@@ -353,16 +353,16 @@ ${prompt}`;
 app.post("/analyze-smi", async (req, res) => {
   try {
     console.log("Received SMI analyze request");
-    const { prompt, studentName, skillDescription, experience, training } = req.body;
+    const { prompt, image, artTitle, artistName } = req.body;
 
     if (!prompt) {
       console.log("Missing prompt in request");
       return res.status(400).json({ error: { message: "Prompt is required" } });
     }
     
-    if (!skillDescription) {
-      console.log("Missing skill description in request");
-      return res.status(400).json({ error: { message: "Skill description is required" } });
+    if (!image) {
+      console.log("Missing image in request");
+      return res.status(400).json({ error: { message: "Image is required" } });
     }
 
     if (!OPENAI_API_KEY) {
@@ -371,17 +371,12 @@ app.post("/analyze-smi", async (req, res) => {
     }
 
     // Log info about the request
-    console.log(`Processing SMI request for student: "${studentName}"`);
+    console.log(`Processing SMI request for artwork: "${artTitle}" by ${artistName}`);
     console.log(`Prompt length: ${prompt.length} characters`);
-    console.log(`Skill description length: ${skillDescription.length} characters`);
     
-    // Construct the prompt with skill information
-    const finalPrompt = `Student: "${studentName}"
-Experience: "${experience}"
-Training: "${training}"
-
-Skill Description:
-${skillDescription}
+    // Construct the prompt with artwork information
+    const finalPrompt = `Title: "${artTitle}"
+Artist: "${artistName}"
 
 ${prompt}`;
 
@@ -395,14 +390,17 @@ ${prompt}`;
         messages: [
           { 
             role: "system", 
-            content: "You are an expert skills assessment analyst specializing in evaluating skill mastery levels. Your task is to analyze the provided skill description and calculate an accurate SMI (Skill Mastery Index) value between 1.00 and 5.00 based on the specified calculation framework. Provide the SMI value, a brief explanation, and a detailed category breakdown." 
+            content: "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Your task is to analyze the provided artwork and calculate an accurate SMI (Skill Mastery Index) value between 1.00 and 5.00 based on the specified calculation framework. Provide detailed analysis following the prompt instructions exactly." 
           },
           { 
             role: "user", 
-            content: finalPrompt
+            content: [
+              { type: "text", text: finalPrompt },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+            ]
           }
         ],
-        max_tokens: 1000
+        max_tokens: 2000
       },
       {
         headers: {
@@ -425,7 +423,7 @@ ${prompt}`;
     // Extract the SMI value using regex
     const smiRegex = /Skill\s+Mastery\s+Index\s*\(?SMI\)?\s*=\s*(\d+\.\d+)/i;
     const smiMatch = analysisText.match(smiRegex);
-    let smiValue = "3.00"; // Default value if extraction fails
+    let smiValue = "3.20"; // Default value if extraction fails
     
     if (smiMatch && smiMatch[1]) {
       smiValue = smiMatch[1];
@@ -450,37 +448,23 @@ ${prompt}`;
       console.log("Could not extract explanation from response");
     }
 
-    // Extract category breakdown (if applicable)
-    let categoryBreakdown = "";
-    const categoryMatch = analysisText.match(/Category Breakdown[\s\S]*?(?=\n\nRaw Score:|$)/i);
-    if (categoryMatch && categoryMatch[0]) {
-      // Process the category breakdown to HTML format
-      const categoryText = categoryMatch[0].replace(/Category Breakdown[:\s]*/i, '').trim();
-      
-      // Split by numbered categories and convert to HTML
-      const categoryItems = categoryText.split(/\d+\.\s+/).filter(item => item.trim() !== '');
-      
-      if (categoryItems.length > 0) {
-        categoryBreakdown = categoryItems.map(item => {
-          const lines = item.split('\n').map(line => line.trim()).filter(line => line !== '');
-          if (lines.length > 0) {
-            const categoryName = lines[0].replace(/:$/, '');
-            const details = lines.slice(1).join('<br>');
-            return `<div class="category">
-              <span class="category-title">${categoryName}:</span>
-              <div class="category-details">${details}</div>
-            </div>`;
-          }
-          return '';
-        }).join('');
-      }
+    // Extract any CSV data that might be present
+    let csvLinks = {};
+    const factorsCsvMatch = analysisText.match(/```csv\s*(Factor#.*[\s\S]*?)```/);
+    if (factorsCsvMatch && factorsCsvMatch[1]) {
+      csvLinks.factorsCSV = factorsCsvMatch[1];
+    }
+    
+    const questionsCsvMatch = analysisText.match(/```csv\s*(Question#.*[\s\S]*?)```/);
+    if (questionsCsvMatch && questionsCsvMatch[1]) {
+      csvLinks.questionsCSV = questionsCsvMatch[1];
     }
 
     const finalResponse = {
       analysis: analysisText,
       smi: smiValue,
       explanation: explanation,
-      categoryBreakdown: categoryBreakdown
+      csvLinks: Object.keys(csvLinks).length > 0 ? csvLinks : undefined
     };
 
     console.log("Sending final SMI response to client");
