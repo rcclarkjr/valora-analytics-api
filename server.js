@@ -236,3 +236,288 @@ app.post("/analyze-cli", async (req, res) => {
     
     // Construct the prompt with artist name and resume
     const finalPrompt = `Artist: "${artistName}"
+
+Artist Resume/Bio:
+${artistResume}
+
+${prompt}`;
+
+    console.log("Sending request to OpenAI API for CLI analysis");
+    
+    // Send request to OpenAI API
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4-turbo",
+        messages: [
+          { 
+            role: "system", 
+            content: "You are an expert art career analyst specializing in evaluating artists' professional achievements. Your task is to analyze the provided artist's resume and calculate an accurate CLI (Career Level Index) value between 1.00 and 5.00 based on the specified calculation framework. Provide the CLI value, a brief explanation, and a detailed category breakdown." 
+          },
+          { 
+            role: "user", 
+            content: finalPrompt
+          }
+        ],
+        max_tokens: 1000
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENAI_API_KEY}`
+        }
+      }
+    );
+
+    console.log("Received response from OpenAI API for CLI");
+    
+    if (!response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
+      console.log("Invalid response format from OpenAI:", JSON.stringify(response.data));
+      return res.status(500).json({ error: { message: "Invalid response from OpenAI API" } });
+    }
+
+    let analysisText = response.data.choices[0].message.content;
+    console.log("CLI Analysis text:", analysisText);
+
+    // Extract the CLI value using regex
+    const cliRegex = /Career\s+Level\s+Index\s*\(?CLI\)?\s*=\s*(\d+\.\d+)/i;
+    const cliMatch = analysisText.match(cliRegex);
+    let cliValue = "3.00"; // Default value if extraction fails
+    
+    if (cliMatch && cliMatch[1]) {
+      cliValue = cliMatch[1];
+      // Ensure it's formatted to 2 decimal places
+      if (cliValue.split('.')[1].length === 1) {
+        cliValue = `${cliValue}0`;
+      }
+      console.log("Extracted CLI value:", cliValue);
+    } else {
+      console.log("Could not extract CLI value from response");
+    }
+    
+    // Extract the explanation text (everything after the CLI value statement)
+    const explanationRegex = /Career\s+Level\s+Index\s*\(?CLI\)?\s*=\s*\d+\.\d+\s*(.+?)(?:\n\n|\n$|$)/i;
+    const explanationMatch = analysisText.match(explanationRegex);
+    let explanation = "";
+    
+    if (explanationMatch && explanationMatch[1]) {
+      explanation = explanationMatch[1].trim();
+      console.log("Extracted explanation:", explanation);
+    } else {
+      console.log("Could not extract explanation from response");
+    }
+
+    // Extract category breakdown
+    let categoryBreakdown = "";
+    const categoryMatch = analysisText.match(/Category Breakdown[\s\S]*?(?=\n\nRaw Score:|$)/i);
+    if (categoryMatch && categoryMatch[0]) {
+      // Process the category breakdown to HTML format
+      const categoryText = categoryMatch[0].replace(/Category Breakdown[:\s]*/i, '').trim();
+      
+      // Split by numbered categories and convert to HTML
+      const categoryItems = categoryText.split(/\d+\.\s+/).filter(item => item.trim() !== '');
+      
+      if (categoryItems.length > 0) {
+        categoryBreakdown = categoryItems.map(item => {
+          const lines = item.split('\n').map(line => line.trim()).filter(line => line !== '');
+          if (lines.length > 0) {
+            const categoryName = lines[0].replace(/:$/, '');
+            const details = lines.slice(1).join('<br>');
+            return `<div class="category">
+              <span class="category-title">${categoryName}:</span>
+              <div class="category-details">${details}</div>
+            </div>`;
+          }
+          return '';
+        }).join('');
+      }
+    }
+
+    const finalResponse = {
+      analysis: analysisText,
+      cli: cliValue,
+      explanation: explanation,
+      categoryBreakdown: categoryBreakdown
+    };
+
+    console.log("Sending final CLI response to client");
+    // Send the response
+    res.json(finalResponse);
+
+  } catch (error) {
+    handleApiError(error, res);
+  }
+});
+
+// Endpoint for Skill Mastery Index (SMI) analysis
+app.post("/analyze-smi", async (req, res) => {
+  try {
+    console.log("Received SMI analyze request");
+    const { prompt, studentName, skillDescription, experience, training } = req.body;
+
+    if (!prompt) {
+      console.log("Missing prompt in request");
+      return res.status(400).json({ error: { message: "Prompt is required" } });
+    }
+    
+    if (!skillDescription) {
+      console.log("Missing skill description in request");
+      return res.status(400).json({ error: { message: "Skill description is required" } });
+    }
+
+    if (!OPENAI_API_KEY) {
+      console.log("Missing OpenAI API key");
+      return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
+    }
+
+    // Log info about the request
+    console.log(`Processing SMI request for student: "${studentName}"`);
+    console.log(`Prompt length: ${prompt.length} characters`);
+    console.log(`Skill description length: ${skillDescription.length} characters`);
+    
+    // Construct the prompt with skill information
+    const finalPrompt = `Student: "${studentName}"
+Experience: "${experience}"
+Training: "${training}"
+
+Skill Description:
+${skillDescription}
+
+${prompt}`;
+
+    console.log("Sending request to OpenAI API for SMI analysis");
+    
+    // Send request to OpenAI API
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4-turbo",
+        messages: [
+          { 
+            role: "system", 
+            content: "You are an expert skills assessment analyst specializing in evaluating skill mastery levels. Your task is to analyze the provided skill description and calculate an accurate SMI (Skill Mastery Index) value between 1.00 and 5.00 based on the specified calculation framework. Provide the SMI value, a brief explanation, and a detailed category breakdown." 
+          },
+          { 
+            role: "user", 
+            content: finalPrompt
+          }
+        ],
+        max_tokens: 1000
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENAI_API_KEY}`
+        }
+      }
+    );
+
+    console.log("Received response from OpenAI API for SMI");
+    
+    if (!response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
+      console.log("Invalid response format from OpenAI:", JSON.stringify(response.data));
+      return res.status(500).json({ error: { message: "Invalid response from OpenAI API" } });
+    }
+
+    let analysisText = response.data.choices[0].message.content;
+    console.log("SMI Analysis text:", analysisText);
+
+    // Extract the SMI value using regex
+    const smiRegex = /Skill\s+Mastery\s+Index\s*\(?SMI\)?\s*=\s*(\d+\.\d+)/i;
+    const smiMatch = analysisText.match(smiRegex);
+    let smiValue = "3.00"; // Default value if extraction fails
+    
+    if (smiMatch && smiMatch[1]) {
+      smiValue = smiMatch[1];
+      // Ensure it's formatted to 2 decimal places
+      if (smiValue.split('.')[1].length === 1) {
+        smiValue = `${smiValue}0`;
+      }
+      console.log("Extracted SMI value:", smiValue);
+    } else {
+      console.log("Could not extract SMI value from response");
+    }
+    
+    // Extract the explanation text (everything after the SMI value statement)
+    const explanationRegex = /Skill\s+Mastery\s+Index\s*\(?SMI\)?\s*=\s*\d+\.\d+\s*(.+?)(?:\n\n|\n$|$)/i;
+    const explanationMatch = analysisText.match(explanationRegex);
+    let explanation = "";
+    
+    if (explanationMatch && explanationMatch[1]) {
+      explanation = explanationMatch[1].trim();
+      console.log("Extracted explanation:", explanation);
+    } else {
+      console.log("Could not extract explanation from response");
+    }
+
+    // Extract category breakdown (if applicable)
+    let categoryBreakdown = "";
+    const categoryMatch = analysisText.match(/Category Breakdown[\s\S]*?(?=\n\nRaw Score:|$)/i);
+    if (categoryMatch && categoryMatch[0]) {
+      // Process the category breakdown to HTML format
+      const categoryText = categoryMatch[0].replace(/Category Breakdown[:\s]*/i, '').trim();
+      
+      // Split by numbered categories and convert to HTML
+      const categoryItems = categoryText.split(/\d+\.\s+/).filter(item => item.trim() !== '');
+      
+      if (categoryItems.length > 0) {
+        categoryBreakdown = categoryItems.map(item => {
+          const lines = item.split('\n').map(line => line.trim()).filter(line => line !== '');
+          if (lines.length > 0) {
+            const categoryName = lines[0].replace(/:$/, '');
+            const details = lines.slice(1).join('<br>');
+            return `<div class="category">
+              <span class="category-title">${categoryName}:</span>
+              <div class="category-details">${details}</div>
+            </div>`;
+          }
+          return '';
+        }).join('');
+      }
+    }
+
+    const finalResponse = {
+      analysis: analysisText,
+      smi: smiValue,
+      explanation: explanation,
+      categoryBreakdown: categoryBreakdown
+    };
+
+    console.log("Sending final SMI response to client");
+    // Send the response
+    res.json(finalResponse);
+
+  } catch (error) {
+    handleApiError(error, res);
+  }
+});
+
+// Error handler function
+function handleApiError(error, res) {
+  console.error("Error in API endpoint:", error);
+  
+  // Detailed error logging
+  if (error.response) {
+    console.error("Response status:", error.response.status);
+    console.error("Response headers:", error.response.headers);
+    console.error("Response data:", JSON.stringify(error.response.data));
+  } else if (error.request) {
+    console.error("No response received:", error.request);
+  } else {
+    console.error("Error setting up request:", error.message);
+  }
+  
+  const errorMessage = error.response?.data?.error?.message || 
+                       error.message || 
+                       "An unknown error occurred";
+                       
+  res.status(500).json({ 
+    error: { 
+      message: errorMessage,
+      details: error.toString()
+    } 
+  });
+}
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
