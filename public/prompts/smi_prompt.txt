@@ -1,0 +1,89 @@
+Skill Mastery Index (SMI) Calculation Framework
+
+Purpose:
+The Skill Mastery Index (SMI) is a scoring system that evaluates an individual's level of mastery in a specific skill or competency. It measures the depth and breadth of skill development using five key categories, resulting in a normalized score ranging from 1.00 to 5.00. A score of 1.00 indicates novice-level competence, while a 5.00 reflects complete mastery.
+
+________________________________________
+How SMI is Calculated:
+
+1. Categories and Weights:
+   The SMI evaluates skill mastery across the following five categories, each weighted based on its importance:
+   - Knowledge Foundation: 20%
+   - Technical Proficiency: 25%
+   - Experience & Application: 25%
+   - Problem-Solving Ability: 15%
+   - Innovation & Creativity: 15%
+
+2. Scoring System:
+   Each category is assigned a score using a five-point scale:
+   - Expert Level (5.0): Comprehensive mastery with ability to innovate and teach others
+   - Advanced Level (4.0): Strong mastery with occasional innovation
+   - Intermediate Level (3.0): Comfortable competence with occasional guidance needed
+   - Basic Level (2.0): Fundamental understanding with regular guidance needed
+   - Novice Level (1.0): Minimal understanding with constant guidance needed
+
+3. Weighted Contributions:
+   - The score for each category is multiplied by its respective weight to calculate its contribution to the overall SMI.
+   - Example: If a person has Expert Level Technical Proficiency (5.0), the contribution from this category is: 5.0 × 0.25 = 1.25
+
+4. Final Calculation:
+   - The sum of all weighted category scores is the final SMI.
+   - Formula: SMI = (Knowledge Score × 0.20) + (Technical Score × 0.25) + (Experience Score × 0.25) + (Problem-Solving Score × 0.15) + (Innovation Score × 0.15)
+
+________________________________________
+Category Assessment Guidelines:
+
+1. Knowledge Foundation (20%):
+   - Assess theoretical understanding and conceptual knowledge
+   - Consider formal education, training, certifications
+   - Evaluate breadth and depth of subject matter expertise
+
+2. Technical Proficiency (25%):
+   - Assess practical skill implementation
+   - Consider accuracy, precision, and consistency
+   - Evaluate efficiency and quality of execution
+
+3. Experience & Application (25%):
+   - Assess duration and diversity of practical application
+   - Consider complexity of completed projects/tasks
+   - Evaluate adaptability to different contexts
+
+4. Problem-Solving Ability (15%):
+   - Assess capability to troubleshoot and resolve issues
+   - Consider critical thinking and analytical skills
+   - Evaluate independence in overcoming obstacles
+
+5. Innovation & Creativity (15%):
+   - Assess ability to generate novel solutions
+   - Consider improvements or adaptations to standard methods
+   - Evaluate original contributions to the field
+
+________________________________________
+Output Format:
+
+1. Calculate the Skill Mastery Index (SMI) value based on the provided skill description.
+2. Format your response as follows:
+
+Skill Mastery Index (SMI) = [value]
+
+[2-3 sentences explaining the individual's skill mastery level based on the SMI value]
+
+Category Breakdown:
+1. Knowledge Foundation (20%): [score] × 0.20 = [weighted score]
+   [Brief explanation of why this score was assigned]
+
+2. Technical Proficiency (25%): [score] × 0.25 = [weighted score]
+   [Brief explanation of why this score was assigned]
+
+3. Experience & Application (25%): [score] × 0.25 = [weighted score]
+   [Brief explanation of why this score was assigned]
+
+4. Problem-Solving Ability (15%): [score] × 0.15 = [weighted score]
+   [Brief explanation of why this score was assigned]
+
+5. Innovation & Creativity (15%): [score] × 0.15 = [weighted score]
+   [Brief explanation of why this score was assigned]
+
+Final SMI: [sum of all weighted scores] = [final SMI value]
+
+Do not include any additional analysis, commentary, or descriptions beyond what is requested.

@@ -1,0 +1,74 @@
+Career Level Index (CLI) Calculation Framework
+
+Purpose:
+The Career Level Index (CLI) is a scoring system that evaluates the career achievements of artists. It measures an artist's professional development and standing within the art world using seven key categories, resulting in a normalized score ranging from 1.00 to 5.00. A score of 1.00 indicates no measurable achievements, while a 5.00 reflects the maximum possible accomplishments.
+
+________________________________________
+How CLI is Calculated:
+
+1. Categories and Weights:
+   The CLI evaluates achievements across the following seven categories, each weighted by its importance to an artist's career:
+   - Education: 10%
+   - Exhibitions: 25%
+   - Awards & Competitions: 15%
+   - Commissions: 10%
+   - Collections: 15%
+   - Publications: 15%
+   - Institutional Interest: 10%
+
+2. Scoring System:
+   Each category is assigned a score using a three-tiered system:
+   - High-Profile Achievement: 1.0 (e.g., solo exhibitions, national awards, museum collections, features in renowned publications)
+   - Low-Profile Achievement: 0.6 (e.g., group exhibitions, local awards, private collections, features in lesser-known publications)
+   - No Mention: 0.0 (e.g., the category is not addressed in the biography)
+
+3. Weighted Contributions:
+   - The score for each category is multiplied by its respective weight to calculate its contribution to the overall CLI.
+   - Example: If an artist has a high-profile solo exhibition, the contribution from this category is: 1.0 × 0.25 = 0.25
+
+4. Normalization:
+   - The raw score (sum of all weighted contributions) is converted into the CLI score using the formula: CLI = (Raw Score × 4.0) + 1.00
+   - This ensures that scores range between 1.00 and 5.00.
+
+________________________________________
+Rules and Safeguards:
+
+1. Structured Breakdown:
+   Each category is scored with the following structure:
+   - What was provided: Description of achievements (e.g., "Exhibited in Paris and London")
+   - Why the score was assigned: Explanation of the assigned score (e.g., "High-profile exhibitions = 1.0")
+   - Final score contribution: Weighted contribution to the overall CLI (e.g., 1.0 × 0.25 = 0.25)
+
+2. Extrapolation:
+   When details are unclear, reasonable assumptions are allowed:
+   - Sales are treated as private collections unless explicitly stated otherwise
+   - Ambiguous mentions like "featured work" are credited as publications
+
+3. Validation Checks:
+   Prevent over-crediting by ensuring:
+   - If exhibitions are scored as high-profile (1.0), no additional weight is applied
+   - Publication scores are capped at 1.0 per artist, even if multiple high-profile mentions exist
+
+________________________________________
+Output Format:
+
+1. Calculate the Career Level Index (CLI) value based on the artist's resume.
+2. Format your response as follows:
+
+Career Level Index (CLI) = [value]
+
+[2-3 sentences explaining the artist's career level based on the CLI value]
+
+Category Breakdown:
+1. Education: [details of what was provided, why the score was assigned, and final contribution]
+2. Exhibitions: [details]
+3. Awards & Competitions: [details]
+4. Commissions: [details]
+5. Collections: [details]
+6. Publications: [details]
+7. Institutional Interest: [details]
+
+Raw Score: [calculated raw score]
+Final CLI: (Raw Score × 4.0) + 1.00 = [final CLI value]
+
+Do not include any additional analysis, commentary, or descriptions beyond what is requested.

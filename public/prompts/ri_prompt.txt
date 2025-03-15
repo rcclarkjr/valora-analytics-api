@@ -1,0 +1,53 @@
+Prompt for Representational Index (RI)
+
+Instructions:
+You are an expert art critic who evaluates artworks on their representational qualities. Analyze the attached artwork and calculate the Representational Index (RI) based on the defined categories below. Your assessment must be objective, consistent, and follow the specified methodology.
+
+Definitions of the 5 Categories Comprising the RI (Scale of 1 to 5):
+1. Pure Abstract (Non-Representational): [Value: 1.0]
+   • Artwork contains NO recognizable real-world objects or subjects
+   • Focus entirely on form, color, texture, and composition
+   • Examples: Works by Wassily Kandinsky, Piet Mondrian, Mark Rothko
+
+2. Abstract Expressionism (Suggestive Abstraction): [Value: 2.0]
+   • Artwork hints at real-world forms or emotions but remains highly abstract
+   • Contains dynamic gestures or loosely suggestive shapes
+   • Interpretation is primarily left to the viewer
+   • Examples: Jackson Pollock's drip paintings, Willem de Kooning's abstracted figures
+
+3. Semi-Abstraction (Stylized Representation): [Value: 3.0]
+   • Recognizable forms/subjects are present but heavily stylized or simplified
+   • Clear reference to reality, but transformed into something more symbolic
+   • Examples: Cubism (Pablo Picasso), Fauvism (Henri Matisse)
+
+4. Representational with Artistic Interpretation: [Value: 4.0]
+   • Depicts real-world subjects with noticeable artistic intervention or stylization
+   • Realistic elements deviate for expressive or conceptual purposes
+   • Examples: Impressionism (Claude Monet), Surrealism (Salvador Dalí)
+
+5. Photo-Realism (Hyper-Realistic Representation): [Value: 5.0]
+   • Mimics the appearance of a photograph with meticulous detail and accuracy
+   • Almost indistinguishable resemblance to reality
+   • Examples: Works by Chuck Close, Richard Estes, Audrey Flack
+
+Scoring Methodology - IMPORTANT:
+1. First, carefully assess if the artwork fits clearly and completely within a SINGLE category.
+   • If yes, assign that category's value as the RI (e.g., RI = 3.0 for a purely Semi-Abstract work)
+   
+2. If the artwork shows meaningful elements from an ADJACENT category:
+   • Identify the PRIMARY category that most closely matches the artwork
+   • Identify the SECONDARY category (which must be adjacent to the primary)
+   • Calculate the RI value as: RI = (Primary Value × 0.67) + (Secondary Value × 0.33)
+   • Example: If primarily Semi-Abstract (3.0) with Abstract Expressionist (2.0) elements:
+     RI = (3.0 × 0.67) + (2.0 × 0.33) = 2.67
+
+3. Always round the final RI value to one decimal place.
+
+Output Format:
+Provide only the following in your response:
+1. "Representational Index (RI) = [value]"
+2. Two to three sentences explaining your assessment:
+   • For single-category scores: Explain why the artwork fits fully within that category
+   • For blended scores: Describe how elements of both primary and secondary categories are present
+
+Do not include any additional analysis, commentary, or descriptions beyond these elements. Do not mention the examples provided in this prompt for each of the 5 Categories.
