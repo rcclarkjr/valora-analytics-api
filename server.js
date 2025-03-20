@@ -349,6 +349,31 @@ ${prompt}`;
   }
 });
 
+// Helper function to extract category scores from analysis text
+function extractCategoryScores(analysisText) {
+  const categoryScoreRegex = {
+    composition: /Composition\s*&\s*Design\s*:?\s*(\d+\.?\d*)/i,
+    color: /Color\s+Harmony\s*&\s*Use\s+of\s+Light\s*:?\s*(\d+\.?\d*)/i,
+    technical: /Technical\s+Skill\s*&\s*Craftsmanship\s*:?\s*(\d+\.?\d*)/i,
+    originality: /Originality\s*&\s*Innovation\s*:?\s*(\d+\.?\d*)/i,
+    emotional: /Emotional\s*&\s*Conceptual\s+Depth\s*:?\s*(\d+\.?\d*)/i
+  };
+  
+  const scores = {};
+  
+  // Extract each category score
+  for (const [category, regex] of Object.entries(categoryScoreRegex)) {
+    const match = analysisText.match(regex);
+    if (match && match[1]) {
+      scores[category] = parseFloat(match[1]);
+    } else {
+      scores[category] = 3.0; // Default score if not found
+    }
+  }
+  
+  return scores;
+}
+
 // Endpoint for Skill Mastery Index (SMI) analysis
 app.post("/analyze-smi", async (req, res) => {
   try {
@@ -448,6 +473,10 @@ ${prompt}`;
       console.log("Could not extract explanation from response");
     }
 
+    // Extract category scores
+    const categoryScores = extractCategoryScores(analysisText);
+    console.log("Extracted category scores:", categoryScores);
+
     // Extract any CSV data that might be present
     let csvLinks = {};
     const factorsCsvMatch = analysisText.match(/```csv\s*(Factor#.*[\s\S]*?)```/);
@@ -464,6 +493,7 @@ ${prompt}`;
       analysis: analysisText,
       smi: smiValue,
       explanation: explanation,
+      categoryScores: categoryScores,
       csvLinks: Object.keys(csvLinks).length > 0 ? csvLinks : undefined
     };
 
