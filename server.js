@@ -22,14 +22,14 @@ app.use(cors({
     // Add any other origins you need
   ],
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']  // Added Cache-Control and Pragma
 }));
 
 // Add a fallback CORS handler for any missed routes
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Cache-Control, Pragma");  // Added Cache-Control and Pragma
   
   if (req.method === "OPTIONS") {
     return res.status(200).end();
