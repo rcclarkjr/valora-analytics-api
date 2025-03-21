@@ -581,6 +581,194 @@ ${prompt}`;
   }
 });
 
+// Add this new endpoint after your existing analyze endpoints
+
+// Endpoint for combined SMI and RI analysis
+app.post("/analyze-combined", async (req, res) => {
+  try {
+    console.log("Received combined SMI and RI analyze request");
+    const { image, artTitle, artistName } = req.body;
+
+    if (!image) {
+      console.log("Missing image in request");
+      return res.status(400).json({ error: { message: "Image is required" } });
+    }
+
+    if (!OPENAI_API_KEY) {
+      console.log("Missing OpenAI API key");
+      return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
+    }
+
+    // Log info about the request
+    console.log(`Processing combined analysis for artwork: "${artTitle}" by ${artistName}`);
+    
+    // First, get the SMI prompt
+    const smiPromptPath = path.join(__dirname, "public", "prompts", "SMI_prompt.txt");
+    let smiPrompt;
+    
+    if (fs.existsSync(smiPromptPath)) {
+      smiPrompt = fs.readFileSync(smiPromptPath, 'utf8');
+    } else {
+      return res.status(404).json({ 
+        error: { message: "SMI prompt file not found" } 
+      });
+    }
+    
+    // Next, get the RI prompt
+    const riPromptPath = path.join(__dirname, "public", "prompts", "RI_prompt.txt");
+    let riPrompt;
+    
+    if (fs.existsSync(riPromptPath)) {
+      riPrompt = fs.readFileSync(riPromptPath, 'utf8');
+    } else {
+      return res.status(404).json({ 
+        error: { message: "RI prompt file not found" } 
+      });
+    }
+
+    // Construct the prompts with art title and artist name
+    const finalSmiPrompt = `Title: "${artTitle}"
+Artist: "${artistName}"
+
+${smiPrompt}`;
+
+    const finalRiPrompt = `Title: "${artTitle}"
+Artist: "${artistName}"
+
+${riPrompt}`;
+
+    console.log("Sending request to OpenAI API for SMI analysis");
+    
+    // First, get the SMI value
+    const smiResponse = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4-turbo",
+        messages: [
+          { 
+            role: "system", 
+            content: "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Your task is to analyze the provided artwork and calculate an accurate SMI (Skill Mastery Index) value between 1.00 and 5.00 based on the specified calculation framework. Provide detailed analysis following the prompt instructions exactly." 
+          },
+          { 
+            role: "user", 
+            content: [
+              { type: "text", text: finalSmiPrompt },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+            ]
+          }
+        ],
+        max_tokens: 2000
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENAI_API_KEY}`
+        }
+      }
+    );
+
+    console.log("Received response from OpenAI API for SMI");
+    
+    if (!smiResponse.data || !smiResponse.data.choices || !smiResponse.data.choices[0] || !smiResponse.data.choices[0].message) {
+      console.log("Invalid response format from OpenAI for SMI:", JSON.stringify(smiResponse.data));
+      return res.status(500).json({ error: { message: "Invalid response from OpenAI API for SMI analysis" } });
+    }
+
+    let smiAnalysisText = smiResponse.data.choices[0].message.content;
+    
+    // Extract category scores
+    const categoryScores = extractCategoryScores(smiAnalysisText);
+    
+    // Check if all category scores were successfully extracted
+    if (!categoryScores) {
+      console.log("Failed to extract all category scores from the analysis");
+      return res.status(500).json({ 
+        error: { 
+          message: "Failed to extract all required category scores. Please try again." 
+        } 
+      });
+    }
+    
+    // Calculate the SMI value using the weighted formula
+    const calculatedSMI = (
+      (categoryScores.composition * 0.20) +
+      (categoryScores.color * 0.20) +
+      (categoryScores.technical * 0.25) +
+      (categoryScores.originality * 0.20) +
+      (categoryScores.emotional * 0.15)
+    );
+    
+    // Round up to the nearest 0.25 increment
+    const roundedSMI = roundSMIUp(calculatedSMI);
+    
+    // Format to ensure 2 decimal places
+    const smiValue = roundedSMI.toFixed(2);
+
+    console.log("Sending request to OpenAI API for RI analysis");
+    
+    // Now, get the RI value
+    const riResponse = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4-turbo",
+        messages: [
+          { 
+            role: "system", 
+            content: "You are an expert art critic specializing in analyzing the representational nature of artwork. Your task is to evaluate the representational characteristics of the provided artwork and calculate an accurate RI (Representational Index) value between 1.00 and 5.00. Provide only the RI value and a 2-3 sentence explanation - no additional commentary or analysis." 
+          },
+          { 
+            role: "user", 
+            content: [
+              { type: "text", text: finalRiPrompt },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+            ]
+          }
+        ],
+        max_tokens: 600
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENAI_API_KEY}`
+        }
+      }
+    );
+
+    console.log("Received response from OpenAI API for RI");
+    
+    if (!riResponse.data || !riResponse.data.choices || !riResponse.data.choices[0] || !riResponse.data.choices[0].message) {
+      console.log("Invalid response format from OpenAI for RI:", JSON.stringify(riResponse.data));
+      return res.status(500).json({ error: { message: "Invalid response from OpenAI API for RI analysis" } });
+    }
+
+    let riAnalysisText = riResponse.data.choices[0].message.content;
+    
+    // Extract the RI value using regex
+    const riRegex = /Representational\s+Index\s*\(?RI\)?\s*=\s*(\d+\.\d+)/i;
+    const riMatch = riAnalysisText.match(riRegex);
+    let riValue = "3.0"; // Default value if extraction fails
+    
+    if (riMatch && riMatch[1]) {
+      riValue = riMatch[1];
+      console.log("Extracted RI value:", riValue);
+    } else {
+      console.log("Could not extract RI value from response");
+    }
+
+    // Send the final response with just the SMI and RI values
+    const finalResponse = {
+      smi: smiValue,
+      ri: riValue
+    };
+
+    console.log("Sending final combined response to client");
+    res.json(finalResponse);
+
+  } catch (error) {
+    handleApiError(error, res);
+  }
+});
+
 // Error handler function
 function handleApiError(error, res) {
   console.error("Error in API endpoint:", error);
