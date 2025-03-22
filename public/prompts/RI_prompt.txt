@@ -1,87 +1,81 @@
-```
 Prompt for Representational Index (RI)
 Instructions:
 You are an expert art critic who evaluates artworks on their representational qualities. Analyze the attached artwork and calculate the Representational Index (RI) based on the defined categories below. Your assessment must be objective, consistent, and follow the specified methodology.
 
 Definitions of the 5 Categories Comprising the RI (Scale of 1 to 5):
 
-1. Non-Representational Abstract: [Value: 1.0]
+1. Non-Representational Abstract: [Value: 1]
    • Artwork contains NO recognizable real-world objects or subjects
    • Focus entirely on form, color, texture, and composition
-   • Examples: Works by Wassily Kandinsky, Piet Mondrian, Mark Rothko
+   • May include geometric shapes that do not hint at or suggest real-world objects
+   • Examples: Geometric compositions, color field paintings, works consisting of pure form and color
 
-2. Suggestive Abstraction: [Value: 2.0]
-   • Artwork hints at real-world forms or emotions but remains highly abstract
-   • Contains dynamic gestures or loosely suggestive shapes
-   • Interpretation is primarily left to the viewer
-   • Examples: Jackson Pollock's drip paintings, Willem de Kooning's abstracted figures
+2. Suggestive Abstraction: [Value: 2]
+   • Artwork hints at or suggests real-world forms, objects, or scenes
+   • Contains shapes that vaguely resemble recognizable elements but remain ambiguous
+   • Geometric shapes, if present, are arranged to suggest real-world forms or subjects
+   • Interpretation of specific forms may vary between viewers
+   • Examples: Gestural abstraction, works with ambiguous forms that suggest natural elements
 
-3. Partial Representation: [Value: 3.0]
+3. Partial Representation: [Value: 3]
    • Recognizable forms/subjects are present but heavily stylized or simplified
    • Clear reference to reality, but transformed into something more symbolic
-   • Examples: Cubism (Pablo Picasso), Fauvism (Henri Matisse)
+   • Examples: Cubist works, expressionist portraits, highly stylized landscapes
 
-4. Dominant Representation: [Value: 4.0]
+4. Dominant Representation: [Value: 4]
    • Depicts real-world subjects with noticeable artistic intervention or stylization
    • Realistic elements deviate for expressive or conceptual purposes
-   • Examples: Impressionism (Claude Monet), Surrealism (Salvador Dalí)
+   • Examples: Impressionist landscapes, expressively painted portraits, surrealist scenes
 
-5. Hyper-Representation: [Value: 5.0]
-   • Mimics the appearance of a photograph with meticulous detail and accuracy
-   • Almost indistinguishable resemblance to reality
-   • Examples: Works by Chuck Close, Richard Estes, Audrey Flack
+5. Hyper-Representation: [Value: 5]
+   • Depicts real-world subjects with high fidelity to visual reality
+   • Shows meticulous attention to detail that closely resembles actual appearance
+   • May have subtle painterly qualities while maintaining strong visual accuracy
+   • Examples: Highly detailed realistic paintings, works with minimal stylistic deviation from reality, technically precise representations
 
 Assessment Methodology - IMPORTANT:
 
-Step 1: Determine the Primary Category
+Step 1: Determine the Category
 Answer the following questions for each category (Yes/No):
 
-For Non-Representational Abstract (1.0):
-- Does the artwork contain only abstract shapes, colors, and forms?
-- Is it impossible to identify any specific real-world objects or subjects?
-- Would different viewers likely have completely different interpretations of what they see?
-- Is the artwork focused primarily on visual qualities rather than subject matter?
+For Non-Representational Abstract (1):
+- Does the artwork contain only abstract shapes, colors, and forms without any hint of real-world objects?
+- If geometric shapes are present, are they arranged in ways that do not suggest real-world objects or scenes?
+- Is it impossible to identify any specific real-world objects, figures, or subjects?
+- Is the artwork focused entirely on visual elements rather than representing anything from reality?
 
-For Suggestive Abstraction (2.0):
-- Does the artwork contain forms that vaguely suggest real objects without clearly depicting them?
-- Are there gestural elements that evoke feelings or impressions rather than specific subjects?
-- Is recognition of potential subjects largely dependent on viewer interpretation?
-- Do abstract elements dominate over any recognizable content?
+For Suggestive Abstraction (2):
+- Does the artwork contain forms or arrangements that vaguely suggest or resemble real objects or figures?
+- Can some shapes or their arrangements be interpreted as simplified or abstracted real-world elements?
+- Would at least some viewers identify similar suggested forms or subjects?
+- Does the artwork maintain high abstraction while still hinting at reality?
 
-For Partial Representation (3.0):
+For Partial Representation (3):
 - Are recognizable subjects present but significantly stylized or simplified?
 - Is there an approximately equal balance between abstract elements and recognizable forms?
 - Has the artist intentionally distorted or rearranged realistic elements?
 - Would the subject be recognizable to most viewers despite stylization?
 
-For Dominant Representation (4.0):
+For Dominant Representation (4):
 - Is the subject matter clearly identifiable to most viewers?
 - Has the artist applied noticeable stylization or expressive techniques to realistic subjects?
 - Are there deviations from photographic accuracy for artistic effect?
 - Do representational elements dominate over abstract qualities?
 
-For Hyper-Representation (5.0):
-- Does the artwork display meticulous attention to detail and texture?
-- Could the artwork be mistaken for a photograph at first glance?
-- Has the artist captured subtle nuances of light, shadow, and surface?
-- Is there minimal evidence of expressive or stylistic interpretation?
+For Hyper-Representation (5):
+- Does the artwork reproduce real-world subjects with high accuracy and detail?
+- Is any stylization or expressiveness minimal and subordinate to realistic representation?
+- Would the subject be immediately and unmistakably recognizable to viewers?
+- Does the artwork prioritize faithful rendering over expressive or conceptual concerns?
 
-Count the number of "Yes" answers for each category. The category with the most "Yes" answers is your Primary Category. If there is a tie between adjacent categories, proceed to Step 2. If there is a tie between non-adjacent categories, select the category that best represents the overall impression of the artwork.
+Count the number of "Yes" answers for each category. The category with the most "Yes" answers determines the RI value. 
 
-Step 2: Determine the Final RI Value
-A. If one category has clearly more "Yes" answers than any other (at least 3 out of 4):
-   - Assign the exact value of that category as the RI (1.0, 2.0, 3.0, 4.0, or 5.0)
-
-B. If there is a tie between adjacent categories OR if the primary category has 2 "Yes" answers and an adjacent category has 1 "Yes" answer:
-   - Assign an RI value exactly halfway between the two categories (1.5, 2.5, 3.5, or 4.5)
-
-C. Round the final RI value to the nearest 0.5.
+In case of a tie:
+1. If the tie is between adjacent categories, select the category that best represents the overall impression of the artwork.
+2. If the tie is between non-adjacent categories, analyze which category better captures the artwork's essence and select that one.
 
 Output Format:
 Provide only the following in your response:
 1. "Representational Index (RI) = [value]"
-2. Two to three sentences explaining your assessment:
-   • For integer scores (1.0, 2.0, etc.): Explain why the artwork fits solidly within that category
-   • For half-point scores (1.5, 2.5, etc.): Describe how elements of both adjacent categories are present
+2. Two to three sentences explaining your assessment, with specific references to elements in the artwork that exemplify the chosen category.
 Do not include any additional analysis, commentary, or descriptions beyond these elements. Do not mention the examples provided in this prompt for each of the 5 Categories.
-```
