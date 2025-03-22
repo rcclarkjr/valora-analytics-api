@@ -164,46 +164,36 @@ messages: [
       return res.status(500).json({ error: { message: "Invalid response from OpenAI API" } });
     }
 
-    let analysisText = response.data.choices[0].message.content;
-    console.log("RI Analysis text:", analysisText);
+let analysisText = response.data.choices[0].message.content;
+console.log("RI Analysis text:", analysisText);
 
-    // Extract the RI value using regex
-    const riRegex = /Representational\s+Index\s*\(?RI\)?\s*=\s*(\d+\.\d+)/i;
-    const riMatch = analysisText.match(riRegex);
-    let riValue = "3.00"; // Default value if extraction fails
-    
-    if (riMatch && riMatch[1]) {
-      riValue = riMatch[1];
-      // Ensure it's formatted to 2 decimal places
-      if (riValue.split('.')[1].length === 1) {
-        riValue = `${riValue}0`;
-      }
-      console.log("Extracted RI value:", riValue);
-    } else {
-      console.log("Could not extract RI value from response");
-    }
-    
-    // Extract the explanation text (everything after the RI value statement)
-    const explanationRegex = /Representational\s+Index\s*\(?RI\)?\s*=\s*\d+\.\d+\s*(.+?)(?:\n\n|\n$|$)/i;
-    const explanationMatch = analysisText.match(explanationRegex);
-    let explanation = "";
-    
-    if (explanationMatch && explanationMatch[1]) {
-      explanation = explanationMatch[1].trim();
-      console.log("Extracted explanation:", explanation);
-    } else {
-      console.log("Could not extract explanation from response");
-    }
+// Attempt to extract JSON block from GPT response
+const jsonRegex = /```json\s*([\s\S]*?)```/;
+const jsonMatch = analysisText.match(jsonRegex);
 
-    const finalResponse = {
-      analysis: analysisText,
-      ri: riValue,
-      explanation: explanation
-    };
+let parsedJson = null;
 
-    console.log("Sending final RI response to client");
-    // Send the response
-    res.json(finalResponse);
+if (jsonMatch && jsonMatch[1]) {
+  try {
+    parsedJson = JSON.parse(jsonMatch[1]);
+    console.log("✅ Successfully parsed JSON:", parsedJson);
+  } catch (err) {
+    console.error("❌ Failed to parse JSON block:", err);
+  }
+}
+
+// Prepare final response using structured data from JSON
+const finalResponse = {
+  analysis: analysisText,
+  ri: parsedJson?.ri || null,
+  explanation: parsedJson?.summary || null,
+  scores: parsedJson?.scores || null,
+  total_score: parsedJson?.total_score || null,
+  category: parsedJson?.category || null
+};
+
+console.log("Sending final RI response to client");
+res.json(finalResponse);
 
   } catch (error) {
     handleApiError(error, res);
