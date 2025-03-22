@@ -105,37 +105,18 @@ app.post("/analyze-ri", async (req, res) => {
     console.log("Received RI analyze request");
     const { prompt, image, artTitle, artistName } = req.body;
 
-    if (!prompt) {
-      console.log("Missing prompt in request");
-      return res.status(400).json({ error: { message: "Prompt is required" } });
+    if (!prompt || !image || !OPENAI_API_KEY) {
+      return res.status(400).json({ error: { message: "Missing prompt, image, or API key" } });
     }
-
-    if (!image) {
-      console.log("Missing image in request");
-      return res.status(400).json({ error: { message: "Image is required" } });
-    }
-
-    if (!OPENAI_API_KEY) {
-      console.log("Missing OpenAI API key");
-      return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
-    }
-
-    console.log(`Processing RI request for artwork: "${artTitle}" by ${artistName}`);
-    console.log(`Prompt length: ${prompt.length} characters`);
 
     const finalPrompt = `Title: "${artTitle}"\nArtist: "${artistName}"\n\n${prompt}`;
-
-    console.log("Sending request to OpenAI API for RI analysis");
 
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
         model: "gpt-4-turbo",
         messages: [
-          {
-            role: "system",
-            content: prompt // Full prompt from RI_prompt.txt
-          },
+          { role: "system", content: prompt },
           {
             role: "user",
             content: [
@@ -154,30 +135,34 @@ app.post("/analyze-ri", async (req, res) => {
       }
     );
 
-    console.log("Received response from OpenAI API for RI");
+    const analysisText = response.data.choices[0]?.message?.content || "";
 
-    if (
-      !response.data ||
-      !response.data.choices ||
-      !response.data.choices[0] ||
-      !response.data.choices[0].message
-    ) {
-      console.log("Invalid response format from OpenAI:", JSON.stringify(response.data));
-      return res.status(500).json({ error: { message: "Invalid response from OpenAI API" } });
-    }
+    // Extract the RI value (e.g., "RI = 3")
+    const riMatch = analysisText.match(/RI\s*=\s*(\d+)/);
+    const riValue = riMatch ? parseInt(riMatch[1]) : null;
 
-    const analysisText = response.data.choices[0].message.content;
-    console.log("RI Analysis text:", analysisText);
+    // Extract the category (e.g., a line that starts with "### Stylized Representation")
+    const categoryMatch = analysisText.match(/#+\s+(Non-Objective|Abstract|Stylized Representation|Representational Realism|Hyper-Realism)/i);
+    const category = categoryMatch ? categoryMatch[1] : null;
+
+    // Extract the summary paragraph
+    const summaryMatch = analysisText.match(/## Summary\s+([\s\S]*?)\n##/i);
+    const summary = summaryMatch ? summaryMatch[1].trim() : null;
 
     const finalResponse = {
-      analysis: analysisText
+      analysis: analysisText,
+      ri: riValue,
+      category: category,
+      explanation: summary || ""
     };
 
     console.log("Sending final RI response to client");
     res.json(finalResponse);
 
   } catch (error) {
-    handleApiError(error, res);
+    console.error("Error in /analyze-ri:", error.message);
+    const errMsg = error.response?.data?.error?.message || error.message || "Unknown error";
+    res.status(500).json({ error: { message: errMsg } });
   }
 });
 
