@@ -99,6 +99,7 @@ app.get("/PromptCalcSMI.txt", (req, res) => {
 
 
 
+
 // Endpoint for Representational Index (RI) analysis
 app.post("/analyze-ri", async (req, res) => {
   try {
@@ -149,8 +150,17 @@ app.post("/analyze-ri", async (req, res) => {
     const summaryMatch = analysisText.match(/## Summary\s+([\s\S]*?)\n##/i);
     const summary = summaryMatch ? summaryMatch[1].trim() : null;
 
+    // Modify the analysis text to ensure the category is properly displayed
+    let modifiedAnalysis = analysisText;
+    if (riValue && category) {
+      // Find the "RI = X" line
+      const riLine = `### RI = ${riValue}`;
+      // Insert the category as a new heading after the RI line
+      modifiedAnalysis = modifiedAnalysis.replace(riLine, `${riLine}\n\n### ${category}`);
+    }
+
     const finalResponse = {
-      analysis: analysisText,
+      analysis: modifiedAnalysis, // Use the modified analysis text
       ri: riValue,
       category: category,
       explanation: summary || ""
@@ -165,7 +175,6 @@ app.post("/analyze-ri", async (req, res) => {
     res.status(500).json({ error: { message: errMsg } });
   }
 });
-
 
 
 
