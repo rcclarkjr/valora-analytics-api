@@ -17,7 +17,7 @@ Provide a brief overview (2–3 sentences) of what is visually observed in the a
 
 ---
 
-## Scoring  
+## Analysis  
 Present a markdown table with two columns only: Criterion and a concise Explanation. Do **not** include numeric scores.
 
 | **Criterion**                     | **Explanation** |
