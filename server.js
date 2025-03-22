@@ -94,6 +94,11 @@ app.get("/PromptCalcSMI.txt", (req, res) => {
 
 // =============== ANALYSIS ENDPOINTS ===============
 
+
+
+
+
+
 // Endpoint for Representational Index (RI) analysis
 app.post("/analyze-ri", async (req, res) => {
   try {
@@ -104,7 +109,7 @@ app.post("/analyze-ri", async (req, res) => {
       console.log("Missing prompt in request");
       return res.status(400).json({ error: { message: "Prompt is required" } });
     }
-    
+
     if (!image) {
       console.log("Missing image in request");
       return res.status(400).json({ error: { message: "Image is required" } });
@@ -115,39 +120,31 @@ app.post("/analyze-ri", async (req, res) => {
       return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
     }
 
-    // Log info about the request (without the full image data for brevity)
     console.log(`Processing RI request for artwork: "${artTitle}" by ${artistName}`);
     console.log(`Prompt length: ${prompt.length} characters`);
-    
-    // Construct the prompt with art title and artist name
-    const finalPrompt = `Title: "${artTitle}"
-Artist: "${artistName}"
 
-${prompt}`;
+    const finalPrompt = `Title: "${artTitle}"\nArtist: "${artistName}"\n\n${prompt}`;
 
     console.log("Sending request to OpenAI API for RI analysis");
-    
-    // Send request to OpenAI API
+
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
         model: "gpt-4-turbo",
-
-messages: [
-  { 
-    role: "system", 
-    content: prompt  // use the loaded full prompt from RI_prompt.txt
-  },
-
-          { 
-            role: "user", 
+        messages: [
+          {
+            role: "system",
+            content: prompt // Full prompt from RI_prompt.txt
+          },
+          {
+            role: "user",
             content: [
               { type: "text", text: finalPrompt },
               { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
             ]
           }
         ],
-        max_tokens: 600
+        max_tokens: 1000
       },
       {
         headers: {
@@ -158,47 +155,39 @@ messages: [
     );
 
     console.log("Received response from OpenAI API for RI");
-    
-    if (!response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
+
+    if (
+      !response.data ||
+      !response.data.choices ||
+      !response.data.choices[0] ||
+      !response.data.choices[0].message
+    ) {
       console.log("Invalid response format from OpenAI:", JSON.stringify(response.data));
       return res.status(500).json({ error: { message: "Invalid response from OpenAI API" } });
     }
 
-let analysisText = response.data.choices[0].message.content;
-console.log("RI Analysis text:", analysisText);
+    const analysisText = response.data.choices[0].message.content;
+    console.log("RI Analysis text:", analysisText);
 
-// Attempt to extract JSON block from GPT response
-const jsonRegex = /```json\s*([\s\S]*?)```/;
-const jsonMatch = analysisText.match(jsonRegex);
+    const finalResponse = {
+      analysis: analysisText
+    };
 
-let parsedJson = null;
-
-if (jsonMatch && jsonMatch[1]) {
-  try {
-    parsedJson = JSON.parse(jsonMatch[1]);
-    console.log("✅ Successfully parsed JSON:", parsedJson);
-  } catch (err) {
-    console.error("❌ Failed to parse JSON block:", err);
-  }
-}
-
-// Prepare final response using structured data from JSON
-const finalResponse = {
-  analysis: analysisText,
-  ri: parsedJson?.ri || null,
-  explanation: parsedJson?.summary || null,
-  scores: parsedJson?.scores || null,
-  total_score: parsedJson?.total_score || null,
-  category: parsedJson?.category || null
-};
-
-console.log("Sending final RI response to client");
-res.json(finalResponse);
+    console.log("Sending final RI response to client");
+    res.json(finalResponse);
 
   } catch (error) {
     handleApiError(error, res);
   }
 });
+
+
+
+
+
+
+
+
 
 // Endpoint for Career Level Index (CLI) analysis
 app.post("/analyze-cli", async (req, res) => {
