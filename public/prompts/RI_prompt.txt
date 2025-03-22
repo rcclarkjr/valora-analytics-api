@@ -38,8 +38,8 @@ Follow this heading with a short paragraph (2–3 sentences) explaining why the 
 ---
 
 Important:
-- Do **not** include a JSON block
-- Do **not** show numeric scores or a total
-- Do **not** mention artist name or artwork title
-- Keep tone professional, neutral, and visually descriptive
+- Do **not** include a JSON block  
+- Do **not** show numeric scores or a total  
+- Do **not** mention artist name or artwork title  
+- Keep tone professional, neutral, and visually descriptive  
 - Use clear markdown formatting (headings, table) so output is easy to style
