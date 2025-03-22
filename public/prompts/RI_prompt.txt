@@ -31,8 +31,17 @@ Present a markdown table with two columns only: Criterion and a concise Explanat
 ---
 
 ## Classification  
+Use the following markdown heading, replacing x with the RI level from 1 to 5:
+
 ### RI = x
-Include the appropriate RI value (1 to 5) directly in the heading above, replacing "x". 
+
+For example:  
+### RI = 3
+
+This heading must be on its own line, with exactly three hash symbols and a single space before “RI =”. This is required for formatting and parsing purposes.
+
+
+
 
 Follow this heading with a short paragraph (2–3 sentences) explaining why the artwork falls into the assigned RI level. Justify it based on observable visual qualities. Avoid mentioning score values or using phrases like “the final score is X.”
 
