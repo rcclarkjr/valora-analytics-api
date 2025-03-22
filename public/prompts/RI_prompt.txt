@@ -31,7 +31,8 @@ Present a markdown table with two columns only: Criterion and a concise Explanat
 ---
 
 ## Classification  
-<h3 class="classification-ri">RI = [insert final RI value here]</h3>
+### RI = [insert final RI value here]
+
 
 Follow this heading with a short paragraph (2–3 sentences) explaining why the artwork falls into the assigned RI level. Justify it based on observable visual qualities. Avoid mentioning score values or using phrases like “the final score is X.”
 
