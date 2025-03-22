@@ -132,11 +132,13 @@ ${prompt}`;
       "https://api.openai.com/v1/chat/completions",
       {
         model: "gpt-4-turbo",
-        messages: [
-          { 
-            role: "system", 
-            content: "You are an expert art critic specializing in analyzing the representational nature of artwork. Your task is to evaluate the representational characteristics of the provided artwork and calculate an accurate RI (Representational Index) value between 1.00 and 5.00. Provide only the RI value and a 2-3 sentence explanation - no additional commentary or analysis." 
-          },
+
+messages: [
+  { 
+    role: "system", 
+    content: prompt  // use the loaded full prompt from RI_prompt.txt
+  },
+
           { 
             role: "user", 
             content: [
