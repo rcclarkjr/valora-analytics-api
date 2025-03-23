@@ -627,9 +627,20 @@ ${prompt}`;
   }
 });
 
-// Add this new endpoint after your existing analyze endpoints
+
+
+
+
+
+
+
+
+
+
+
 
 // Endpoint for combined SMI and RI analysis
+// Replace the entire analyze-combined endpoint with this improved version
 app.post("/analyze-combined", async (req, res) => {
   try {
     console.log("Received combined SMI and RI analyze request");
@@ -648,111 +659,9 @@ app.post("/analyze-combined", async (req, res) => {
     // Log info about the request
     console.log(`Processing combined analysis for artwork: "${artTitle}" by ${artistName}`);
     
-    // First, get the SMI prompt
-    const smiPromptPath = path.join(__dirname, "public", "prompts", "SMI_prompt.txt");
-    let smiPrompt;
+    // First, we'll get the RI value using a simplified approach
+    console.log("Sending request to OpenAI API for simplified RI analysis");
     
-    if (fs.existsSync(smiPromptPath)) {
-      smiPrompt = fs.readFileSync(smiPromptPath, 'utf8');
-    } else {
-      return res.status(404).json({ 
-        error: { message: "SMI prompt file not found" } 
-      });
-    }
-    
-    // Next, get the RI prompt
-    const riPromptPath = path.join(__dirname, "public", "prompts", "RI_prompt.txt");
-    let riPrompt;
-    
-    if (fs.existsSync(riPromptPath)) {
-      riPrompt = fs.readFileSync(riPromptPath, 'utf8');
-    } else {
-      return res.status(404).json({ 
-        error: { message: "RI prompt file not found" } 
-      });
-    }
-
-    // Construct the prompts with art title and artist name
-    const finalSmiPrompt = `Title: "${artTitle}"
-Artist: "${artistName}"
-
-${smiPrompt}`;
-
-    const finalRiPrompt = `Title: "${artTitle}"
-Artist: "${artistName}"
-
-${riPrompt}`;
-
-    console.log("Sending request to OpenAI API for SMI analysis");
-    
-    // First, get the SMI value
-    const smiResponse = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: "gpt-4-turbo",
-        messages: [
-          { 
-            role: "system", 
-            content: "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Your task is to analyze the provided artwork and calculate an accurate SMI (Skill Mastery Index) value between 1.00 and 5.00 based on the specified calculation framework. Provide detailed analysis following the prompt instructions exactly." 
-          },
-          { 
-            role: "user", 
-            content: [
-              { type: "text", text: finalSmiPrompt },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
-            ]
-          }
-        ],
-        max_tokens: 2000
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${OPENAI_API_KEY}`
-        }
-      }
-    );
-
-    console.log("Received response from OpenAI API for SMI");
-    
-    if (!smiResponse.data || !smiResponse.data.choices || !smiResponse.data.choices[0] || !smiResponse.data.choices[0].message) {
-      console.log("Invalid response format from OpenAI for SMI:", JSON.stringify(smiResponse.data));
-      return res.status(500).json({ error: { message: "Invalid response from OpenAI API for SMI analysis" } });
-    }
-
-    let smiAnalysisText = smiResponse.data.choices[0].message.content;
-    
-    // Extract category scores
-    const categoryScores = extractCategoryScores(smiAnalysisText);
-    
-    // Check if all category scores were successfully extracted
-    if (!categoryScores) {
-      console.log("Failed to extract all category scores from the analysis");
-      return res.status(500).json({ 
-        error: { 
-          message: "Failed to extract all required category scores. Please try again." 
-        } 
-      });
-    }
-    
-    // Calculate the SMI value using the weighted formula
-    const calculatedSMI = (
-      (categoryScores.composition * 0.20) +
-      (categoryScores.color * 0.20) +
-      (categoryScores.technical * 0.25) +
-      (categoryScores.originality * 0.20) +
-      (categoryScores.emotional * 0.15)
-    );
-    
-    // Round up to the nearest 0.25 increment
-    const roundedSMI = roundSMIUp(calculatedSMI);
-    
-    // Format to ensure 2 decimal places
-    const smiValue = roundedSMI.toFixed(2);
-
-    console.log("Sending request to OpenAI API for RI analysis");
-    
-    // Now, get the RI value
     const riResponse = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -760,17 +669,17 @@ ${riPrompt}`;
         messages: [
           { 
             role: "system", 
-            content: "You are an expert art critic specializing in analyzing the representational nature of artwork. Your task is to evaluate the representational characteristics of the provided artwork and calculate an accurate RI (Representational Index) value between 1.00 and 5.00. Provide only the RI value and a 2-3 sentence explanation - no additional commentary or analysis." 
+            content: "You are an expert art analyst. Examine this artwork and determine its Representational Index (RI) from 1-5 based on how representational versus abstract it is. 1=Non-Objective (Pure Abstraction), 2=Abstract, 3=Stylized Representation, 4=Representational Realism, 5=Hyper-Realism. Respond with ONLY a number from 1 to 5, no explanation." 
           },
           { 
             role: "user", 
             content: [
-              { type: "text", text: finalRiPrompt },
+              { type: "text", text: `What is the RI value (1-5) for this artwork titled "${artTitle}" by ${artistName}?` },
               { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
             ]
           }
         ],
-        max_tokens: 600
+        max_tokens: 10
       },
       {
         headers: {
@@ -783,22 +692,82 @@ ${riPrompt}`;
     console.log("Received response from OpenAI API for RI");
     
     if (!riResponse.data || !riResponse.data.choices || !riResponse.data.choices[0] || !riResponse.data.choices[0].message) {
-      console.log("Invalid response format from OpenAI for RI:", JSON.stringify(riResponse.data));
+      console.log("Invalid response format from OpenAI for RI");
       return res.status(500).json({ error: { message: "Invalid response from OpenAI API for RI analysis" } });
     }
 
-    let riAnalysisText = riResponse.data.choices[0].message.content;
+    let riAnalysisText = riResponse.data.choices[0].message.content.trim();
+    console.log("RI response:", riAnalysisText);
     
-    // Extract the RI value using regex
-    const riRegex = /Representational\s+Index\s*\(?RI\)?\s*=\s*(\d+\.\d+)/i;
-    const riMatch = riAnalysisText.match(riRegex);
+    // Extract the RI value - should be just a single digit
     let riValue = "3.0"; // Default value if extraction fails
+    const numberMatch = riAnalysisText.match(/\b([1-5])\b/);
     
-    if (riMatch && riMatch[1]) {
-      riValue = riMatch[1];
+    if (numberMatch && numberMatch[1]) {
+      riValue = numberMatch[1] + ".0";
       console.log("Extracted RI value:", riValue);
     } else {
-      console.log("Could not extract RI value from response");
+      console.log("Could not extract RI value from simplified response");
+    }
+
+    // Now, for the SMI value, we'll use a simplified approach as well
+    console.log("Sending request to OpenAI API for simplified SMI analysis");
+    
+    const smiResponse = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4-turbo",
+        messages: [
+          { 
+            role: "system", 
+            content: "You are an expert fine art analyst specialized in evaluating artistic skill. Rate this artwork on a Skill Mastery Index (SMI) from 1.00 to 5.00. Consider: Composition (20%), Color & Light (20%), Technical Skill (25%), Originality (20%), and Emotional Depth (15%). Respond with ONLY a decimal number between 1.00 and 5.00, rounded to the nearest 0.25 (e.g. 3.25, 4.50, etc.). No explanation." 
+          },
+          { 
+            role: "user", 
+            content: [
+              { type: "text", text: `What is the SMI value (1.00-5.00) for this artwork titled "${artTitle}" by ${artistName}?` },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+            ]
+          }
+        ],
+        max_tokens: 10
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENAI_API_KEY}`
+        }
+      }
+    );
+
+    console.log("Received response from OpenAI API for SMI");
+    
+    if (!smiResponse.data || !smiResponse.data.choices || !smiResponse.data.choices[0] || !smiResponse.data.choices[0].message) {
+      console.log("Invalid response format from OpenAI for SMI");
+      return res.status(500).json({ error: { message: "Invalid response from OpenAI API for SMI analysis" } });
+    }
+
+    let smiAnalysisText = smiResponse.data.choices[0].message.content.trim();
+    console.log("SMI response:", smiAnalysisText);
+    
+    // Extract the SMI value - should be a decimal number
+    let smiValue = "3.00"; // Default value if extraction fails
+    const decimalMatch = smiAnalysisText.match(/\b(\d+\.\d+)\b/);
+    
+    if (decimalMatch && decimalMatch[1]) {
+      // Ensure it's formatted with 2 decimal places
+      smiValue = parseFloat(decimalMatch[1]).toFixed(2);
+      console.log("Extracted SMI value:", smiValue);
+    } else {
+      // Try to match just a whole number
+      const wholeNumberMatch = smiAnalysisText.match(/\b(\d+)\b/);
+      if (wholeNumberMatch && wholeNumberMatch[1]) {
+        // Add .00 to the whole number
+        smiValue = parseFloat(wholeNumberMatch[1]).toFixed(2);
+        console.log("Extracted SMI whole number value:", smiValue);
+      } else {
+        console.log("Could not extract SMI value from simplified response");
+      }
     }
 
     // Send the final response with just the SMI and RI values
@@ -807,13 +776,32 @@ ${riPrompt}`;
       ri: riValue
     };
 
-    console.log("Sending final combined response to client");
+    console.log("Sending final combined response to client:", finalResponse);
     res.json(finalResponse);
 
   } catch (error) {
-    handleApiError(error, res);
+    console.error("Error in combined endpoint:", error);
+    
+    if (error.response) {
+      console.error("OpenAI API error details:", error.response.data);
+    }
+    
+    res.status(500).json({ 
+      error: { 
+        message: error.message || "An unknown error occurred in combined analysis" 
+      } 
+    });
   }
 });
+
+
+
+
+
+
+
+
+
 
 // Error handler function
 function handleApiError(error, res) {
