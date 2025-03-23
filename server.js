@@ -146,7 +146,7 @@ app.post("/analyze-ri", async (req, res) => {
 // Extract the RI value using regex
 const riRegex = /Representational\s+Index\s*\(?RI\)?\s*=\s*(\d+)|\bRI\s*=\s*(\d+)/i;
 const riMatch = riAnalysisText.match(riRegex);
-let riValue = "3.0"; // Default value if extraction fails
+let riValue = "NA"; // Default value if extraction fails
     
 if (riMatch) {
   // The value could be in group 1 or group 2 depending on which pattern matched
@@ -699,16 +699,16 @@ app.post("/analyze-combined", async (req, res) => {
     let riAnalysisText = riResponse.data.choices[0].message.content.trim();
     console.log("RI response:", riAnalysisText);
     
-    // Extract the RI value - should be just a single digit
-    let riValue = "3.0"; // Default value if extraction fails
-    const numberMatch = riAnalysisText.match(/\b([1-5])\b/);
-    
-    if (numberMatch && numberMatch[1]) {
-      riValue = numberMatch[1] + ".0";
-      console.log("Extracted RI value:", riValue);
-    } else {
-      console.log("Could not extract RI value from simplified response");
-    }
+    // Extract the RI value - should be an integer
+	let riValue = "3"; // Changed from "3.0"
+	const numberMatch = riAnalysisText.match(/\b([1-5])\b/);
+
+	if (numberMatch && numberMatch[1]) {
+ 	 riValue = numberMatch[1]; // Removed + ".0"
+  	console.log("Extracted RI value:", riValue);
+	} else {
+  	console.log("Could not extract RI value from simplified response");
+	}
 
     // Now, for the SMI value, we'll use a simplified approach as well
     console.log("Sending request to OpenAI API for simplified SMI analysis");
