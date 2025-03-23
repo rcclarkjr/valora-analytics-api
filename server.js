@@ -138,9 +138,35 @@ app.post("/analyze-ri", async (req, res) => {
 
     const analysisText = response.data.choices[0]?.message?.content || "";
 
-    // Extract the RI value (e.g., "RI = 3")
-    const riMatch = analysisText.match(/RI\s*=\s*(\d+)/);
-    const riValue = riMatch ? parseInt(riMatch[1]) : null;
+
+
+
+
+
+// Extract the RI value using regex
+const riRegex = /Representational\s+Index\s*\(?RI\)?\s*=\s*(\d+)|\bRI\s*=\s*(\d+)/i;
+const riMatch = riAnalysisText.match(riRegex);
+let riValue = "3.0"; // Default value if extraction fails
+    
+if (riMatch) {
+  // The value could be in group 1 or group 2 depending on which pattern matched
+  const extractedValue = riMatch[1] || riMatch[2];
+  if (extractedValue) {
+    riValue = extractedValue + ".0"; // Add decimal to keep consistent format
+    console.log("Extracted RI value:", riValue);
+  } else {
+    console.log("Match found but no value captured");
+  }
+} else {
+  console.log("Could not extract RI value from response");
+  // Add additional logging to see what we're getting
+  console.log("First 100 chars of analysis:", riAnalysisText.substring(0, 100));
+}    
+
+
+
+
+
 
     // Define the category based on the RI value (this is more reliable than trying to extract it)
     let category = "";
