@@ -4,6 +4,7 @@ const cors = require("cors");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
+const multer = require("multer"); // For handling file uploads
 
 const app = express();
 
@@ -21,14 +22,14 @@ app.use(cors({
     'https://advisory.valoraanalytics.com',
     // Add any other origins you need
   ],
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'], // Added PUT and DELETE for art valuation API
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']  // Added Cache-Control and Pragma
 }));
 
 // Add a fallback CORS handler for any missed routes
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE"); // Added PUT and DELETE
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Cache-Control, Pragma");  // Added Cache-Control and Pragma
   
   if (req.method === "OPTIONS") {
@@ -94,12 +95,6 @@ app.get("/PromptCalcSMI.txt", (req, res) => {
 
 // =============== ANALYSIS ENDPOINTS ===============
 
-
-
-
-
-
-
 // Endpoint for Representational Index (RI) analysis
 app.post("/analyze-ri", async (req, res) => {
   try {
@@ -138,35 +133,25 @@ app.post("/analyze-ri", async (req, res) => {
 
     const analysisText = response.data.choices[0]?.message?.content || "";
 
-
-
-
-
-
-// Extract the RI value using regex
-const riRegex = /Representational\s+Index\s*\(?RI\)?\s*=\s*(\d+)|\bRI\s*=\s*(\d+)/i;
-const riMatch = riAnalysisText.match(riRegex);
-let riValue = "NA"; // Default value if extraction fails
-    
-if (riMatch) {
-  // The value could be in group 1 or group 2 depending on which pattern matched
-  const extractedValue = riMatch[1] || riMatch[2];
-  if (extractedValue) {
-    riValue = extractedValue + ".0"; // Add decimal to keep consistent format
-    console.log("Extracted RI value:", riValue);
-  } else {
-    console.log("Match found but no value captured");
-  }
-} else {
-  console.log("Could not extract RI value from response");
-  // Add additional logging to see what we're getting
-  console.log("First 100 chars of analysis:", riAnalysisText.substring(0, 100));
-}    
-
-
-
-
-
+    // Extract the RI value using regex
+    const riRegex = /Representational\s+Index\s*\(?RI\)?\s*=\s*(\d+)|\bRI\s*=\s*(\d+)/i;
+    const riMatch = analysisText.match(riRegex);
+    let riValue = "NA"; // Default value if extraction fails
+        
+    if (riMatch) {
+      // The value could be in group 1 or group 2 depending on which pattern matched
+      const extractedValue = riMatch[1] || riMatch[2];
+      if (extractedValue) {
+        riValue = extractedValue + ".0"; // Add decimal to keep consistent format
+        console.log("Extracted RI value:", riValue);
+      } else {
+        console.log("Match found but no value captured");
+      }
+    } else {
+      console.log("Could not extract RI value from response");
+      // Add additional logging to see what we're getting
+      console.log("First 100 chars of analysis:", analysisText.substring(0, 100));
+    }    
 
     // Define the category based on the RI value (this is more reliable than trying to extract it)
     let category = "";
@@ -248,11 +233,6 @@ ${explanationText}`;
     res.status(500).json({ error: { message: errMsg } });
   }
 });
-
-
-
-
-
 
 // Endpoint for Career Level Index (CLI) analysis
 app.post("/analyze-cli", async (req, res) => {
@@ -402,7 +382,7 @@ function extractCategoryScores(analysisText) {
   // More robust regex patterns that look for category names followed by scores
   const categoryScoreRegex = {
     composition: /(?:1\.\s*)?(?:Composition\s*&\s*Design|Composition[\s:]+)[\s:]*(\d+\.?\d*)/i,
-    color: /(?:2\.\s*)?(?:Color\s+Harmony\s*&\s*Use\s+of\s+Light|Color(?:\s+&\s+Light)?[\s:]+)[\s:]*(\d+\.?\d*)/i,
+    color: /(?:2\.\s*)?(?:Color\s+Harmony\s*&\s+Use\s+of\s+Light|Color(?:\s+&\s+Light)?[\s:]+)[\s:]*(\d+\.?\d*)/i,
     technical: /(?:3\.\s*)?(?:Technical\s+Skill\s*&\s*Craftsmanship|Technical[\s:]+)[\s:]*(\d+\.?\d*)/i,
     originality: /(?:4\.\s*)?(?:Originality\s*&\s*Innovation|Originality[\s:]+)[\s:]*(\d+\.?\d*)/i,
     emotional: /(?:5\.\s*)?(?:Emotional\s*&\s*Conceptual\s+Depth|Emotional[\s:]+)[\s:]*(\d+\.?\d*)/i
@@ -627,18 +607,6 @@ ${prompt}`;
   }
 });
 
-
-
-
-
-
-
-
-
-
-
-
-
 // Endpoint for combined SMI and RI analysis
 // Replace the entire analyze-combined endpoint with this improved version
 app.post("/analyze-combined", async (req, res) => {
@@ -794,15 +762,6 @@ app.post("/analyze-combined", async (req, res) => {
   }
 });
 
-
-
-
-
-
-
-
-
-
 // Error handler function
 function handleApiError(error, res) {
   console.error("Error in API endpoint:", error);
@@ -830,5 +789,490 @@ function handleApiError(error, res) {
   });
 }
 
+// =======================================
+// ART VALUATION SYSTEM API ENDPOINTS
+// =======================================
+
+// Path to your JSON database and images directory
+const DB_PATH = path.join(__dirname, 'public', 'data', 'art_database.json');
+const IMAGES_DIR = path.join(__dirname, 'public', 'images', 'artworks');
+
+// Ensure directories exist
+if (!fs.existsSync(path.dirname(DB_PATH))) {
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+}
+if (!fs.existsSync(IMAGES_DIR)) {
+  fs.mkdirSync(IMAGES_DIR, { recursive: true });
+}
+
+// Configure multer for image uploads
+const storage = multer.diskStorage({
+  destination: function(req, file, cb) {
+    cb(null, IMAGES_DIR);
+  },
+  filename: function(req, file, cb) {
+    // Use the record ID from the request parameters, padded to 5 digits
+    const paddedId = String(req.params.id).padStart(5, '0');
+    cb(null, `${paddedId}.jpg`);
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: function(req, file, cb) {
+    // Accept only image files
+    if (!file.originalname.match(/\.(jpg|jpeg|png)$/)) {
+      return cb(new Error('Only image files are allowed'));
+    }
+    cb(null, true);
+  }
+});
+
+// Helper function to read database
+function readDatabase() {
+  try {
+    if (!fs.existsSync(DB_PATH)) {
+      // Create empty database if it doesn't exist
+      const emptyDb = {
+        metadata: {
+          lastUpdated: new Date().toISOString(),
+          coefficients: {
+            constant: 100,
+            exponent: 0.5,
+            lastCalculated: new Date().toISOString()
+          }
+        },
+        records: []
+      };
+      fs.writeFileSync(DB_PATH, JSON.stringify(emptyDb, null, 2));
+      return emptyDb;
+    }
+    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  } catch (error) {
+    console.error('Error reading database:', error);
+    throw new Error('Database error');
+  }
+}
+
+// Helper function to write database
+function writeDatabase(data) {
+  try {
+    // Update the lastUpdated timestamp
+    data.metadata.lastUpdated = new Date().toISOString();
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error('Error writing database:', error);
+    throw new Error('Database error');
+  }
+}
+
+// Calculate APPSI helper function
+function calculateAPPSI(ppsi, size, coefficients) {
+  return ppsi * Math.pow(200/size, coefficients.exponent);
+}
+
+// Update APPSI values for all records
+function updateAllAPPSI(data) {
+  data.records.forEach(record => {
+    if (record.ppsi && record.size) {
+      record.appsi = calculateAPPSI(record.ppsi, record.size, data.metadata.coefficients);
+    }
+  });
+  return data;
+}
+
+// ====================================================
+// DATA ACCESS ENDPOINTS
+// ====================================================
+
+// GET all records
+app.get("/api/records", (req, res) => {
+  try {
+    const data = readDatabase();
+    const includeInactive = req.query.inactive === 'true';
+    
+    let records = data.records;
+    if (!includeInactive) {
+      records = records.filter(record => record.isActive !== false);
+    }
+    
+    res.json(records);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET single record by ID
+app.get("/api/records/:id", (req, res) => {
+  try {
+    const recordId = parseInt(req.params.id);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: 'Invalid record ID' });
+    }
+    
+    const data = readDatabase();
+    const record = data.records.find(r => r.recordId === recordId);
+    
+    if (!record) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+    
+    res.json(record);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET statistical information
+app.get("/api/stats", (req, res) => {
+  try {
+    const data = readDatabase();
+    const activeRecords = data.records.filter(record => record.isActive !== false);
+    
+    const stats = {
+      totalRecords: data.records.length,
+      activeRecords: activeRecords.length,
+      inactiveRecords: data.records.length - activeRecords.length,
+      avgPrice: 0,
+      avgSize: 0,
+      avgPPSI: 0,
+      avgAPPSI: 0,
+      lastUpdated: data.metadata.lastUpdated
+    };
+    
+    if (activeRecords.length > 0) {
+      stats.avgPrice = activeRecords.reduce((sum, r) => sum + (r.price || 0), 0) / activeRecords.length;
+      stats.avgSize = activeRecords.reduce((sum, r) => sum + (r.size || 0), 0) / activeRecords.length;
+      stats.avgPPSI = activeRecords.reduce((sum, r) => sum + (r.ppsi || 0), 0) / activeRecords.length;
+      stats.avgAPPSI = activeRecords.reduce((sum, r) => sum + (r.appsi || 0), 0) / activeRecords.length;
+    }
+    
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ====================================================
+// DATA MODIFICATION ENDPOINTS
+// ====================================================
+
+// POST add new record
+app.post("/api/records", (req, res) => {
+  try {
+    const data = readDatabase();
+    
+    // Validate required fields
+    const requiredFields = ['artistName', 'title', 'height', 'width', 'price'];
+    for (const field of requiredFields) {
+      if (!req.body[field]) {
+        return res.status(400).json({ error: `Missing required field: ${field}` });
+      }
+    }
+    
+    // Get the highest existing ID and increment
+    const maxId = data.records.reduce((max, record) => 
+      Math.max(max, record.recordId || 0), 0);
+    
+    // Create a new record
+    const newRecord = {
+      recordId: maxId + 1,
+      isActive: true,
+      ...req.body
+    };
+    
+    // Calculate derived fields
+    newRecord.size = newRecord.height * newRecord.width;
+    newRecord.ppsi = newRecord.price / newRecord.size;
+    newRecord.appsi = calculateAPPSI(
+      newRecord.ppsi, 
+      newRecord.size, 
+      data.metadata.coefficients
+    );
+    
+    // Format image path using padded ID
+    const paddedId = String(newRecord.recordId).padStart(5, '0');
+    newRecord.imagePath = `images/artworks/${paddedId}.jpg`;
+    
+    data.records.push(newRecord);
+    writeDatabase(data);
+    
+    res.status(201).json(newRecord);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT update existing record
+app.put("/api/records/:id", (req, res) => {
+  try {
+    const recordId = parseInt(req.params.id);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: 'Invalid record ID' });
+    }
+    
+    const data = readDatabase();
+    const index = data.records.findIndex(r => r.recordId === recordId);
+    
+    if (index === -1) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+    
+    // Update the record, preserving recordId and imagePath
+    const updatedRecord = {
+      ...data.records[index],
+      ...req.body,
+      recordId: recordId, // Ensure ID doesn't change
+    };
+    
+    // Recalculate derived fields if height/width/price changed
+    if (req.body.height || req.body.width || req.body.price) {
+      updatedRecord.size = updatedRecord.height * updatedRecord.width;
+      updatedRecord.ppsi = updatedRecord.price / updatedRecord.size;
+      updatedRecord.appsi = calculateAPPSI(
+        updatedRecord.ppsi, 
+        updatedRecord.size, 
+        data.metadata.coefficients
+      );
+    }
+    
+    // Ensure image path stays consistent
+    const paddedId = String(recordId).padStart(5, '0');
+    updatedRecord.imagePath = `images/artworks/${paddedId}.jpg`;
+    
+    data.records[index] = updatedRecord;
+    writeDatabase(data);
+    
+    res.json(updatedRecord);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE (soft delete) a record
+app.delete("/api/records/:id", (req, res) => {
+  try {
+    const recordId = parseInt(req.params.id);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: 'Invalid record ID' });
+    }
+    
+    const data = readDatabase();
+    const index = data.records.findIndex(r => r.recordId === recordId);
+    
+    if (index === -1) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+    
+    // Soft delete by setting isActive to false
+    data.records[index].isActive = false;
+    
+    writeDatabase(data);
+    
+    res.json({ success: true, message: 'Record deactivated' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ====================================================
+// APPSI MANAGEMENT ENDPOINTS
+// ====================================================
+
+// GET current coefficients
+app.get("/api/coefficients", (req, res) => {
+  try {
+    const data = readDatabase();
+    res.json(data.metadata.coefficients);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper for R-squared calculation
+function calculateRSquared(points, slope, intercept) {
+  let totalSS = 0;
+  let residualSS = 0;
+  const meanY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+  
+  for (const point of points) {
+    const predicted = slope * point.x + intercept;
+    totalSS += Math.pow(point.y - meanY, 2);
+    residualSS += Math.pow(point.y - predicted, 2);
+  }
+  
+  return 1 - (residualSS / totalSS);
+}
+
+// GET calculate proposed coefficients
+app.get("/api/coefficients/calculate", (req, res) => {
+  try {
+    const data = readDatabase();
+    const activeRecords = data.records.filter(record => 
+      record.isActive !== false && record.size && record.ppsi);
+    
+    if (activeRecords.length < 10) {
+      return res.status(400).json({ 
+        error: 'Not enough active records for reliable coefficient calculation' 
+      });
+    }
+    
+    // Extract size and PPSI data points for calculation
+    const points = activeRecords.map(record => ({
+      x: Math.log(record.size),
+      y: Math.log(record.ppsi)
+    }));
+    
+    // Calculate best-fit power function using linear regression on log-transformed data
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    for (const point of points) {
+      sumX += point.x;
+      sumY += point.y;
+      sumXY += point.x * point.y;
+      sumXX += point.x * point.x;
+    }
+    
+    const n = points.length;
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+    
+    // Power function: y = a * x^b where b is the slope and a is e^intercept
+    const proposedCoefficients = {
+      exponent: -slope, // Negative because we want inverse relationship
+      constant: Math.exp(intercept) * Math.pow(200, -slope),
+      r2: calculateRSquared(points, slope, intercept)
+    };
+    
+    res.json({
+      current: data.metadata.coefficients,
+      proposed: proposedCoefficients
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST apply new coefficients
+app.post("/api/coefficients", (req, res) => {
+  try {
+    if (!req.body.exponent || !req.body.constant) {
+      return res.status(400).json({ error: 'Missing coefficient values' });
+    }
+    
+    const data = readDatabase();
+    
+    // Update coefficients
+    data.metadata.coefficients = {
+      exponent: req.body.exponent,
+      constant: req.body.constant,
+      lastCalculated: new Date().toISOString()
+    };
+    
+    // Recalculate APPSI for all records
+    const updatedData = updateAllAPPSI(data);
+    writeDatabase(updatedData);
+    
+    res.json({ 
+      success: true, 
+      message: 'Coefficients updated and APPSI recalculated for all records',
+      coefficients: data.metadata.coefficients
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ====================================================
+// IMAGE HANDLING ENDPOINTS
+// ====================================================
+
+// GET image by record ID
+app.get("/api/images/:id", (req, res) => {
+  try {
+    const recordId = parseInt(req.params.id);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: 'Invalid record ID' });
+    }
+    
+    const paddedId = String(recordId).padStart(5, '0');
+    const imagePath = path.join(IMAGES_DIR, `${paddedId}.jpg`);
+    
+    if (!fs.existsSync(imagePath)) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    
+    res.sendFile(imagePath);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST upload new image
+app.post("/api/images/:id", upload.single('image'), (req, res) => {
+  try {
+    const recordId = parseInt(req.params.id);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: 'Invalid record ID' });
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file uploaded' });
+    }
+    
+    // Check if record exists
+    const data = readDatabase();
+    const record = data.records.find(r => r.recordId === recordId);
+    
+    if (!record) {
+      // Remove the uploaded file if record doesn't exist
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Record not found' });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Image uploaded successfully',
+      imagePath: record.imagePath
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT replace existing image
+app.put("/api/images/:id", upload.single('image'), (req, res) => {
+  try {
+    const recordId = parseInt(req.params.id);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: 'Invalid record ID' });
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file uploaded' });
+    }
+    
+    // Check if record exists
+    const data = readDatabase();
+    const record = data.records.find(r => r.recordId === recordId);
+    
+    if (!record) {
+      // Remove the uploaded file if record doesn't exist
+      fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Record not found' });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Image replaced successfully',
+      imagePath: record.imagePath
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+
