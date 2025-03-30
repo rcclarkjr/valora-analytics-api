@@ -868,19 +868,32 @@ function writeDatabase(data) {
 }
 
 // Calculate APPSI helper function
-function calculateAPPSI(ppsi, size, coefficients) {
-  return ppsi * Math.pow(200/size, coefficients.exponent);
+function calculateAPPSI(size, ppsi, coefficients) {
+  // Calculate predicted PPSI at original size using exponential model
+  const predictedPPSI = coefficients.constant * Math.pow(size, coefficients.exponent);
+  
+  // Calculate residual (error)
+  const residual = ppsi - predictedPPSI;
+  
+  // Calculate predicted PPSI at standardized size (200 sq inches)
+  const predictedPPSI200 = coefficients.constant * Math.pow(200, coefficients.exponent);
+  
+  // Final APPSI calculation preserving residual
+  return predictedPPSI200 + residual;
 }
+
+
 
 // Update APPSI values for all records
 function updateAllAPPSI(data) {
   data.records.forEach(record => {
     if (record.ppsi && record.size) {
-      record.appsi = calculateAPPSI(record.ppsi, record.size, data.metadata.coefficients);
+      record.appsi = calculateAPPSI(record.size, record.ppsi, data.metadata.coefficients);
     }
   });
   return data;
 }
+
 
 // ====================================================
 // DATA ACCESS ENDPOINTS
@@ -986,8 +999,8 @@ app.post("/api/records", (req, res) => {
     newRecord.size = newRecord.height * newRecord.width;
     newRecord.ppsi = newRecord.price / newRecord.size;
     newRecord.appsi = calculateAPPSI(
+      newRecord.size,
       newRecord.ppsi, 
-      newRecord.size, 
       data.metadata.coefficients
     );
     
@@ -1019,6 +1032,11 @@ app.put("/api/records/:id", (req, res) => {
       return res.status(404).json({ error: 'Record not found' });
     }
     
+
+
+
+
+
     // Update the record, preserving recordId and imagePath
     const updatedRecord = {
       ...data.records[index],
@@ -1026,13 +1044,18 @@ app.put("/api/records/:id", (req, res) => {
       recordId: recordId, // Ensure ID doesn't change
     };
     
+
+
+
+
+
     // Recalculate derived fields if height/width/price changed
     if (req.body.height || req.body.width || req.body.price) {
       updatedRecord.size = updatedRecord.height * updatedRecord.width;
       updatedRecord.ppsi = updatedRecord.price / updatedRecord.size;
       updatedRecord.appsi = calculateAPPSI(
+        updatedRecord.size,
         updatedRecord.ppsi, 
-        updatedRecord.size, 
         data.metadata.coefficients
       );
     }
