@@ -996,6 +996,12 @@ app.post("/api/records", (req, res) => {
     
     // Calculate derived fields
     newRecord.size = newRecord.height * newRecord.width;
+
+    // Calculate LSSI (Log of Size in Square Inches)
+    if (newRecord.size > 0) {
+      newRecord.lssi = Math.log(newRecord.size);
+    }
+
     newRecord.ppsi = newRecord.price / newRecord.size;
     newRecord.appsi = calculateAPPSI(
       newRecord.size,
@@ -1051,6 +1057,12 @@ app.put("/api/records/:id", (req, res) => {
     // Recalculate derived fields if height/width/price changed
     if (req.body.height || req.body.width || req.body.price) {
       updatedRecord.size = updatedRecord.height * updatedRecord.width;
+
+    // Calculate LSSI (Log of Size in Square Inches)
+    if (updatedRecord.size > 0) {
+      updatedRecord.lssi = Math.log(updatedRecord.size);
+    }
+
       updatedRecord.ppsi = updatedRecord.price / updatedRecord.size;
       updatedRecord.appsi = calculateAPPSI(
         updatedRecord.size,
