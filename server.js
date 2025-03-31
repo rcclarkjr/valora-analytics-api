@@ -16,10 +16,9 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cors({
   origin: [
     'https://robert-clark-4dee.mykajabi.com', 
-    'http://localhost:5000', 
-    'https://cli-backend-g0lg.onrender.com',
-    'https://ri-backend-bozm.onrender.com',
+    'http://localhost:5000',
     'https://advisory.valoraanalytics.com',
+    'https://profound-mandazi-3e8fd7.netlify.app', // Netlify maintenance site
     // Add any other origins you need
   ],
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'], // Added PUT and DELETE for art valuation API
