@@ -866,24 +866,33 @@ function writeDatabase(data) {
   }
 }
 
-// Calculate APPSI helper function
+// ====================================================
+// COMPLETE REPLACEMENT: Calculate APPSI Function
+// ====================================================
+
 function calculateAPPSI(size, ppsi, coefficients) {
-  // Calculate predicted PPSI at original size using exponential model
-  const predictedPPSI = coefficients.constant * Math.pow(size, coefficients.exponent);
+  // Calculate LSSI (Log of Size in Square Inches)
+  const lssi = Math.log(size);
+  
+  // Calculate predicted PPSI at original LSSI using the model
+  const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
   
   // Calculate residual (error)
   const residual = ppsi - predictedPPSI;
   
-  // Calculate predicted PPSI at standardized size (200 sq inches)
-  const predictedPPSI200 = coefficients.constant * Math.pow(200, coefficients.exponent);
+  // Calculate predicted PPSI at standardized LSSI (ln(200))
+  const standardLSSI = Math.log(200);
+  const predictedPPSIStandard = coefficients.constant * Math.pow(standardLSSI, coefficients.exponent);
   
   // Final APPSI calculation preserving residual
-  return predictedPPSI200 + residual;
+  return predictedPPSIStandard + residual;
 }
 
 
 
-// Update APPSI values for all records
+// ====================================================
+// COMPLETE REPLACEMENT: Update All APPSI Function
+// ====================================================
 function updateAllAPPSI(data) {
   data.records.forEach(record => {
     if (record.ppsi && record.size) {
@@ -894,9 +903,13 @@ function updateAllAPPSI(data) {
 }
 
 
+
 // ====================================================
 // DATA ACCESS ENDPOINTS
 // ====================================================
+
+
+
 
 // GET all records
 app.get("/api/records", (req, res) => {
@@ -970,7 +983,14 @@ app.get("/api/stats", (req, res) => {
 // DATA MODIFICATION ENDPOINTS
 // ====================================================
 
-// POST add new record
+
+    
+
+
+// ====================================================
+// COMPLETE REPLACEMENT: POST Add New Record Endpoint
+// ===================================================
+
 app.post("/api/records", (req, res) => {
   try {
     const data = readDatabase();
@@ -996,12 +1016,12 @@ app.post("/api/records", (req, res) => {
     
     // Calculate derived fields
     newRecord.size = newRecord.height * newRecord.width;
-
+    
     // Calculate LSSI (Log of Size in Square Inches)
     if (newRecord.size > 0) {
       newRecord.lssi = Math.log(newRecord.size);
     }
-
+    
     newRecord.ppsi = newRecord.price / newRecord.size;
     newRecord.appsi = calculateAPPSI(
       newRecord.size,
@@ -1022,7 +1042,10 @@ app.post("/api/records", (req, res) => {
   }
 });
 
-// PUT update existing record
+// ====================================================
+// COMPLETE REPLACEMENT: PUT Update Existing Record Endpoint
+// ====================================================
+
 app.put("/api/records/:id", (req, res) => {
   try {
     const recordId = parseInt(req.params.id);
@@ -1037,32 +1060,22 @@ app.put("/api/records/:id", (req, res) => {
       return res.status(404).json({ error: 'Record not found' });
     }
     
-
-
-
-
-
-    // Update the record, preserving recordId and imagePath
+    // Update the record, preserving recordId
     const updatedRecord = {
       ...data.records[index],
       ...req.body,
       recordId: recordId, // Ensure ID doesn't change
     };
     
-
-
-
-
-
     // Recalculate derived fields if height/width/price changed
     if (req.body.height || req.body.width || req.body.price) {
       updatedRecord.size = updatedRecord.height * updatedRecord.width;
-
-    // Calculate LSSI (Log of Size in Square Inches)
-    if (updatedRecord.size > 0) {
-      updatedRecord.lssi = Math.log(updatedRecord.size);
-    }
-
+      
+      // Calculate LSSI (Log of Size in Square Inches)
+      if (updatedRecord.size > 0) {
+        updatedRecord.lssi = Math.log(updatedRecord.size);
+      }
+      
       updatedRecord.ppsi = updatedRecord.price / updatedRecord.size;
       updatedRecord.appsi = calculateAPPSI(
         updatedRecord.size,
@@ -1083,6 +1096,12 @@ app.put("/api/records/:id", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
+
+
+
 
 // DELETE (soft delete) a record
 app.delete("/api/records/:id", (req, res) => {
@@ -1124,22 +1143,42 @@ app.get("/api/coefficients", (req, res) => {
   }
 });
 
-// Helper for R-squared calculation
-function calculateRSquared(points, slope, intercept) {
-  let totalSS = 0;
-  let residualSS = 0;
+
+
+
+
+
+
+// ====================================================
+// COMPLETE REPLACEMENT: Calculate R-Squared Function
+// ====================================================
+
+function calculateRSquared(points, constant, exponent) {
+  let sumResidualSquared = 0;
+  let sumTotalSquared = 0;
   const meanY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
   
   for (const point of points) {
-    const predicted = slope * point.x + intercept;
-    totalSS += Math.pow(point.y - meanY, 2);
-    residualSS += Math.pow(point.y - predicted, 2);
+    const predicted = constant * Math.pow(point.x, exponent);
+    sumResidualSquared += Math.pow(point.y - predicted, 2);
+    sumTotalSquared += Math.pow(point.y - meanY, 2);
   }
   
-  return 1 - (residualSS / totalSS);
+  return 1 - (sumResidualSquared / sumTotalSquared);
 }
 
-// GET calculate proposed coefficients
+
+
+
+
+
+
+
+
+// ====================================================
+// COMPLETE REPLACEMENT: Calculate Proposed Coefficients Endpoint
+// ====================================================
+
 app.get("/api/coefficients/calculate", (req, res) => {
   try {
     const data = readDatabase();
@@ -1152,30 +1191,61 @@ app.get("/api/coefficients/calculate", (req, res) => {
       });
     }
     
-    // Extract size and PPSI data points for calculation
+    // Extract LSSI and PPSI data (without log-transforming PPSI)
     const points = activeRecords.map(record => ({
-      x: Math.log(record.size),
-      y: Math.log(record.ppsi)
+      x: Math.log(record.size), // LSSI
+      y: record.ppsi            // PPSI (not log-transformed)
     }));
     
-    // Calculate best-fit power function using linear regression on log-transformed data
-    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-    for (const point of points) {
-      sumX += point.x;
-      sumY += point.y;
-      sumXY += point.x * point.y;
-      sumXX += point.x * point.x;
+    // Simple non-linear regression approach:
+    // 1. Try different exponents
+    // 2. For each exponent, find the optimal constant C
+    // 3. Choose the exponent that gives the best R^2
+    
+    let bestExponent = 0;
+    let bestConstant = 0;
+    let bestR2 = -Infinity;
+    
+    // Try exponents from -5 to 5 in small increments
+    for (let e = -5; e <= 5; e += 0.1) {
+      // For a given exponent, find the optimal constant
+      let sumXeY = 0;  // Sum of x^e * y
+      let sumXe2 = 0;  // Sum of (x^e)^2
+      
+      for (const point of points) {
+        const xPowE = Math.pow(point.x, e);
+        sumXeY += xPowE * point.y;
+        sumXe2 += xPowE * xPowE;
+      }
+      
+      const constant = sumXeY / sumXe2;
+      
+      // Calculate R^2 for this model
+      let sumResidualSquared = 0;
+      let sumTotalSquared = 0;
+      const meanY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+      
+      for (const point of points) {
+        const predicted = constant * Math.pow(point.x, e);
+        sumResidualSquared += Math.pow(point.y - predicted, 2);
+        sumTotalSquared += Math.pow(point.y - meanY, 2);
+      }
+      
+      const r2 = 1 - (sumResidualSquared / sumTotalSquared);
+      
+      // If this is better than our previous best, update
+      if (r2 > bestR2) {
+        bestR2 = r2;
+        bestExponent = e;
+        bestConstant = constant;
+      }
     }
     
-    const n = points.length;
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-    const intercept = (sumY - slope * sumX) / n;
-    
-    // Power function: y = a * x^b where b is the slope and a is e^intercept
+    // Create proposed coefficients object
     const proposedCoefficients = {
-      exponent: -slope, // Negative because we want inverse relationship
-      constant: Math.exp(intercept) * Math.pow(200, -slope),
-      r2: calculateRSquared(points, slope, intercept)
+      exponent: bestExponent,
+      constant: bestConstant,
+      r2: bestR2
     };
     
     res.json({
@@ -1187,7 +1257,16 @@ app.get("/api/coefficients/calculate", (req, res) => {
   }
 });
 
-// POST apply new coefficients
+
+
+
+
+
+
+// ====================================================
+// COMPLETE REPLACEMENT: POST Apply Coefficients Endpoint
+// ====================================================
+
 app.post("/api/coefficients", (req, res) => {
   try {
     if (!req.body.exponent || !req.body.constant) {
@@ -1216,6 +1295,12 @@ app.post("/api/coefficients", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
+
+
+
 
 // ====================================================
 // IMAGE HANDLING ENDPOINTS
