@@ -867,7 +867,7 @@ function writeDatabase(data) {
 }
 
 // ====================================================
-// COMPLETE REPLACEMENT: Calculate APPSI Function
+// Calculate APPSI Function
 // ====================================================
 
 function calculateAPPSI(size, ppsi, coefficients) {
@@ -877,16 +877,17 @@ function calculateAPPSI(size, ppsi, coefficients) {
   // Calculate predicted PPSI at original LSSI using the model
   const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
   
-  // Calculate residual (error)
-  const residual = ppsi - predictedPPSI;
+  // Calculate residual as a percentage of predicted PPSI
+  const residualPercentage = (ppsi - predictedPPSI) / predictedPPSI;
   
   // Calculate predicted PPSI at standardized LSSI (ln(200))
   const standardLSSI = Math.log(200);
   const predictedPPSIStandard = coefficients.constant * Math.pow(standardLSSI, coefficients.exponent);
   
-  // Final APPSI calculation preserving residual
-  return predictedPPSIStandard + residual;
+  // Apply the percentage residual to the standardized predicted PPSI
+  return predictedPPSIStandard * (1 + residualPercentage);
 }
+
 
 
 
