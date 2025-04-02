@@ -1299,6 +1299,30 @@ app.post("/api/coefficients", (req, res) => {
 
 
 
+// ====================================================
+// SIZE YOUR PRICE ENDPOINT
+// ====================================================
+app.get("/api/sizeyourprice", (req, res) => {
+  try {
+    const data = readDatabase();
+    
+    // Extract just the coefficients from the database
+    const coefficients = {
+      constant: data.metadata.coefficients.constant,
+      exponent: data.metadata.coefficients.exponent
+    };
+    
+    res.json(coefficients);
+  } catch (error) {
+    console.error('Error in Size Your Price endpoint:', error);
+    res.status(500).json({ 
+      error: { 
+        message: error.message || "An error occurred retrieving the coefficients" 
+      } 
+    });
+  }
+});
+
 
 
 
