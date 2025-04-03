@@ -1434,6 +1434,7 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
   }
 });
 
+
 // ====================================================
 // ART VALUATION ENDPOINT
 // ====================================================
@@ -1441,6 +1442,8 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
 // POST valuation recommendation based on comparable sales
 app.post("/api/valuation", (req, res) => {
   try {
+    console.log("Valuation endpoint called with data:", req.body);
+    
     // Validate required fields
     const requiredFields = ['smi', 'ri', 'cli', 'size'];
     for (const field of requiredFields) {
@@ -1487,6 +1490,8 @@ app.post("/api/valuation", (req, res) => {
       record.appsi
     );
     
+    console.log(`Found ${activeRecords.length} active records with valid metrics`);
+    
     if (activeRecords.length === 0) {
       return res.status(404).json({ error: 'No records with valid metrics found' });
     }
@@ -1508,12 +1513,18 @@ app.post("/api/valuation", (req, res) => {
     const smiIsExtreme = Math.abs(subjectSMI - smiMean) > smiStdDev;
     const cliIsExtreme = Math.abs(subjectCLI - cliMean) > cliStdDev;
     
+    console.log(`Database stats - SMI: mean=${smiMean.toFixed(2)}, stdDev=${smiStdDev.toFixed(2)}`);
+    console.log(`Database stats - CLI: mean=${cliMean.toFixed(2)}, stdDev=${cliStdDev.toFixed(2)}`);
+    console.log(`Subject artwork - SMI: ${subjectSMI} (extreme: ${smiIsExtreme}), CLI: ${subjectCLI} (extreme: ${cliIsExtreme})`);
+    
     // Step 1: Initial RI filter
     let filteredRecords = activeRecords.filter(record => record.ri === subjectRI);
     let riExpanded = false;
     
-    // If we don't have enough records (at least 14), expand RI by +/- 1
-    if (filteredRecords.length < 14) {
+    console.log(`Initial RI filter (RI=${subjectRI}) found ${filteredRecords.length} records`);
+    
+    // If we don't have enough records (at least 10), expand RI by +/- 1
+    if (filteredRecords.length < 10) {
       const expandedRiMin = Math.max(1, subjectRI - 1);
       const expandedRiMax = Math.min(5, subjectRI + 1);
       
@@ -1525,11 +1536,10 @@ app.post("/api/valuation", (req, res) => {
       console.log(`Expanded RI range to ${expandedRiMin}-${expandedRiMax}, found ${filteredRecords.length} records`);
     }
     
-    // If still not enough records, return error
-    if (filteredRecords.length < 5) {
+    // Instead of returning error for insufficient records, proceed with what we have
+    if (filteredRecords.length === 0) {
       return res.status(404).json({ 
-        error: 'Insufficient comparable records found, even with expanded RI range',
-        recordCount: filteredRecords.length,
+        error: 'No records with matching RI found, even with expanded range',
         recommendation: 'Try adjusting the RI value or adding more records to the database'
       });
     }
@@ -1553,60 +1563,10 @@ app.post("/api/valuation", (req, res) => {
     // Sort by distance (closest first)
     filteredRecords.sort((a, b) => a.distance - b.distance);
     
-    // Select the best records that maintain bracketing if possible
-    const selectedRecords = [];
+    // Select up to 10 closest records without further filtering
+    const selectedRecords = filteredRecords.slice(0, Math.min(10, filteredRecords.length));
     
-    // Check if we have records that can provide bracketing
-    const hasSmiAbove = filteredRecords.some(record => record.smi > subjectSMI);
-    const hasSmiBelow = filteredRecords.some(record => record.smi < subjectSMI);
-    const hasCliAbove = filteredRecords.some(record => record.cli > subjectCLI);
-    const hasCliBelow = filteredRecords.some(record => record.cli < subjectCLI);
-    
-    let needSmiAbove = !smiIsExtreme && hasSmiAbove && !selectedRecords.some(r => r.smi > subjectSMI);
-    let needSmiBelow = !smiIsExtreme && hasSmiBelow && !selectedRecords.some(r => r.smi < subjectSMI);
-    let needCliAbove = !cliIsExtreme && hasCliAbove && !selectedRecords.some(r => r.cli > subjectCLI);
-    let needCliBelow = !cliIsExtreme && hasCliBelow && !selectedRecords.some(r => r.cli < subjectCLI);
-    
-    // First pass: try to ensure we have bracketing
-    if (needSmiAbove || needSmiBelow || needCliAbove || needCliBelow) {
-      for (const record of filteredRecords) {
-        let helps = false;
-        
-        if (needSmiAbove && record.smi > subjectSMI) helps = true;
-        if (needSmiBelow && record.smi < subjectSMI) helps = true;
-        if (needCliAbove && record.cli > subjectCLI) helps = true;
-        if (needCliBelow && record.cli < subjectCLI) helps = true;
-        
-        if (helps && !selectedRecords.includes(record)) {
-          selectedRecords.push(record);
-          
-          // Update our bracketing needs
-          if (needSmiAbove && record.smi > subjectSMI) 
-            needSmiAbove = !selectedRecords.some(r => r.smi > subjectSMI);
-          if (needSmiBelow && record.smi < subjectSMI) 
-            needSmiBelow = !selectedRecords.some(r => r.smi < subjectSMI);
-          if (needCliAbove && record.cli > subjectCLI) 
-            needCliAbove = !selectedRecords.some(r => r.cli > subjectCLI);
-          if (needCliBelow && record.cli < subjectCLI) 
-            needCliBelow = !selectedRecords.some(r => r.cli < subjectCLI);
-          
-          // Break if we have 14 records
-          if (selectedRecords.length >= 14) break;
-        }
-      }
-    }
-    
-    // Second pass: fill in with closest records until we have 14 (or max available)
-    const maxRecords = Math.min(14, filteredRecords.length);
-    if (selectedRecords.length < maxRecords) {
-      for (const record of filteredRecords) {
-        if (!selectedRecords.includes(record)) {
-          selectedRecords.push(record);
-          
-          if (selectedRecords.length >= maxRecords) break;
-        }
-      }
-    }
+    console.log(`Selected ${selectedRecords.length} records for valuation calculation`);
     
     // Calculate APPSI statistics
     let appsiSum = 0;
@@ -1679,6 +1639,8 @@ app.post("/api/valuation", (req, res) => {
     // Calculate value range (15% above and below)
     const valueMin = finalValue * 0.85;
     const valueMax = finalValue * 1.15;
+    
+    console.log(`Calculated valuation - APPSI: $${finalAppsi.toFixed(2)}, Value: $${finalValue.toFixed(2)}`);
     
     // Prepare and return the response
     const response = {
@@ -1755,6 +1717,112 @@ app.post("/api/valuation", (req, res) => {
     res.status(500).json({ error: error.message || 'An unknown error occurred' });
   }
 });
+
+// GET endpoint to export comparable sales for a given artwork
+app.get("/api/valuation/export", (req, res) => {
+  try {
+    // Validate required query parameters
+    const requiredParams = ['smi', 'ri', 'cli', 'size'];
+    for (const param of requiredParams) {
+      if (!req.query[param]) {
+        return res.status(400).json({ error: `Missing required parameter: ${param}` });
+      }
+    }
+    
+    // Extract parameters from query string
+    const subjectSMI = parseFloat(req.query.smi);
+    const subjectRI = parseInt(req.query.ri);
+    const subjectCLI = parseFloat(req.query.cli);
+    const subjectSize = parseFloat(req.query.size);
+    
+    // Same valuation logic as in POST /api/valuation but returns CSV
+    // ... (implement the same filtering and calculation logic)
+    
+    // For now, a simplified implementation that calls the valuation logic
+    // and formats results as CSV
+    
+    // Simulate a request body for the valuation endpoint
+    const valReq = {
+      body: {
+        smi: subjectSMI,
+        ri: subjectRI,
+        cli: subjectCLI,
+        size: subjectSize
+      }
+    };
+    
+    // Create a response object to capture the valuation result
+    const valRes = {
+      json: function(data) {
+        // Generate CSV content
+        let csvContent = "";
+        
+        // Add report header
+        csvContent += "Art Valuation Report\r\n";
+        csvContent += `Generated on,${new Date().toLocaleString()}\r\n\r\n`;
+        
+        // Add subject artwork details
+        csvContent += "Subject Artwork Details\r\n";
+        csvContent += `Size (sq in),${data.artwork.size.toFixed(2)}\r\n`;
+        csvContent += `SMI,${data.artwork.smi.toFixed(2)}\r\n`;
+        csvContent += `RI,${data.artwork.ri}\r\n`;
+        csvContent += `CLI,${data.artwork.cli.toFixed(2)}\r\n\r\n`;
+        
+        // Add valuation results
+        csvContent += "Valuation Results\r\n";
+        csvContent += `Recommended APPSI,$${data.valuation.appsi.toFixed(2)}\r\n`;
+        csvContent += `Estimated Value,$${data.valuation.value.toFixed(2)}\r\n`;
+        csvContent += `Value Range,$${data.valuation.valueRange.min.toFixed(2)} - $${data.valuation.valueRange.max.toFixed(2)}\r\n\r\n`;
+        
+        // Add comparable sales statistics
+        csvContent += "Comparable Sales Statistics\r\n";
+        csvContent += `Number of Comparables,${data.comparables.count}\r\n`;
+        csvContent += `Average SMI,${data.comparables.stats.smi.avg.toFixed(2)}\r\n`;
+        csvContent += `Average CLI,${data.comparables.stats.cli.avg.toFixed(2)}\r\n`;
+        csvContent += `Average APPSI,$${data.comparables.stats.appsi.avg.toFixed(2)}\r\n\r\n`;
+        
+        // Add comparable sales details
+        csvContent += "Comparable Sales Details\r\n";
+        csvContent += "ID,Artist,Title,Size,Price,APPSI,SMI,RI,CLI,Distance\r\n";
+        
+        data.comparables.records.forEach(record => {
+          csvContent += `${record.recordId},`;
+          csvContent += `"${record.artistName || ''}",`;
+          csvContent += `"${record.title || ''}",`;
+          csvContent += `${record.size ? record.size.toFixed(0) : ''},`;
+          csvContent += `${record.price ? record.price.toFixed(2) : ''},`;
+          csvContent += `${record.appsi ? record.appsi.toFixed(2) : ''},`;
+          csvContent += `${record.smi.toFixed(2)},`;
+          csvContent += `${record.ri},`;
+          csvContent += `${record.cli.toFixed(2)},`;
+          csvContent += `${record.distance.toFixed(4)}\r\n`;
+        });
+        
+        // Set response headers for CSV download
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=art_valuation_report_${new Date().toISOString().slice(0,10)}.csv`);
+        
+        // Send CSV content
+        res.send(csvContent);
+      },
+      status: function(code) {
+        res.status(code);
+        return this;
+      }
+    };
+    
+    // Call the valuation logic
+    app._router.handle(valReq, valRes, () => {
+      // If we get here, something went wrong
+      res.status(500).json({ error: 'Failed to generate CSV export' });
+    });
+    
+  } catch (error) {
+    console.error('Error in valuation export endpoint:', error);
+    res.status(500).json({ error: error.message || 'An unknown error occurred' });
+  }
+});
+
 
 // GET endpoint to export comparable sales for a given artwork
 app.get("/api/valuation/export", (req, res) => {
