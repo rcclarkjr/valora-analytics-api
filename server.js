@@ -1824,6 +1824,64 @@ app.get("/api/valuation/export", (req, res) => {
 });
 
 
+
+// ===========================================
+//     DEBUG ENDPOINT
+// ===========================================
+
+// Add this endpoint to server.js for database debugging
+app.get("/api/debug-database", (req, res) => {
+  try {
+    // Read the database
+    const data = readDatabase();
+    
+    // Check for records
+    const totalRecords = data.records.length;
+    
+    // Check for particular field names by examining the first record
+    const sampleRecord = totalRecords > 0 ? data.records[0] : null;
+    const fieldNames = sampleRecord ? Object.keys(sampleRecord) : [];
+    
+    // Check for records with our expected metrics
+    const recordsWithSmi = data.records.filter(r => r.smi !== undefined).length;
+    const recordsWithRi = data.records.filter(r => r.ri !== undefined).length;
+    const recordsWithCli = data.records.filter(r => r.cli !== undefined).length;
+    
+    // Check for alternate capitalization
+    const recordsWithSMI = data.records.filter(r => r.SMI !== undefined).length;
+    const recordsWithRI = data.records.filter(r => r.RI !== undefined).length;
+    const recordsWithCLI = data.records.filter(r => r.CLI !== undefined).length;
+    
+    // Get path to database file
+    const dbPath = DB_PATH;
+    
+    res.json({
+      databasePath: dbPath,
+      databaseExists: fs.existsSync(DB_PATH),
+      totalRecords: totalRecords,
+      sampleFieldNames: fieldNames,
+      metricsCount: {
+        lowercaseSmi: recordsWithSmi,
+        lowercaseRi: recordsWithRi,
+        lowercaseCli: recordsWithCli,
+        uppercaseSMI: recordsWithSMI,
+        uppercaseRI: recordsWithRI,
+        uppercaseCLI: recordsWithCLI
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
+
+
+
+
+
 // GET endpoint to export comparable sales for a given artwork
 app.get("/api/valuation/export", (req, res) => {
   try {
