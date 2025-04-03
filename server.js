@@ -1826,7 +1826,7 @@ app.get("/api/valuation/export", (req, res) => {
 
 
 // ===========================================
-//     DEBUG ENDPOINT
+//     DEBUG ENDPOINTS
 // ===========================================
 
 // Add this endpoint to server.js for database debugging
@@ -1875,6 +1875,29 @@ app.get("/api/debug-database", (req, res) => {
       stack: error.stack 
     });
   }
+});
+
+
+
+// Filter active records with valid metrics
+const activeRecords = data.records.filter(record => {
+  // Check if record is active
+  if (record.isActive === false) {
+    return false;
+  }
+  
+  // Check metrics one by one for debugging
+  const hasSmi = record.smi !== undefined && record.smi !== null && !isNaN(parseFloat(record.smi));
+  const hasRi = record.ri !== undefined && record.ri !== null && !isNaN(parseInt(record.ri));
+  const hasCli = record.cli !== undefined && record.cli !== null && !isNaN(parseFloat(record.cli));
+  const hasAppsi = record.appsi !== undefined && record.appsi !== null && !isNaN(parseFloat(record.appsi));
+  
+  // Log failing records for debugging
+  if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
+    console.log(`Record ${record.recordId} missing metrics: smi=${hasSmi}, ri=${hasRi}, cli=${hasCli}, appsi=${hasAppsi}`);
+  }
+  
+  return hasSmi && hasRi && hasCli && hasAppsi;
 });
 
 
