@@ -12,6 +12,7 @@ const app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+
 // Configure CORS to accept requests from all your sites
 app.use(cors({
   origin: [
@@ -19,23 +20,40 @@ app.use(cors({
     'http://localhost:5000',
     'https://advisory.valoraanalytics.com',
     'https://profound-mandazi-3e8fd7.netlify.app', // Netlify maintenance site
+    'https://stunning-arithmetic-16de6b.netlify.app', // Netify valuation site
     // Add any other origins you need
   ],
-  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'], // Added PUT and DELETE for art valuation API
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']  // Added Cache-Control and Pragma
+  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']
 }));
+
 
 // Add a fallback CORS handler for any missed routes
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE"); // Added PUT and DELETE
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Cache-Control, Pragma");  // Added Cache-Control and Pragma
+  // Try using a specific list of allowed origins instead of '*'
+  const allowedOrigins = [
+    'https://robert-clark-4dee.mykajabi.com', 
+    'http://localhost:5000',
+    'https://advisory.valoraanalytics.com',
+    'https://profound-mandazi-3e8fd7.netlify.app',
+    'https://67eeb64d859f8b0b6c2fed45--stunning-arithmetic-16de6b.netlify.app',
+    'https://stunning-arithmetic-16de6b.netlify.app'
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Cache-Control, Pragma");
   
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
   next();
 });
+
 
 // Serve static files from the "public" folder
 app.use(express.static("public"));
