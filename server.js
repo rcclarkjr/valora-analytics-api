@@ -8,7 +8,6 @@ const multer = require("multer"); // For handling file uploads
 
 const app = express();
 
-// const lockfile = require('proper-lockfile'); // You'll need to install this: npm install proper-lockfile
 
 // Allow larger image sizes (50MB) for the RI calculator
 app.use(express.json({ limit: "50mb" }));
@@ -908,11 +907,10 @@ const upload = multer({
 
 
 
-// Helper function to read database with file locking
+
 function readDatabase() {
   try {
     if (!fs.existsSync(DB_PATH)) {
-      // Create empty database if it doesn't exist
       const emptyDb = {
         metadata: {
           lastUpdated: new Date().toISOString(),
@@ -927,57 +925,30 @@ function readDatabase() {
       fs.writeFileSync(DB_PATH, JSON.stringify(emptyDb, null, 2));
       return emptyDb;
     }
-    
-    // Acquire a lock before reading
-    const release = lockfile.lockSync(DB_PATH, { 
-      retries: 5,
-      retryWait: 100,
-      stale: 10000 // Consider the lock stale after 10 seconds
-    });
-    
-    try {
-      const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-      return data;
-    } finally {
-      // Always release the lock
-      release();
-    }
+
+    const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+    return data;
   } catch (error) {
     console.error('Error reading database:', error);
     throw new Error('Database error: ' + error.message);
   }
 }
 
-// Helper function to write database with file locking
 function writeDatabase(data) {
   try {
-    // Ensure directory exists
     const dir = path.dirname(DB_PATH);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    
-    // Update the lastUpdated timestamp
+
     data.metadata.lastUpdated = new Date().toISOString();
-    
-    // Acquire a lock before writing
-    const release = lockfile.lockSync(DB_PATH, { 
-      retries: 5,
-      retryWait: 100,
-      stale: 10000 // Consider the lock stale after 10 seconds
-    });
-    
-    try {
-      fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-    } finally {
-      // Always release the lock
-      release();
-    }
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
   } catch (error) {
     console.error('Error writing database:', error);
     throw new Error('Database error: ' + error.message);
   }
 }
+
 
 
 
