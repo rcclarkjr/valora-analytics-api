@@ -968,11 +968,34 @@ app.get("/api/records/:id", (req, res) => {
   }
 });
 
+
+
+
 // GET statistical information
 app.get("/api/stats", (req, res) => {
   try {
     const data = readDatabase();
-    const activeRecords = data.records.filter(record => record.isActive !== false);
+
+// Filter active records with valid metrics
+const activeRecords = data.records.filter(record => {
+  // Check if record is active
+  if (record.isActive === false) {
+    return false;
+  }
+  
+  // Check metrics one by one for debugging
+  const hasSmi = record.smi !== undefined && record.smi !== null && !isNaN(parseFloat(record.smi));
+  const hasRi = record.ri !== undefined && record.ri !== null && !isNaN(parseInt(record.ri));
+  const hasCli = record.cli !== undefined && record.cli !== null && !isNaN(parseFloat(record.cli));
+  const hasAppsi = record.appsi !== undefined && record.appsi !== null && !isNaN(parseFloat(record.appsi));
+  
+  // Log failing records for debugging
+  if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
+    console.log(`Record ${record.recordId} missing metrics: smi=${hasSmi}, ri=${hasRi}, cli=${hasCli}, appsi=${hasAppsi}`);
+  }
+  
+  return hasSmi && hasRi && hasCli && hasAppsi;
+});
     
     const stats = {
       totalRecords: data.records.length,
@@ -1878,135 +1901,41 @@ app.get("/api/debug-database", (req, res) => {
 });
 
 
-
-// Filter active records with valid metrics
-const activeRecords = data.records.filter(record => {
-  // Check if record is active
-  if (record.isActive === false) {
-    return false;
-  }
-  
-  // Check metrics one by one for debugging
-  const hasSmi = record.smi !== undefined && record.smi !== null && !isNaN(parseFloat(record.smi));
-  const hasRi = record.ri !== undefined && record.ri !== null && !isNaN(parseInt(record.ri));
-  const hasCli = record.cli !== undefined && record.cli !== null && !isNaN(parseFloat(record.cli));
-  const hasAppsi = record.appsi !== undefined && record.appsi !== null && !isNaN(parseFloat(record.appsi));
-  
-  // Log failing records for debugging
-  if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
-    console.log(`Record ${record.recordId} missing metrics: smi=${hasSmi}, ri=${hasRi}, cli=${hasCli}, appsi=${hasAppsi}`);
-  }
-  
-  return hasSmi && hasRi && hasCli && hasAppsi;
-});
-
-
-
-
-
-
-// GET endpoint to export comparable sales for a given artwork
-app.get("/api/valuation/export", (req, res) => {
+// Add this endpoint to server.js for record debugging
+app.get("/api/debug-record/:id", (req, res) => {
   try {
-    // Validate required query parameters
-    const requiredParams = ['smi', 'ri', 'cli', 'size'];
-    for (const param of requiredParams) {
-      if (!req.query[param]) {
-        return res.status(400).json({ error: `Missing required parameter: ${param}` });
-      }
+    const recordId = parseInt(req.params.id);
+    const data = readDatabase();
+    const record = data.records.find(r => r.recordId === recordId);
+    
+    if (!record) {
+      return res.status(404).json({ error: 'Record not found' });
     }
     
-    // Extract parameters from query string
-    const subjectSMI = parseFloat(req.query.smi);
-    const subjectRI = parseInt(req.query.ri);
-    const subjectCLI = parseFloat(req.query.cli);
-    const subjectSize = parseFloat(req.query.size);
-    
-    // Same valuation logic as in POST /api/valuation but returns CSV
-    // ... (implement the same filtering and calculation logic)
-    
-    // For now, a simplified implementation that calls the valuation logic
-    // and formats results as CSV
-    
-    // Simulate a request body for the valuation endpoint
-    const valReq = {
-      body: {
-        smi: subjectSMI,
-        ri: subjectRI,
-        cli: subjectCLI,
-        size: subjectSize
-      }
-    };
-    
-    // Create a response object to capture the valuation result
-    const valRes = {
-      json: function(data) {
-        // Generate CSV content
-        let csvContent = "data:text/csv;charset=utf-8,";
-        
-        // Add report header
-        csvContent += "Art Valuation Report\r\n";
-        csvContent += `Generated on,${new Date().toLocaleString()}\r\n\r\n`;
-        
-        // Add subject artwork details
-        csvContent += "Subject Artwork Details\r\n";
-        csvContent += `Size (sq in),${data.artwork.size.toFixed(2)}\r\n`;
-        csvContent += `SMI,${data.artwork.smi.toFixed(2)}\r\n`;
-        csvContent += `RI,${data.artwork.ri}\r\n`;
-        csvContent += `CLI,${data.artwork.cli.toFixed(2)}\r\n\r\n`;
-        
-        // Add valuation results
-        csvContent += "Valuation Results\r\n";
-        csvContent += `Recommended APPSI,$${data.valuation.appsi.toFixed(2)}\r\n`;
-        csvContent += `Estimated Value,$${data.valuation.value.toFixed(2)}\r\n`;
-        csvContent += `Value Range,$${data.valuation.valueRange.min.toFixed(2)} - $${data.valuation.valueRange.max.toFixed(2)}\r\n\r\n`;
-        
-        // Add comparable sales statistics
-        csvContent += "Comparable Sales Statistics\r\n";
-        csvContent += `Number of Comparables,${data.comparables.count}\r\n`;
-        csvContent += `Average SMI,${data.comparables.stats.smi.avg.toFixed(2)}\r\n`;
-        csvContent += `Average CLI,${data.comparables.stats.cli.avg.toFixed(2)}\r\n`;
-        csvContent += `Average APPSI,$${data.comparables.stats.appsi.avg.toFixed(2)}\r\n\r\n`;
-        
-        // Add comparable sales details
-        csvContent += "Comparable Sales Details\r\n";
-        csvContent += "ID,Artist,Title,Size,Price,APPSI,SMI,RI,CLI,Distance\r\n";
-        
-        data.comparables.records.forEach(record => {
-          csvContent += `${record.recordId},`;
-          csvContent += `"${record.artistName || ''}",`;
-          csvContent += `"${record.title || ''}",`;
-          csvContent += `${record.size ? record.size.toFixed(0) : ''},`;
-          csvContent += `${record.price ? record.price.toFixed(2) : ''},`;
-          csvContent += `${record.appsi ? record.appsi.toFixed(2) : ''},`;
-          csvContent += `${record.smi.toFixed(2)},`;
-          csvContent += `${record.ri},`;
-          csvContent += `${record.cli.toFixed(2)},`;
-          csvContent += `${record.distance.toFixed(4)}\r\n`;
-        });
-        
-        // Set response headers for CSV download
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename=art_valuation_report_${new Date().toISOString().slice(0,10)}.csv`);
-        
-        // Send CSV content
-        res.send(csvContent);
+    res.json({
+      id: record.recordId,
+      isActive: record.isActive,
+      metrics: {
+        smi: record.smi,
+        ri: record.ri,
+        cli: record.cli,
+        appsi: record.appsi
       },
-      status: function(code) {
-        res.status(code);
-        return this;
+      types: {
+        smi_type: typeof record.smi,
+        ri_type: typeof record.ri,
+        cli_type: typeof record.cli,
+        appsi_type: typeof record.appsi
+      },
+      valid: {
+        smi_valid: record.smi !== undefined && record.smi !== null && !isNaN(record.smi),
+        ri_valid: record.ri !== undefined && record.ri !== null && !isNaN(record.ri),
+        cli_valid: record.cli !== undefined && record.cli !== null && !isNaN(record.cli),
+        appsi_valid: record.appsi !== undefined && record.appsi !== null && !isNaN(record.appsi)
       }
-    };
-    
-    // Call the valuation logic
-    app._router.handle(valReq, valRes, () => {
-      // If we get here, something went wrong
-      res.status(500).json({ error: 'Failed to generate CSV export' });
     });
-    
   } catch (error) {
-    console.error('Error in valuation export endpoint:', error);
-    res.status(500).json({ error: error.message || 'An unknown error occurred' });
+    res.status(500).json({ error: error.message });
   }
 });
 
