@@ -392,6 +392,41 @@ ${prompt}`;
   }
 });
 
+
+
+function calculateAPPSI(size, ppsi, coefficients) {
+    const lssi = Math.log(size);
+    const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
+    const residualPercentage = (ppsi - predictedPPSI) / predictedPPSI;
+    const standardLSSI = Math.log(200);
+    const predictedPPSIStandard = coefficients.constant * Math.pow(standardLSSI, coefficients.exponent);
+    return predictedPPSIStandard * (1 + residualPercentage);
+}
+
+
+function ensureAPPSICalculation(req, res, next) {
+    try {
+        const data = readDatabase();
+        const coefficients = data.metadata.coefficients;
+
+        if (req.body.size && req.body.ppsi) {
+            req.body.appsi = calculateAPPSI(
+                req.body.size, 
+                req.body.ppsi, 
+                coefficients
+            );
+        }
+
+        next();
+    } catch (error) {
+        console.error('Error in APPSI calculation middleware:', error);
+        res.status(500).json({ error: 'Failed to calculate APPSI' });
+    }
+}
+
+
+
+
 // Helper function to extract category scores from analysis text with improved regex patterns
 function extractCategoryScores(analysisText) {
   console.log("Extracting category scores from analysis text...");
@@ -1030,118 +1065,162 @@ const activeRecords = data.records.filter(record => {
 
 
 // ====================================================
-// COMPLETE REPLACEMENT: POST Add New Record Endpoint
+// POST Add New Record Endpoint
 // ===================================================
 
-app.post("/api/records", (req, res) => {
-  try {
-    const data = readDatabase();
-    
-    // Validate required fields
-    const requiredFields = ['artistName', 'title', 'height', 'width', 'price'];
-    for (const field of requiredFields) {
-      if (!req.body[field]) {
-        return res.status(400).json({ error: `Missing required field: ${field}` });
-      }
+app.post("/api/records", ensureAPPSICalculation, (req, res) => {
+    try {
+        const data = readDatabase();
+        
+        // Validate required fields
+        const requiredFields = ['artistName', 'title', 'height', 'width', 'price'];
+        for (const field of requiredFields) {
+            if (!req.body[field]) {
+                return res.status(400).json({ error: `Missing required field: ${field}` });
+            }
+        }
+        
+        // Get the highest existing ID and increment
+        const maxId = data.records.reduce((max, record) => 
+            Math.max(max, record.recordId || 0), 0);
+        
+        // Create a new record
+        const newRecord = {
+            recordId: maxId + 1,
+            isActive: true,
+            ...req.body
+        };
+        
+        // Calculate derived fields (now including APPSI)
+        newRecord.size = newRecord.height * newRecord.width;
+        
+        // Calculate LSSI (Log of Size in Square Inches)
+        if (newRecord.size > 0) {
+            newRecord.lssi = Math.log(newRecord.size);
+        }
+        
+        newRecord.ppsi = newRecord.price / newRecord.size;
+        
+        // Format image path using padded ID
+        const paddedId = String(newRecord.recordId).padStart(5, '0');
+        newRecord.imagePath = `images/artworks/${paddedId}.jpg`;
+        
+        data.records.push(newRecord);
+        writeDatabase(data);
+        
+        res.status(201).json(newRecord);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
-    
-    // Get the highest existing ID and increment
-    const maxId = data.records.reduce((max, record) => 
-      Math.max(max, record.recordId || 0), 0);
-    
-    // Create a new record
-    const newRecord = {
-      recordId: maxId + 1,
-      isActive: true,
-      ...req.body
-    };
-    
-    // Calculate derived fields
-    newRecord.size = newRecord.height * newRecord.width;
-    
-    // Calculate LSSI (Log of Size in Square Inches)
-    if (newRecord.size > 0) {
-      newRecord.lssi = Math.log(newRecord.size);
-    }
-    
-    newRecord.ppsi = newRecord.price / newRecord.size;
-    newRecord.appsi = calculateAPPSI(
-      newRecord.size,
-      newRecord.ppsi, 
-      data.metadata.coefficients
-    );
-    
-    // Format image path using padded ID
-    const paddedId = String(newRecord.recordId).padStart(5, '0');
-    newRecord.imagePath = `images/artworks/${paddedId}.jpg`;
-    
-    data.records.push(newRecord);
-    writeDatabase(data);
-    
-    res.status(201).json(newRecord);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ====================================================
-// COMPLETE REPLACEMENT: PUT Update Existing Record Endpoint
-// ====================================================
-
-app.put("/api/records/:id", (req, res) => {
-  try {
-    const recordId = parseInt(req.params.id);
-    if (isNaN(recordId)) {
-      return res.status(400).json({ error: 'Invalid record ID' });
-    }
-    
-    const data = readDatabase();
-    const index = data.records.findIndex(r => r.recordId === recordId);
-    
-    if (index === -1) {
-      return res.status(404).json({ error: 'Record not found' });
-    }
-    
-    // Update the record, preserving recordId
-    const updatedRecord = {
-      ...data.records[index],
-      ...req.body,
-      recordId: recordId, // Ensure ID doesn't change
-    };
-    
-    // Recalculate derived fields if height/width/price changed
-    if (req.body.height || req.body.width || req.body.price) {
-      updatedRecord.size = updatedRecord.height * updatedRecord.width;
-      
-      // Calculate LSSI (Log of Size in Square Inches)
-      if (updatedRecord.size > 0) {
-        updatedRecord.lssi = Math.log(updatedRecord.size);
-      }
-      
-      updatedRecord.ppsi = updatedRecord.price / updatedRecord.size;
-      updatedRecord.appsi = calculateAPPSI(
-        updatedRecord.size,
-        updatedRecord.ppsi, 
-        data.metadata.coefficients
-      );
-    }
-    
-    // Ensure image path stays consistent
-    const paddedId = String(recordId).padStart(5, '0');
-    updatedRecord.imagePath = `images/artworks/${paddedId}.jpg`;
-    
-    data.records[index] = updatedRecord;
-    writeDatabase(data);
-    
-    res.json(updatedRecord);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
 });
 
 
+// ====================================================
+// PUT Update Existing Record Endpoint
+// ====================================================
+
+app.put("/api/records/:id", ensureAPPSICalculation, (req, res) => {
+    try {
+        const recordId = parseInt(req.params.id);
+        if (isNaN(recordId)) {
+            return res.status(400).json({ error: 'Invalid record ID' });
+        }
+        
+        const data = readDatabase();
+        const index = data.records.findIndex(r => r.recordId === recordId);
+        
+        if (index === -1) {
+            return res.status(404).json({ error: 'Record not found' });
+        }
+        
+        // Update the record, preserving recordId
+        const updatedRecord = {
+            ...data.records[index],
+            ...req.body,
+            recordId: recordId, // Ensure ID doesn't change
+        };
+        
+        // Recalculate derived fields if height/width/price changed
+        if (req.body.height || req.body.width || req.body.price) {
+            updatedRecord.size = updatedRecord.height * updatedRecord.width;
+            
+            // Calculate LSSI (Log of Size in Square Inches)
+            if (updatedRecord.size > 0) {
+                updatedRecord.lssi = Math.log(updatedRecord.size);
+            }
+            
+            updatedRecord.ppsi = updatedRecord.price / updatedRecord.size;
+        }
+        
+        // Ensure image path stays consistent
+        const paddedId = String(recordId).padStart(5, '0');
+        updatedRecord.imagePath = `images/artworks/${paddedId}.jpg`;
+        
+        data.records[index] = updatedRecord;
+        writeDatabase(data);
+        
+        res.json(updatedRecord);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 
+// ====================================================
+// POST Recalculate APPSI Endpoint
+// ====================================================
+
+app.post("/api/records/recalculate-appsi", (req, res) => {
+    try {
+        const data = readDatabase();
+        const coefficients = data.metadata.coefficients;
+
+        // Track problematic records
+        const problematicRecords = [];
+
+        // Recalculate APPSI for all records
+        data.records.forEach(record => {
+            // Add more robust validation
+            if (!record.size || !record.ppsi || 
+                isNaN(record.size) || isNaN(record.ppsi) || 
+                record.size <= 0 || record.ppsi <= 0) {
+                
+                // Log details about problematic record
+                problematicRecords.push({
+                    recordId: record.recordId,
+                    issues: {
+                        size: record.size,
+                        ppsi: record.ppsi,
+                        hasValidSize: !!record.size && !isNaN(record.size) && record.size > 0,
+                        hasValidPPSI: !!record.ppsi && !isNaN(record.ppsi) && record.ppsi > 0
+                    }
+                });
+                
+                return; // Skip this record
+            }
+
+            // Calculate APPSI for valid records
+            record.appsi = calculateAPPSI(
+                record.size, 
+                record.ppsi, 
+                coefficients
+            );
+        });
+
+        // Write updated database
+        writeDatabase(data);
+
+        res.json({
+            message: 'Successfully recalculated APPSI for all records',
+            totalRecords: data.records.length,
+            updatedRecords: data.records.filter(r => r.appsi !== undefined).length,
+            problematicRecords: problematicRecords
+        });
+    } catch (error) {
+        console.error('Error in retroactive APPSI calculation:', error);
+        res.status(500).json({ error: 'Failed to recalculate APPSI', details: error.message });
+    }
+});
 
 
 
@@ -1938,7 +2017,6 @@ app.get("/api/debug-record/:id", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
