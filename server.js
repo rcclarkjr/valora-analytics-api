@@ -8,7 +8,7 @@ const multer = require("multer"); // For handling file uploads
 
 const app = express();
 
-const lockfile = require('proper-lockfile'); // You'll need to install this: npm install proper-lockfile
+// const lockfile = require('proper-lockfile'); // You'll need to install this: npm install proper-lockfile
 
 // Allow larger image sizes (50MB) for the RI calculator
 app.use(express.json({ limit: "50mb" }));
