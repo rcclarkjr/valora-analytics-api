@@ -8,6 +8,10 @@ const multer = require("multer"); // For handling file uploads
 
 const app = express();
 
+const fs = require("fs");
+const path = require("path");
+const lockfile = require('proper-lockfile'); // You'll need to install this: npm install proper-lockfile
+
 // Allow larger image sizes (50MB) for the RI calculator
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -404,11 +408,30 @@ function calculateAPPSI(size, ppsi, coefficients) {
 }
 
 
+
+
+
 function ensureAPPSICalculation(req, res, next) {
     try {
         const data = readDatabase();
         const coefficients = data.metadata.coefficients;
 
+        // If we have height and width, calculate size and lssi if not provided
+        if (req.body.height && req.body.width && !req.body.size) {
+            req.body.size = req.body.height * req.body.width;
+        }
+        
+        // Calculate LSSI if we have size but not LSSI
+        if (req.body.size && !req.body.lssi) {
+            req.body.lssi = Math.log(req.body.size);
+        }
+        
+        // Calculate PPSI if we have price and size but not PPSI
+        if (req.body.price && req.body.size && !req.body.ppsi) {
+            req.body.ppsi = req.body.price / req.body.size;
+        }
+
+        // Calculate APPSI if we have all required values
         if (req.body.size && req.body.ppsi) {
             req.body.appsi = calculateAPPSI(
                 req.body.size, 
@@ -420,9 +443,12 @@ function ensureAPPSICalculation(req, res, next) {
         next();
     } catch (error) {
         console.error('Error in APPSI calculation middleware:', error);
-        res.status(500).json({ error: 'Failed to calculate APPSI' });
+        res.status(500).json({ error: 'Failed to calculate APPSI: ' + error.message });
     }
 }
+
+
+
 
 
 
@@ -881,7 +907,10 @@ const upload = multer({
   }
 });
 
-// Helper function to read database
+
+
+
+// Helper function to read database with file locking
 function readDatabase() {
   try {
     if (!fs.existsSync(DB_PATH)) {
@@ -900,24 +929,63 @@ function readDatabase() {
       fs.writeFileSync(DB_PATH, JSON.stringify(emptyDb, null, 2));
       return emptyDb;
     }
-    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+    
+    // Acquire a lock before reading
+    const release = lockfile.lockSync(DB_PATH, { 
+      retries: 5,
+      retryWait: 100,
+      stale: 10000 // Consider the lock stale after 10 seconds
+    });
+    
+    try {
+      const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+      return data;
+    } finally {
+      // Always release the lock
+      release();
+    }
   } catch (error) {
     console.error('Error reading database:', error);
-    throw new Error('Database error');
+    throw new Error('Database error: ' + error.message);
   }
 }
 
-// Helper function to write database
+// Helper function to write database with file locking
 function writeDatabase(data) {
   try {
+    // Ensure directory exists
+    const dir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    
     // Update the lastUpdated timestamp
     data.metadata.lastUpdated = new Date().toISOString();
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+    
+    // Acquire a lock before writing
+    const release = lockfile.lockSync(DB_PATH, { 
+      retries: 5,
+      retryWait: 100,
+      stale: 10000 // Consider the lock stale after 10 seconds
+    });
+    
+    try {
+      fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+    } finally {
+      // Always release the lock
+      release();
+    }
   } catch (error) {
     console.error('Error writing database:', error);
-    throw new Error('Database error');
+    throw new Error('Database error: ' + error.message);
   }
 }
+
+
+
+
+
+
 
 // ====================================================
 // Calculate APPSI Function
@@ -1091,7 +1159,7 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
             ...req.body
         };
         
-        // Calculate derived fields (now including APPSI)
+        // Calculate derived fields (now including LSSI)
         newRecord.size = newRecord.height * newRecord.width;
         
         // Calculate LSSI (Log of Size in Square Inches)
@@ -1113,6 +1181,7 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
 
 
 // ====================================================
@@ -1150,6 +1219,9 @@ app.put("/api/records/:id", ensureAPPSICalculation, (req, res) => {
             }
             
             updatedRecord.ppsi = updatedRecord.price / updatedRecord.size;
+        } else if (!updatedRecord.lssi && updatedRecord.size > 0) {
+            // Ensure LSSI exists even if height/width didn't change
+            updatedRecord.lssi = Math.log(updatedRecord.size);
         }
         
         // Ensure image path stays consistent
@@ -1164,6 +1236,7 @@ app.put("/api/records/:id", ensureAPPSICalculation, (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
 
 
 // ====================================================
@@ -2017,6 +2090,49 @@ app.get("/api/debug-record/:id", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+app.post("/api/records/calculate-lssi", (req, res) => {
+    try {
+        const data = readDatabase();
+        
+        // Track records updated
+        let recordsUpdated = 0;
+        let recordsWithErrors = 0;
+        
+        // Update LSSI for all records
+        data.records.forEach(record => {
+            try {
+                // Skip records without size
+                if (!record.size || isNaN(record.size) || record.size <= 0) {
+                    recordsWithErrors++;
+                    return;
+                }
+                
+                // Calculate or update LSSI
+                record.lssi = Math.log(record.size);
+                recordsUpdated++;
+            } catch (error) {
+                console.error(`Error calculating LSSI for record ${record.recordId}:`, error);
+                recordsWithErrors++;
+            }
+        });
+        
+        // Write updated database
+        writeDatabase(data);
+        
+        res.json({
+            message: 'Successfully calculated LSSI for records',
+            totalRecords: data.records.length,
+            recordsUpdated: recordsUpdated,
+            recordsWithErrors: recordsWithErrors
+        });
+    } catch (error) {
+        console.error('Error in LSSI calculation endpoint:', error);
+        res.status(500).json({ error: 'Failed to calculate LSSI', details: error.message });
+    }
+});
+
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
