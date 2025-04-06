@@ -1114,30 +1114,6 @@ app.post("/api/records/deactivate", (req, res) => {
 
 
 
-// GET single record by ID
-app.get("/api/records/:id", (req, res) => {
-  try {
-    const recordId = parseInt(req.params.id);
-    if (isNaN(recordId)) {
-      return res.status(400).json({ error: 'Invalid record ID' });
-    }
-    
-    const data = readDatabase();
-    const record = data.records.find(r => r.recordId === recordId);
-    
-    if (!record) {
-      return res.status(404).json({ error: 'Record not found' });
-    }
-    
-    res.json(record);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-
-
-
 // GET statistical information
 app.get("/api/stats", (req, res) => {
   try {
@@ -1245,6 +1221,30 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+
+
+// GET single record by ID
+app.get("/api/records/:id", (req, res) => {
+  try {
+    const recordId = parseInt(req.params.id);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: 'Invalid record ID' });
+    }
+    
+    const data = readDatabase();
+    const record = data.records.find(r => r.recordId === recordId);
+    
+    if (!record) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+    
+    res.json(record);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 
 
