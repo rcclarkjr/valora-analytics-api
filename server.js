@@ -869,7 +869,7 @@ function handleApiError(error, res) {
 // =======================================
 
 // Path to your JSON database and images directory
-const DB_PATH = path.join(__dirname, 'public', 'data', 'art_database.json');
+const DB_PATH = '/opt/render/project/src/public/data/art_database.json';
 const IMAGES_DIR = path.join('/mnt/data', 'images');
 //
 
