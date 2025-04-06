@@ -1071,6 +1071,48 @@ app.post("/api/records/recalculate-appsi", (req, res) => {
 });
 
 
+// ====================================================
+// POST Deactivate Multiple Records (Soft Delete)
+// ====================================================
+app.post("/api/records/deactivate", (req, res) => {
+  try {
+    const { recordIds } = req.body;
+
+    if (!Array.isArray(recordIds) || recordIds.length === 0) {
+      return res.status(400).json({ error: "Missing or invalid 'recordIds' array." });
+    }
+
+    const data = readDatabase();
+    const updated = [];
+
+    recordIds.forEach(id => {
+      const recordId = parseInt(id);
+      const record = data.records.find(r => r.recordId === recordId);
+
+      if (record && record.isActive !== false) {
+        record.isActive = false;
+        updated.push(recordId);
+      }
+    });
+
+    writeDatabase(data);
+
+    res.json({
+      success: true,
+      message: `Deactivated ${updated.length} records.`,
+      deactivatedIds: updated
+    });
+  } catch (error) {
+    console.error("Error in /api/records/deactivate:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+
+
+
 
 // GET single record by ID
 app.get("/api/records/:id", (req, res) => {
