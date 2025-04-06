@@ -2103,6 +2103,48 @@ app.post("/api/records/calculate-lssi", (req, res) => {
 
 
 
+
+
+
+// ==============================
+// TEMP: Deactivate specific records
+// ==============================
+app.post("/api/debug/deactivate-bulk", (req, res) => {
+  try {
+    const data = readDatabase();
+
+    // IDs of records you want to deactivate
+    const idsToDeactivate = [220, 221, 222, 223, 224, 225, 226, 227, 228];
+
+    let updatedCount = 0;
+
+    data.records.forEach(record => {
+      if (idsToDeactivate.includes(record.recordId)) {
+        record.isActive = false;
+        updatedCount++;
+      }
+    });
+
+    writeDatabase(data);
+
+    res.json({
+      success: true,
+      message: `Deactivated ${updatedCount} records.`,
+      deactivatedIds: idsToDeactivate
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+
+
+
+
+
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
