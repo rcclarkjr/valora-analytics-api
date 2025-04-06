@@ -1012,6 +1012,66 @@ app.get("/api/records", (req, res) => {
   }
 });
 
+
+
+// ====================================================
+// POST Recalculate APPSI Endpoint
+// ====================================================
+
+app.post("/api/records/recalculate-appsi", (req, res) => {
+    try {
+        const data = readDatabase();
+        const coefficients = data.metadata.coefficients;
+
+        // Track problematic records
+        const problematicRecords = [];
+
+        // Recalculate APPSI for all records
+        data.records.forEach(record => {
+            // Add more robust validation
+            if (!record.size || !record.ppsi || 
+                isNaN(record.size) || isNaN(record.ppsi) || 
+                record.size <= 0 || record.ppsi <= 0) {
+                
+                // Log details about problematic record
+                problematicRecords.push({
+                    recordId: record.recordId,
+                    issues: {
+                        size: record.size,
+                        ppsi: record.ppsi,
+                        hasValidSize: !!record.size && !isNaN(record.size) && record.size > 0,
+                        hasValidPPSI: !!record.ppsi && !isNaN(record.ppsi) && record.ppsi > 0
+                    }
+                });
+                
+                return; // Skip this record
+            }
+
+            // Calculate APPSI for valid records
+            record.appsi = calculateAPPSI(
+                record.size, 
+                record.ppsi, 
+                coefficients
+            );
+        });
+
+        // Write updated database
+        writeDatabase(data);
+
+        res.json({
+            message: 'Successfully recalculated APPSI for all records',
+            totalRecords: data.records.length,
+            updatedRecords: data.records.filter(r => r.appsi !== undefined).length,
+            problematicRecords: problematicRecords
+        });
+    } catch (error) {
+        console.error('Error in retroactive APPSI calculation:', error);
+        res.status(500).json({ error: 'Failed to recalculate APPSI', details: error.message });
+    }
+});
+
+
+
 // GET single record by ID
 app.get("/api/records/:id", (req, res) => {
   try {
@@ -1199,63 +1259,6 @@ app.put("/api/records/:id", ensureAPPSICalculation, (req, res) => {
     }
 });
 
-
-
-// ====================================================
-// POST Recalculate APPSI Endpoint
-// ====================================================
-
-app.post("/api/records/recalculate-appsi", (req, res) => {
-    try {
-        const data = readDatabase();
-        const coefficients = data.metadata.coefficients;
-
-        // Track problematic records
-        const problematicRecords = [];
-
-        // Recalculate APPSI for all records
-        data.records.forEach(record => {
-            // Add more robust validation
-            if (!record.size || !record.ppsi || 
-                isNaN(record.size) || isNaN(record.ppsi) || 
-                record.size <= 0 || record.ppsi <= 0) {
-                
-                // Log details about problematic record
-                problematicRecords.push({
-                    recordId: record.recordId,
-                    issues: {
-                        size: record.size,
-                        ppsi: record.ppsi,
-                        hasValidSize: !!record.size && !isNaN(record.size) && record.size > 0,
-                        hasValidPPSI: !!record.ppsi && !isNaN(record.ppsi) && record.ppsi > 0
-                    }
-                });
-                
-                return; // Skip this record
-            }
-
-            // Calculate APPSI for valid records
-            record.appsi = calculateAPPSI(
-                record.size, 
-                record.ppsi, 
-                coefficients
-            );
-        });
-
-        // Write updated database
-        writeDatabase(data);
-
-        res.json({
-            message: 'Successfully recalculated APPSI for all records',
-            totalRecords: data.records.length,
-            updatedRecords: data.records.filter(r => r.appsi !== undefined).length,
-            problematicRecords: problematicRecords
-        });
-    } catch (error) {
-        console.error('Error in retroactive APPSI calculation:', error);
-        res.status(500).json({ error: 'Failed to recalculate APPSI', details: error.message });
-    }
-});
 
 
 
