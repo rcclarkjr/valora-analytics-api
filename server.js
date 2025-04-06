@@ -8,6 +8,8 @@ const multer = require("multer"); // For handling file uploads
 
 const app = express();
 
+app.use('/images/artworks', express.static(path.join(__dirname, 'public', 'data', 'images', 'artworks')));
+
 
 // Allow larger image sizes (50MB) for the RI calculator
 app.use(express.json({ limit: "50mb" }));
