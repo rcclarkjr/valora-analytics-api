@@ -869,8 +869,9 @@ function handleApiError(error, res) {
 // =======================================
 
 // Path to your JSON database and images directory
-const DB_PATH = path.join(__dirname, 'public', 'data', 'art_database.json');
-const IMAGES_DIR = path.join(__dirname, 'public', 'images', 'artworks');
+const DB_PATH = path.join('/mnt/data', 'public', 'data', 'art_database.json');
+const IMAGES_DIR = path.join('/mnt/data', 'public', 'images', 'artworks');
+
 
 // Ensure directories exist
 if (!fs.existsSync(path.dirname(DB_PATH))) {
@@ -2100,48 +2101,6 @@ app.post("/api/records/calculate-lssi", (req, res) => {
         res.status(500).json({ error: 'Failed to calculate LSSI', details: error.message });
     }
 });
-
-
-
-
-
-
-// ==============================
-// TEMP: Deactivate specific records
-// ==============================
-app.post("/api/debug/deactivate-bulk", (req, res) => {
-  try {
-    const data = readDatabase();
-
-    // IDs of records you want to deactivate
-    const idsToDeactivate = [220, 221, 222, 223, 224, 225, 226, 227, 228];
-
-    let updatedCount = 0;
-
-    data.records.forEach(record => {
-      if (idsToDeactivate.includes(record.recordId)) {
-        record.isActive = false;
-        updatedCount++;
-      }
-    });
-
-    writeDatabase(data);
-
-    res.json({
-      success: true,
-      message: `Deactivated ${updatedCount} records.`,
-      deactivatedIds: idsToDeactivate
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-
-
-
-
-
 
 
 
