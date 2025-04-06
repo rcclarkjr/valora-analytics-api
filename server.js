@@ -1535,9 +1535,18 @@ app.get("/api/sizeyourprice", (req, res) => {
 
 
 
+
+
 // ====================================================
-// IMAGE HANDLING ENDPOINTS
+// IMAGE HANDLING ENDPOINTS (UPDATED FOR PERSISTENT DISK)
 // ====================================================
+
+const PERSISTENT_IMAGE_DIR = path.join(__dirname, 'public', 'data', 'images', 'artworks');
+
+// Ensure persistent image directory exists
+if (!fs.existsSync(PERSISTENT_IMAGE_DIR)) {
+  fs.mkdirSync(PERSISTENT_IMAGE_DIR, { recursive: true });
+}
 
 // GET image by record ID
 app.get("/api/images/:id", (req, res) => {
@@ -1546,14 +1555,14 @@ app.get("/api/images/:id", (req, res) => {
     if (isNaN(recordId)) {
       return res.status(400).json({ error: 'Invalid record ID' });
     }
-    
+
     const paddedId = String(recordId).padStart(5, '0');
-    const imagePath = path.join(IMAGES_DIR, `${paddedId}.jpg`);
-    
+    const imagePath = path.join(PERSISTENT_IMAGE_DIR, `${paddedId}.jpg`);
+
     if (!fs.existsSync(imagePath)) {
       return res.status(404).json({ error: 'Image not found' });
     }
-    
+
     res.sendFile(imagePath);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1567,25 +1576,20 @@ app.post("/api/images/:id", upload.single('image'), (req, res) => {
     if (isNaN(recordId)) {
       return res.status(400).json({ error: 'Invalid record ID' });
     }
-    
+
     if (!req.file) {
       return res.status(400).json({ error: 'No image file uploaded' });
     }
-    
-    // Check if record exists
-    const data = readDatabase();
-    const record = data.records.find(r => r.recordId === recordId);
-    
-    if (!record) {
-      // Remove the uploaded file if record doesn't exist
-      fs.unlinkSync(req.file.path);
-      return res.status(404).json({ error: 'Record not found' });
-    }
-    
+
+    const paddedId = String(recordId).padStart(5, '0');
+    const targetPath = path.join(PERSISTENT_IMAGE_DIR, `${paddedId}.jpg`);
+
+    fs.renameSync(req.file.path, targetPath);
+
     res.json({ 
       success: true, 
       message: 'Image uploaded successfully',
-      imagePath: record.imagePath
+      imagePath: `images/artworks/${paddedId}.jpg`
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1599,30 +1603,33 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
     if (isNaN(recordId)) {
       return res.status(400).json({ error: 'Invalid record ID' });
     }
-    
+
     if (!req.file) {
       return res.status(400).json({ error: 'No image file uploaded' });
     }
-    
-    // Check if record exists
-    const data = readDatabase();
-    const record = data.records.find(r => r.recordId === recordId);
-    
-    if (!record) {
-      // Remove the uploaded file if record doesn't exist
-      fs.unlinkSync(req.file.path);
-      return res.status(404).json({ error: 'Record not found' });
-    }
-    
+
+    const paddedId = String(recordId).padStart(5, '0');
+    const targetPath = path.join(PERSISTENT_IMAGE_DIR, `${paddedId}.jpg`);
+
+    // Replace existing image
+    fs.renameSync(req.file.path, targetPath);
+
     res.json({ 
       success: true, 
       message: 'Image replaced successfully',
-      imagePath: record.imagePath
+      imagePath: `images/artworks/${paddedId}.jpg`
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
+
+
+
+
 
 
 // ====================================================
