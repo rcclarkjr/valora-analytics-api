@@ -869,9 +869,9 @@ function handleApiError(error, res) {
 // =======================================
 
 // Path to your JSON database and images directory
-const DB_PATH = path.join('/mnt/data', 'art_database.json');
+const DB_PATH = path.join(__dirname, 'public', 'data', 'art_database.json');
 const IMAGES_DIR = path.join('/mnt/data', 'images');
-
+//
 
 // Configure multer for image uploads
 const storage = multer.diskStorage({
