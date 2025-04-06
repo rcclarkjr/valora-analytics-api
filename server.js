@@ -869,16 +869,8 @@ function handleApiError(error, res) {
 // =======================================
 
 // Path to your JSON database and images directory
-const DB_PATH = path.join('/mnt/data', 'public', 'data', 'art_database.json');
-const IMAGES_DIR = path.join('/mnt/data', 'public', 'images', 'artworks');
-
-
-// Remove DB path check — folder already exists on the mounted disk
-
-// Only ensure images/artworks folder exists (safe to create subfolder)
-if (!fs.existsSync(IMAGES_DIR)) {
-  fs.mkdirSync(IMAGES_DIR, { recursive: true });
-}
+const DB_PATH = path.join('/mnt/data', 'art_database.json');
+const IMAGES_DIR = path.join('/mnt/data', 'images');
 
 
 // Configure multer for image uploads
