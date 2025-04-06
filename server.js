@@ -870,7 +870,8 @@ function handleApiError(error, res) {
 
 // Path to your JSON database and images directory
 const DB_PATH = '/opt/render/project/src/public/data/art_database.json';
-const IMAGES_DIR = path.join('/mnt/data', 'images');
+const IMAGES_DIR = path.join(__dirname, 'public', 'data', 'images', 'artworks');
+
 //
 
 // Configure multer for image uploads
@@ -929,18 +930,25 @@ function readDatabase() {
 
 function writeDatabase(data) {
   try {
-    const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    const dbDir = path.dirname(DB_PATH);
+    const imgDir = IMAGES_DIR;
+
+    // Ensure the directory for the JSON database exists
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
     }
 
-    data.metadata.lastUpdated = new Date().toISOString();
+    // Ensure the image directory exists
+    if (!fs.existsSync(imgDir)) {
+      fs.mkdirSync(imgDir, { recursive: true });
+    }
+
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
   } catch (error) {
     console.error('Error writing database:', error);
-    throw new Error('Database error: ' + error.message);
   }
 }
+
 
 
 
