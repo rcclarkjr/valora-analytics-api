@@ -1917,107 +1917,111 @@ app.post("/api/valuation", (req, res) => {
   }
 });
 
-// GET endpoint to export comparable sales for a given artwork
-app.get("/api/valuation/export", (req, res) => {
+
+app.post("/api/valuation", (req, res) => {
   try {
-    // Validate required query parameters
-    const requiredParams = ['smi', 'ri', 'cli', 'size'];
-    for (const param of requiredParams) {
-      if (!req.query[param]) {
-        return res.status(400).json({ error: `Missing required parameter: ${param}` });
+    console.log("Valuation endpoint called with data:", req.body);
+
+    // Validate required fields
+    const requiredFields = ['smi', 'ri', 'cli', 'size'];
+    for (const field of requiredFields) {
+      if (req.body[field] === undefined) {
+        return res.status(400).json({ error: `Missing required field: ${field}` });
       }
     }
-    
-    // Extract parameters from query string
-    const subjectSMI = parseFloat(req.query.smi);
-    const subjectRI = parseInt(req.query.ri);
-    const subjectCLI = parseFloat(req.query.cli);
-    const subjectSize = parseFloat(req.query.size);
-    
-    // Same valuation logic as in POST /api/valuation but returns CSV
-    // ... (implement the same filtering and calculation logic)
-    
-    // For now, a simplified implementation that calls the valuation logic
-    // and formats results as CSV
-    
-    // Simulate a request body for the valuation endpoint
-    const valReq = {
-      body: {
-        smi: subjectSMI,
-        ri: subjectRI,
-        cli: subjectCLI,
-        size: subjectSize
-      }
-    };
-    
-    // Create a response object to capture the valuation result
-    const valRes = {
-      json: function(data) {
-        // Generate CSV content
-        let csvContent = "";
-        
-        // Add report header
-        csvContent += "Art Valuation Report\r\n";
-        csvContent += `Generated on,${new Date().toLocaleString()}\r\n\r\n`;
-        
-        // Add subject artwork details
-        csvContent += "Subject Artwork Details\r\n";
-        csvContent += `Size (sq in),${data.artwork.size.toFixed(2)}\r\n`;
-        csvContent += `SMI,${data.artwork.smi.toFixed(2)}\r\n`;
-        csvContent += `RI,${data.artwork.ri}\r\n`;
-        csvContent += `CLI,${data.artwork.cli.toFixed(2)}\r\n\r\n`;
-        
-        // Add valuation results
-        csvContent += "Valuation Results\r\n";
-        csvContent += `Recommended APPSI,$${data.valuation.appsi.toFixed(2)}\r\n`;
-        csvContent += `Estimated Value,$${data.valuation.value.toFixed(2)}\r\n`;
-        csvContent += `Value Range,$${data.valuation.valueRange.min.toFixed(2)} - $${data.valuation.valueRange.max.toFixed(2)}\r\n\r\n`;
-        
-        // Add comparable sales statistics
-        csvContent += "Comparable Sales Statistics\r\n";
-        csvContent += `Number of Comparables,${data.comparables.count}\r\n`;
-        csvContent += `Average SMI,${data.comparables.stats.smi.avg.toFixed(2)}\r\n`;
-        csvContent += `Average CLI,${data.comparables.stats.cli.avg.toFixed(2)}\r\n`;
-        csvContent += `Average APPSI,$${data.comparables.stats.appsi.avg.toFixed(2)}\r\n\r\n`;
-        
-        // Add comparable sales details
-        csvContent += "Comparable Sales Details\r\n";
-        csvContent += "ID,Artist,Title,Size,Price,APPSI,SMI,RI,CLI,Distance\r\n";
-        
-        data.comparables.records.forEach(record => {
-          csvContent += `${record.recordId},`;
-          csvContent += `"${record.artistName || ''}",`;
-          csvContent += `"${record.title || ''}",`;
-          csvContent += `${record.size ? record.size.toFixed(0) : ''},`;
-          csvContent += `${record.price ? record.price.toFixed(2) : ''},`;
-          csvContent += `${record.appsi ? record.appsi.toFixed(2) : ''},`;
-          csvContent += `${record.smi.toFixed(2)},`;
-          csvContent += `${record.ri},`;
-          csvContent += `${record.cli.toFixed(2)},`;
-          csvContent += `${record.distance.toFixed(4)}\r\n`;
-        });
-        
-        // Set response headers for CSV download
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename=art_valuation_report_${new Date().toISOString().slice(0,10)}.csv`);
-        
-        // Send CSV content
-        res.send(csvContent);
-      },
-      status: function(code) {
-        res.status(code);
-        return this;
-      }
-    };
-    
-    // Call the valuation logic
-    app._router.handle(valReq, valRes, () => {
-      // If we get here, something went wrong
-      res.status(500).json({ error: 'Failed to generate CSV export' });
+
+    // Extract parameters
+    const subjectSMI = parseFloat(req.body.smi);
+    const subjectRIs = Array.isArray(req.body.ri) ? req.body.ri.map(r => parseInt(r)) : [parseInt(req.body.ri)];
+    const subjectCLI = parseFloat(req.body.cli);
+    const subjectSize = parseFloat(req.body.size);
+
+    // Validate values
+    if (isNaN(subjectSMI) || subjectSMI < 1 || subjectSMI > 5) throw new Error('SMI must be between 1 and 5');
+    if (subjectRIs.some(r => isNaN(r) || r < 1 || r > 5)) throw new Error('RI values must be between 1 and 5');
+    if (isNaN(subjectCLI) || subjectCLI < 1 || subjectCLI > 5) throw new Error('CLI must be between 1 and 5');
+    if (isNaN(subjectSize) || subjectSize <= 0) throw new Error('Size must be positive');
+
+    // Read database
+    const data = readDatabase();
+    const activeRecords = data.records.filter(r => r.isActive !== false && r.smi && r.ri && r.cli && r.appsi);
+
+    // Filter by RI array
+    let filteredRecords = activeRecords.filter(record => subjectRIs.includes(record.ri));
+    const riExpanded = subjectRIs.length > 1; // Mark as expanded if array has multiple values
+
+    console.log(`Filtered by RIs ${subjectRIs} - found ${filteredRecords.length} records`);
+
+    // Proceed even with fewer records
+    if (filteredRecords.length === 0) {
+      return res.status(404).json({ error: 'No matching RI records found' });
+    }
+
+    // Calculate distances
+    filteredRecords.forEach(record => {
+      record.distance = Math.sqrt(
+        Math.pow(record.smi - subjectSMI, 2) + 
+        Math.pow(record.cli - subjectCLI, 2)
+      );
+      record.smiRelation = record.smi > subjectSMI ? 'above' : record.smi < subjectSMI ? 'below' : 'equal';
+      record.cliRelation = record.cli > subjectCLI ? 'above' : record.cli < subjectCLI ? 'below' : 'equal';
     });
-    
+
+    // Sort and select
+    filteredRecords.sort((a, b) => a.distance - b.distance);
+    const selectedRecords = filteredRecords.slice(0, Math.min(10, filteredRecords.length));
+
+    // Calculate APPSI and valuation (same as original)
+    const appsiAvg = selectedRecords.reduce((sum, r) => sum + r.appsi, 0) / selectedRecords.length;
+    const smiAvg = selectedRecords.reduce((sum, r) => sum + r.smi, 0) / selectedRecords.length;
+    const cliAvg = selectedRecords.reduce((sum, r) => sum + r.cli, 0) / selectedRecords.length;
+    const finalAppsi = appsiAvg; // Simplified—add your adjustments if needed
+    const finalValue = finalAppsi * subjectSize;
+    const valueMin = finalValue * 0.85;
+    const valueMax = finalValue * 1.15;
+
+    // Response
+    const response = {
+      valuation: {
+        appsi: finalAppsi,
+        value: finalValue,
+        valueRange: { min: valueMin, max: valueMax }
+      },
+      artwork: { smi: subjectSMI, ri: subjectRIs[0], cli: subjectCLI, size: subjectSize }, // Use first RI for display
+      comparables: {
+        count: selectedRecords.length,
+        riExpanded: riExpanded,
+        hasBracketing: {
+          smi: { above: selectedRecords.some(r => r.smi > subjectSMI), below: selectedRecords.some(r => r.smi < subjectSMI) },
+          cli: { above: selectedRecords.some(r => r.cli > subjectCLI), below: selectedRecords.some(r => r.cli < subjectCLI) }
+        },
+        extremeValues: { smi: false, cli: false }, // Simplified
+        stats: {
+          smi: { avg: smiAvg, min: Math.min(...selectedRecords.map(r => r.smi)), max: Math.max(...selectedRecords.map(r => r.smi)) },
+          cli: { avg: cliAvg, min: Math.min(...selectedRecords.map(r => r.cli)), max: Math.max(...selectedRecords.map(r => r.cli)) },
+          appsi: { avg: appsiAvg, min: Math.min(...selectedRecords.map(r => r.appsi)), max: Math.max(...selectedRecords.map(r => r.appsi)) }
+        },
+        records: selectedRecords.map(r => ({
+          recordId: r.recordId,
+          artistName: r.artistName,
+          title: r.title,
+          size: r.size,
+          price: r.price,
+          appsi: r.appsi,
+          smi: r.smi,
+          ri: r.ri,
+          cli: r.cli,
+          distance: r.distance,
+          smiRelation: r.smiRelation,
+          cliRelation: r.cliRelation
+        }))
+      }
+    };
+
+    res.json(response);
+
   } catch (error) {
-    console.error('Error in valuation export endpoint:', error);
+    console.error('Error in valuation endpoint:', error);
     res.status(500).json({ error: error.message || 'An unknown error occurred' });
   }
 });
