@@ -1638,10 +1638,6 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
 // ART VALUATION ENDPOINT
 // ====================================================
 
-// ====================================================
-// ART VALUATION ENDPOINT
-// ====================================================
-
 app.post("/api/valuation", (req, res) => {
   try {
     const { smi, ri, targetedRI, cli, size } = req.body;
@@ -1773,7 +1769,10 @@ app.post("/api/valuation", (req, res) => {
   		distance: r.distance ?? null,
   		smiRelation: r.smiRelation ?? 'unknown',
   		cliRelation: r.cliRelation ?? 'unknown'
-	}))
+        })) // Ends map
+      }     // Ends comparables
+    });     // Ends res.json
+
 
 
   } catch (error) {
