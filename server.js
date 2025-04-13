@@ -1760,22 +1760,21 @@ app.post("/api/valuation", (req, res) => {
       artwork: { smi, ri, cli, size },
       comparables: {
         count: selectedRecords.length,
-        records: selectedRecords.map(r => ({
-          recordId: r.recordId ?? null,
-          artistName: r.artistName ?? 'Unknown',
-          title: r.title ?? 'Untitled',
-          size: r.size ?? null,
-          price: r.price ?? null,
-          appsi: r.appsi ?? null,
-          smi: r.smi ?? null,
-          ri: r.ri ?? null,
-          cli: r.cli ?? null,
-          distance: r.distance ?? null,
-          smiRelation: r.smiRelation ?? 'unknown',
-          cliRelation: r.cliRelation ?? 'unknown'
-        }))
-      }
-    });
+	records: selectedRecords.map(r => ({
+  		recordId: r.recordId ?? r.ID ?? null,
+  		artistName: r.artistName ?? r['Artist Name'] ?? 'Unknown',
+  		title: r.title ?? r.Title ?? 'Untitled',
+  		size: r.size ?? r['Size (sq in)'] ?? null,
+  		price: r.price ?? r['Price ($)'] ?? null,
+  		appsi: r.appsi ?? null,
+  		smi: r.smi ?? null,
+  		ri: r.ri ?? null,
+  		cli: r.cli ?? null,
+  		distance: r.distance ?? null,
+  		smiRelation: r.smiRelation ?? 'unknown',
+  		cliRelation: r.cliRelation ?? 'unknown'
+	}))
+
 
   } catch (error) {
     console.error('Error in valuation endpoint:', error);
