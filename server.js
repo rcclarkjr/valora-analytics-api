@@ -1638,7 +1638,6 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
 // ART VALUATION ENDPOINT
 // ====================================================
 
-// Change 3: Replace /api/valuation endpoint
 app.post("/api/valuation", (req, res) => {
   try {
     const { smi, ri, targetedRI, cli, size } = req.body;
@@ -1663,8 +1662,7 @@ app.post("/api/valuation", (req, res) => {
     // Read database
     const data = readDatabase();
     const activeRecords = data.records.filter(
-      record => record.isActive !== false && 
-      record.smi != null && 
+      record => record.smi != null && 
       record.ri != null && 
       record.cli != null && 
       record.appsi != null
@@ -1674,68 +1672,82 @@ app.post("/api/valuation", (req, res) => {
       return res.status(400).json({ error: 'No active records with valid metrics' });
     }
 
-    // Step 1: Filter by targetedRI and check minimum count
+    // Step 1: Filter by targetedRI
     let filteredRecords = activeRecords.filter(record => targetedRI.includes(record.ri));
+    console.log(`Step 1: ${filteredRecords.length} records with RI=${targetedRI.join(',')}`);
     if (filteredRecords.length < 30) {
       return res.status(400).json({ 
         error: `Insufficient comparable sales: only ${filteredRecords.length} records found for RI=${targetedRI.join(',')}. Minimum required is 30.` 
       });
     }
 
-    // Step 2: Split by SMI relative to subject
-    const aboveSMI = filteredRecords.filter(record => record.smi >= smi);
-    const belowSMI = filteredRecords.filter(record => record.smi < smi);
+    // Step 2: Split into Superior and Inferior Groups
+    const superiorGroup = filteredRecords.filter(record => record.smi > smi);
+    const inferiorGroup = filteredRecords.filter(record => record.smi <= smi);
+    console.log(`Step 2: superiorGroup=${superiorGroup.length}, inferiorGroup=${inferiorGroup.length}`);
 
-    // Step 3: Take top 15 by SMI from each group
-    const sortedAbove = aboveSMI.sort((a, b) => b.smi - a.smi).slice(0, 15);
-    const sortedBelow = belowSMI.sort((a, b) => b.smi - a.smi).slice(0, 15);
-    let combinedRecords = [...sortedAbove, ...sortedBelow];
+    // Step 3: Sort Superior by SMI ascending
+    const sortedSuperior = superiorGroup.sort((a, b) => a.smi - b.smi);
+    const sortedInferior = inferiorGroup.sort((a, b) => a.smi - b.smi);
+    console.log(`Step 3: sortedSuperior=${sortedSuperior.length}, sortedInferior=${sortedInferior.length}`);
+    console.log(`Step 3 Superior SMI values: ${sortedSuperior.slice(0, 10).map(r => r.smi).join(', ')}`);
 
-    // Step 4: Standardize RI and CLI, select up to 6 per group by distance
+    // Step 4: Calculate CLI/RI distance
     const riMean = activeRecords.reduce((sum, r) => sum + r.ri, 0) / activeRecords.length;
     const riVariance = activeRecords.reduce((sum, r) => sum + Math.pow(r.ri - riMean, 2), 0) / activeRecords.length;
-    const riStdDev = Math.sqrt(riVariance);
+    const riStdDev = Math.sqrt(riVariance) || 1;
     const cliMean = activeRecords.reduce((sum, r) => sum + r.cli, 0) / activeRecords.length;
     const cliVariance = activeRecords.reduce((sum, r) => sum + Math.pow(r.cli - cliMean, 2), 0) / activeRecords.length;
-    const cliStdDev = Math.sqrt(cliVariance);
+    const cliStdDev = Math.sqrt(cliVariance) || 1;
 
-    combinedRecords.forEach(record => {
-      const standardizedRI = (record.ri - riMean) / riStdDev;
-      const standardizedCLI = (record.cli - cliMean) / cliStdDev;
-      const subjectStandardizedRI = (ri - riMean) / riStdDev;
-      const subjectStandardizedCLI = (cli - cliMean) / cliStdDev;
-      record.distance = Math.sqrt(
-        Math.pow(standardizedRI - subjectStandardizedRI, 2) + 
-        Math.pow(standardizedCLI - subjectStandardizedCLI, 2)
-      );
-      record.smiRelation = record.smi > smi ? 'above' : record.smi < smi ? 'below' : 'equal';
-      record.cliRelation = record.cli > cli ? 'above' : record.cli < cli ? 'below' : 'equal';
-    });
+    const assignDistances = (records) => {
+      records.forEach(record => {
+        const standardizedRI = (record.ri - riMean) / riStdDev;
+        const standardizedCLI = (record.cli - cliMean) / cliStdDev;
+        const subjectStandardizedRI = (ri - riMean) / riStdDev;
+        const subjectStandardizedCLI = (cli - cliMean) / cliStdDev;
+        record.distance = Math.sqrt(
+          Math.pow(standardizedRI - subjectStandardizedRI, 2) +
+          Math.pow(standardizedCLI - subjectStandardizedCLI, 2)
+        );
+        record.smiRelation = record.smi > smi ? 'above' : record.smi < smi ? 'below' : 'equal';
+        record.cliRelation = record.cli > cli ? 'above' : record.cli < cli ? 'below' : 'equal';
+      });
+    };
 
-    const aboveGroup = combinedRecords.filter(r => r.smiRelation === 'above' || r.smiRelation === 'equal')
+    assignDistances(sortedSuperior);
+    assignDistances(sortedInferior);
+
+    // Step 5: Select up to 6 from each group
+    let selectedSuperior = sortedSuperior
       .sort((a, b) => a.distance - b.distance)
       .slice(0, 6);
-    const belowGroup = combinedRecords.filter(r => r.smiRelation === 'below')
+    let selectedInferior = sortedInferior
       .sort((a, b) => a.distance - b.distance)
       .slice(0, 6);
+    let selectedRecords = [...selectedSuperior, ...selectedInferior];
 
-    let selectedRecords = [...aboveGroup, ...belowGroup];
+    console.log(`Step 5: selectedSuperior=${selectedSuperior.length}, selectedInferior=${selectedInferior.length}, total=${selectedRecords.length}`);
+    console.log(`Step 5 SMI values: ${selectedRecords.map(r => r.smi).join(', ')}`);
+    console.log(`Step 5 RI values: ${selectedRecords.map(r => r.ri).join(', ')}`);
+    console.log(`Step 5 CLI values: ${selectedRecords.map(r => r.cli).join(', ')}`);
 
-    // Step 5: Final sort by SMI descending, limit to 12
-    selectedRecords = selectedRecords
-      .sort((a, b) => b.smi - a.smi)
-      .slice(0, 12);
-
-    if (selectedRecords.length < 6) {
+    if (selectedRecords.length < 6 && superiorGroup.length >= 6) {
       return res.status(400).json({ 
-        error: `Insufficient final comparables: only ${selectedRecords.length} records after filtering. Minimum required is 6.` 
+        error: `Insufficient final comparables: only ${selectedRecords.length} records after filtering. Minimum required is 6 when Superior Group is available.` 
       });
     }
 
-    // Calculate valuation
-    const appsiAvg = selectedRecords.reduce((sum, r) => sum + r.appsi, 0) / selectedRecords.length;
-    const smiAvg = selectedRecords.reduce((sum, r) => sum + r.smi, 0) / selectedRecords.length;
-    const cliAvg = selectedRecords.reduce((sum, r) => sum + r.cli, 0) / selectedRecords.length;
+    // Step 6: Calculate valuation
+    const appsiAvg = selectedRecords.length > 0 
+      ? selectedRecords.reduce((sum, r) => sum + r.appsi, 0) / selectedRecords.length 
+      : 0;
+    const smiAvg = selectedRecords.length > 0 
+      ? selectedRecords.reduce((sum, r) => sum + r.smi, 0) / selectedRecords.length 
+      : smi;
+    const cliAvg = selectedRecords.length > 0 
+      ? selectedRecords.reduce((sum, r) => sum + r.cli, 0) / selectedRecords.length 
+      : cli;
     const smiAdjustment = (smi - smiAvg) / 5.0;
     const cliAdjustment = (cli - cliAvg) / 5.0;
     const qualityAdjustment = (smiAdjustment * 0.6) + (cliAdjustment * 0.4);
@@ -1767,36 +1779,40 @@ app.post("/api/valuation", (req, res) => {
           }
         },
         extremeValues: {
-          smi: Math.abs(smi - smiAvg) > Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.smi - smiAvg, 2), 0) / activeRecords.length),
-          cli: Math.abs(cli - cliAvg) > Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.cli - cliAvg, 2), 0) / activeRecords.length)
+          smi: selectedRecords.length > 0 && Math.abs(smi - smiAvg) > Math.sqrt(
+            activeRecords.reduce((sum, r) => sum + Math.pow(r.smi - smiAvg, 2), 0) / activeRecords.length
+          ),
+          cli: selectedRecords.length > 0 && Math.abs(cli - cliAvg) > Math.sqrt(
+            activeRecords.reduce((sum, r) => sum + Math.pow(r.cli - cliAvg, 2), 0) / activeRecords.length
+          )
         },
         stats: {
           smi: {
             avg: smiAvg,
-            min: Math.min(...selectedRecords.map(r => r.smi)),
-            max: Math.max(...selectedRecords.map(r => r.smi))
+            min: selectedRecords.length > 0 ? Math.min(...selectedRecords.map(r => r.smi)) : smi,
+            max: selectedRecords.length > 0 ? Math.max(...selectedRecords.map(r => r.smi)) : smi
           },
           cli: {
             avg: cliAvg,
-            min: Math.min(...selectedRecords.map(r => r.cli)),
-            max: Math.max(...selectedRecords.map(r => r.cli))
+            min: selectedRecords.length > 0 ? Math.min(...selectedRecords.map(r => r.cli)) : cli,
+            max: selectedRecords.length > 0 ? Math.max(...selectedRecords.map(r => r.cli)) : cli
           },
           appsi: {
             avg: appsiAvg,
-            min: Math.min(...selectedRecords.map(r => r.appsi)),
-            max: Math.max(...selectedRecords.map(r => r.appsi))
+            min: selectedRecords.length > 0 ? Math.min(...selectedRecords.map(r => r.appsi)) : 0,
+            max: selectedRecords.length > 0 ? Math.max(...selectedRecords.map(r => r.appsi)) : 0
           }
         },
         records: selectedRecords.map(r => ({
-          recordId: r.recordId,
-          artistName: r.artistName,
-          title: r.title,
-          size: r.size,
-          price: r.price,
-          appsi: r.appsi,
-          smi: r.smi,
-          ri: r.ri,
-          cli: r.cli,
+          recordId: r.ID,
+          artistName: r['Artist Name'],
+          title: r.Title,
+          size: r['Size (sq in)'],
+          price: r['Price ($)'],
+          appsi: r.APPSI,
+          smi: r.SMI,
+          ri: r.RI,
+          cli: r.CLI,
           distance: r.distance,
           smiRelation: r.smiRelation,
           cliRelation: r.cliRelation
@@ -1811,6 +1827,8 @@ app.post("/api/valuation", (req, res) => {
     res.status(500).json({ error: error.message || 'An unknown error occurred' });
   }
 });
+
+
 
 
 
