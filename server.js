@@ -1834,6 +1834,34 @@ app.post("/api/valuation", (req, res) => {
 
 
 
+
+
+
+app.get('/api/debug-export', (req, res) => {
+  try {
+    const data = readDatabase();
+    const exportSubset = data.records.map(r => ({
+      ID: r.recordId,
+      'Artist Name': r.artistName,
+      Title: r.title,
+      SMI: r.SMI,
+      RI: r.RI,
+      CLI: r.CLI,
+      APPSI: r.APPSI,
+      'Price ($)': r['Price ($)']
+    }));
+    res.json(exportSubset);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+
+
+
+
 // ===========================================
 //     DEBUG ENDPOINTS
 // ===========================================
