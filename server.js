@@ -1666,7 +1666,7 @@ app.post("/api/valuation", (req, res) => {
       record.ri != null && 
       record.cli != null && 
       record.appsi != null &&
-      record['price ($)'] != null
+      record.price != null
     );
 
     if (activeRecords.length === 0) {
