@@ -1638,6 +1638,10 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
 // ART VALUATION ENDPOINT
 // ====================================================
 
+// ====================================================
+// ART VALUATION ENDPOINT
+// ====================================================
+
 app.post("/api/valuation", (req, res) => {
   try {
     const { smi, ri, targetedRI, cli, size } = req.body;
@@ -1663,10 +1667,10 @@ app.post("/api/valuation", (req, res) => {
     const data = readDatabase();
     const activeRecords = data.records.filter(
       record => record.smi != null && 
-      record.ri != null && 
-      record.cli != null && 
-      record.appsi != null &&
-      record.price != null
+                record.ri != null && 
+                record.cli != null && 
+                record.appsi != null &&
+                record.price != null
     );
 
     if (activeRecords.length === 0) {
@@ -1674,7 +1678,7 @@ app.post("/api/valuation", (req, res) => {
     }
 
     // Step 1: Filter by targetedRI
-    let filteredRecords = activeRecords.filter(record => targetedRI.includes(record.RI));
+    let filteredRecords = activeRecords.filter(record => targetedRI.includes(record.ri));
     console.log(`Step 1: ${filteredRecords.length} records with RI=${targetedRI.join(',')}`);
     if (filteredRecords.length < 30) {
       return res.status(400).json({ 
@@ -1683,36 +1687,35 @@ app.post("/api/valuation", (req, res) => {
     }
 
     // Step 2: Split into Superior and Inferior Groups
-    const superiorGroup = filteredRecords.filter(record => record.SMI > smi);
-    const inferiorGroup = filteredRecords.filter(record => record.SMI <= smi);
+    const superiorGroup = filteredRecords.filter(record => record.smi > smi);
+    const inferiorGroup = filteredRecords.filter(record => record.smi <= smi);
     console.log(`Step 2: superiorGroup=${superiorGroup.length}, inferiorGroup=${inferiorGroup.length}`);
 
     // Step 3: Sort Superior by SMI ascending
-    const sortedSuperior = superiorGroup.sort((a, b) => a.SMI - b.SMI);
-    const sortedInferior = inferiorGroup.sort((a, b) => a.SMI - b.SMI);
+    const sortedSuperior = superiorGroup.sort((a, b) => a.smi - b.smi);
+    const sortedInferior = inferiorGroup.sort((a, b) => a.smi - b.smi);
     console.log(`Step 3: sortedSuperior=${sortedSuperior.length}, sortedInferior=${sortedInferior.length}`);
-    console.log(`Step 3 Superior SMI values: ${sortedSuperior.slice(0, 10).map(r => r.SMI).join(', ')}`);
+    console.log(`Step 3 Superior SMI values: ${sortedSuperior.slice(0, 10).map(r => r.smi).join(', ')}`);
 
     // Step 4: Calculate CLI/RI distance
-    const riMean = activeRecords.reduce((sum, r) => sum + r.RI, 0) / activeRecords.length;
-    const riVariance = activeRecords.reduce((sum, r) => sum + Math.pow(r.RI - riMean, 2), 0) / activeRecords.length;
-    const riStdDev = Math.sqrt(riVariance) || 1;
-    const cliMean = activeRecords.reduce((sum, r) => sum + r.CLI, 0) / activeRecords.length;
-    const cliVariance = activeRecords.reduce((sum, r) => sum + Math.pow(r.CLI - cliMean, 2), 0) / activeRecords.length;
-    const cliStdDev = Math.sqrt(cliVariance) || 1;
+    const riMean = activeRecords.reduce((sum, r) => sum + r.ri, 0) / activeRecords.length;
+    const riStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.ri - riMean, 2), 0) / activeRecords.length) || 1;
+
+    const cliMean = activeRecords.reduce((sum, r) => sum + r.cli, 0) / activeRecords.length;
+    const cliStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.cli - cliMean, 2), 0) / activeRecords.length) || 1;
 
     const assignDistances = (records) => {
       records.forEach(record => {
-        const standardizedRI = (record.RI - riMean) / riStdDev;
-        const standardizedCLI = (record.CLI - cliMean) / cliStdDev;
+        const standardizedRI = (record.ri - riMean) / riStdDev;
+        const standardizedCLI = (record.cli - cliMean) / cliStdDev;
         const subjectStandardizedRI = (ri - riMean) / riStdDev;
         const subjectStandardizedCLI = (cli - cliMean) / cliStdDev;
         record.distance = Math.sqrt(
           Math.pow(standardizedRI - subjectStandardizedRI, 2) +
           Math.pow(standardizedCLI - subjectStandardizedCLI, 2)
         );
-        record.smiRelation = record.SMI > smi ? 'above' : record.SMI < smi ? 'below' : 'equal';
-        record.cliRelation = record.CLI > cli ? 'above' : record.CLI < cli ? 'below' : 'equal';
+        record.smiRelation = record.smi > smi ? 'above' : record.smi < smi ? 'below' : 'equal';
+        record.cliRelation = record.cli > cli ? 'above' : record.cli < cli ? 'below' : 'equal';
       });
     };
 
@@ -1720,18 +1723,14 @@ app.post("/api/valuation", (req, res) => {
     assignDistances(sortedInferior);
 
     // Step 5: Select up to 6 from each group
-    let selectedSuperior = sortedSuperior
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, 6);
-    let selectedInferior = sortedInferior
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, 6);
+    let selectedSuperior = sortedSuperior.sort((a, b) => a.distance - b.distance).slice(0, 6);
+    let selectedInferior = sortedInferior.sort((a, b) => a.distance - b.distance).slice(0, 6);
     let selectedRecords = [...selectedSuperior, ...selectedInferior];
 
     console.log(`Step 5: selectedSuperior=${selectedSuperior.length}, selectedInferior=${selectedInferior.length}, total=${selectedRecords.length}`);
-    console.log(`Step 5 SMI values: ${selectedRecords.map(r => r.SMI).join(', ')}`);
-    console.log(`Step 5 RI values: ${selectedRecords.map(r => r.RI).join(', ')}`);
-    console.log(`Step 5 CLI values: ${selectedRecords.map(r => r.CLI).join(', ')}`);
+    console.log(`Step 5 SMI values: ${selectedRecords.map(r => r.smi).join(', ')}`);
+    console.log(`Step 5 RI values: ${selectedRecords.map(r => r.ri).join(', ')}`);
+    console.log(`Step 5 CLI values: ${selectedRecords.map(r => r.cli).join(', ')}`);
 
     if (selectedRecords.length < 6 && superiorGroup.length >= 6) {
       return res.status(400).json({ 
@@ -1740,15 +1739,9 @@ app.post("/api/valuation", (req, res) => {
     }
 
     // Step 6: Calculate valuation
-    const appsiAvg = selectedRecords.length > 0 
-      ? selectedRecords.reduce((sum, r) => sum + r.APPSI, 0) / selectedRecords.length 
-      : 0;
-    const smiAvg = selectedRecords.length > 0 
-      ? selectedRecords.reduce((sum, r) => sum + r.SMI, 0) / selectedRecords.length 
-      : smi;
-    const cliAvg = selectedRecords.length > 0 
-      ? selectedRecords.reduce((sum, r) => sum + r.CLI, 0) / selectedRecords.length 
-      : cli;
+    const appsiAvg = selectedRecords.reduce((sum, r) => sum + r.appsi, 0) / selectedRecords.length;
+    const smiAvg = selectedRecords.reduce((sum, r) => sum + r.smi, 0) / selectedRecords.length;
+    const cliAvg = selectedRecords.reduce((sum, r) => sum + r.cli, 0) / selectedRecords.length;
     const smiAdjustment = (smi - smiAvg) / 5.0;
     const cliAdjustment = (cli - cliAvg) / 5.0;
     const qualityAdjustment = (smiAdjustment * 0.6) + (cliAdjustment * 0.4);
@@ -1758,8 +1751,7 @@ app.post("/api/valuation", (req, res) => {
     const valueMin = finalValue * 0.85;
     const valueMax = finalValue * 1.15;
 
-    // Prepare stats
-    const response = {
+    res.json({
       valuation: {
         appsi: finalAppsi,
         value: finalValue,
@@ -1768,62 +1760,22 @@ app.post("/api/valuation", (req, res) => {
       artwork: { smi, ri, cli, size },
       comparables: {
         count: selectedRecords.length,
-        riExpanded: targetedRI.length > 1,
-        hasBracketing: {
-          smi: {
-            above: selectedRecords.some(r => r.SMI > smi),
-            below: selectedRecords.some(r => r.SMI < smi)
-          },
-          cli: {
-            above: selectedRecords.some(r => r.CLI > cli),
-            below: selectedRecords.some(r => r.CLI < cli)
-          }
-        },
-        extremeValues: {
-          smi: selectedRecords.length > 0 && Math.abs(smi - smiAvg) > Math.sqrt(
-            activeRecords.reduce((sum, r) => sum + Math.pow(r.SMI - smiAvg, 2), 0) / activeRecords.length
-          ),
-          cli: selectedRecords.length > 0 && Math.abs(cli - cliAvg) > Math.sqrt(
-            activeRecords.reduce((sum, r) => sum + Math.pow(r.CLI - cliAvg, 2), 0) / activeRecords.length
-          )
-        },
-        stats: {
-          smi: {
-            avg: smiAvg,
-            min: selectedRecords.length > 0 ? Math.min(...selectedRecords.map(r => r.SMI)) : smi,
-            max: selectedRecords.length > 0 ? Math.max(...selectedRecords.map(r => r.SMI)) : smi
-          },
-          cli: {
-            avg: cliAvg,
-            min: selectedRecords.length > 0 ? Math.min(...selectedRecords.map(r => r.CLI)) : cli,
-            max: selectedRecords.length > 0 ? Math.max(...selectedRecords.map(r => r.CLI)) : cli
-          },
-          appsi: {
-            avg: appsiAvg,
-            min: selectedRecords.length > 0 ? Math.min(...selectedRecords.map(r => r.APPSI)) : 0,
-            max: selectedRecords.length > 0 ? Math.max(...selectedRecords.map(r => r.APPSI)) : 0
-          }
-        },
         records: selectedRecords.map(r => ({
-          recordId: r.ID ?? null,
-          artistName: r['Artist Name'] ?? 'Unknown',
-          title: r.Title ?? 'Untitled',
-          size: r['Size (sq in)'] ?? null,
-          price: r['Price ($)'] ?? null,
-          appsi: r.APPSI ?? null,
-          smi: r.SMI ?? null,
-          ri: r.RI ?? null,
-          cli: r.CLI ?? null,
+          recordId: r.recordId ?? null,
+          artistName: r.artistName ?? 'Unknown',
+          title: r.title ?? 'Untitled',
+          size: r.size ?? null,
+          price: r.price ?? null,
+          appsi: r.appsi ?? null,
+          smi: r.smi ?? null,
+          ri: r.ri ?? null,
+          cli: r.cli ?? null,
           distance: r.distance ?? null,
           smiRelation: r.smiRelation ?? 'unknown',
           cliRelation: r.cliRelation ?? 'unknown'
         }))
       }
-    };
-
-    // Log response for debugging
-    console.log('API Response Records:', JSON.stringify(response.comparables.records, null, 2));
-    res.json(response);
+    });
 
   } catch (error) {
     console.error('Error in valuation endpoint:', error);
