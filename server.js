@@ -1638,368 +1638,154 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
 // ART VALUATION ENDPOINT
 // ====================================================
 
-// POST valuation recommendation based on comparable sales
+// Change 3: Replace /api/valuation endpoint
 app.post("/api/valuation", (req, res) => {
   try {
-    console.log("Valuation endpoint called with data:", req.body);
-    
-    // Validate required fields
-    const requiredFields = ['smi', 'ri', 'cli', 'size'];
-    for (const field of requiredFields) {
-      if (req.body[field] === undefined) {
-        return res.status(400).json({ error: `Missing required field: ${field}` });
-      }
+    const { smi, ri, targetedRI, cli, size } = req.body;
+
+    // Validate inputs
+    if (typeof smi !== 'number' || smi < 1 || smi > 5) {
+      return res.status(400).json({ error: 'SMI must be between 1.00 and 5.00' });
     }
-    
-    // Extract parameters from request
-    const subjectSMI = parseFloat(req.body.smi);
-    const subjectRI = parseInt(req.body.ri);
-    const subjectCLI = parseFloat(req.body.cli);
-    const subjectSize = parseFloat(req.body.size);
-    
-    // Validate parameter values
-    if (isNaN(subjectSMI) || subjectSMI < 1 || subjectSMI > 5) {
-      return res.status(400).json({ error: 'SMI must be a number between 1 and 5' });
-    }
-    
-    if (isNaN(subjectRI) || subjectRI < 1 || subjectRI > 5) {
+    if (typeof ri !== 'number' || !Number.isInteger(ri) || ri < 1 || ri > 5) {
       return res.status(400).json({ error: 'RI must be an integer between 1 and 5' });
     }
-    
-    if (isNaN(subjectCLI) || subjectCLI < 1 || subjectCLI > 5) {
-      return res.status(400).json({ error: 'CLI must be a number between 1 and 5' });
+    if (!Array.isArray(targetedRI) || !targetedRI.every(val => Number.isInteger(val) && val >= 1 && val <= 5)) {
+      return res.status(400).json({ error: 'targetedRI must be an array of integers between 1 and 5' });
     }
-    
-    if (isNaN(subjectSize) || subjectSize <= 0) {
-      return res.status(400).json({ error: 'Size must be a positive number' });
+    if (typeof cli !== 'number' || cli < 1 || cli > 5) {
+      return res.status(400).json({ error: 'CLI must be between 1.00 and 5.00' });
     }
-    
+    if (typeof size !== 'number' || size <= 0) {
+      return res.status(400).json({ error: 'Size must be positive' });
+    }
+
     // Read database
     const data = readDatabase();
-    if (!data || !data.records || data.records.length === 0) {
-      return res.status(500).json({ error: 'No records available in database' });
-    }
-    
-    // Filter active records with valid metrics
-    const activeRecords = data.records.filter(record => 
-      record.isActive !== false && 
-      record.smi && 
-      record.ri && 
-      record.cli && 
-      record.appsi
+    const activeRecords = data.records.filter(
+      record => record.isActive !== false && 
+      record.smi != null && 
+      record.ri != null && 
+      record.cli != null && 
+      record.appsi != null
     );
-    
-    console.log(`Found ${activeRecords.length} active records with valid metrics`);
-    
+
     if (activeRecords.length === 0) {
-      return res.status(404).json({ error: 'No records with valid metrics found' });
+      return res.status(400).json({ error: 'No active records with valid metrics' });
     }
-    
-    // Calculate statistics for SMI and CLI to determine if subject values are extreme
-    // Calculate mean and standard deviation for SMI
-    const smiValues = activeRecords.map(record => record.smi);
-    const smiMean = smiValues.reduce((sum, val) => sum + val, 0) / smiValues.length;
-    const smiVariance = smiValues.reduce((sum, val) => sum + Math.pow(val - smiMean, 2), 0) / smiValues.length;
-    const smiStdDev = Math.sqrt(smiVariance);
-    
-    // Calculate mean and standard deviation for CLI
-    const cliValues = activeRecords.map(record => record.cli);
-    const cliMean = cliValues.reduce((sum, val) => sum + val, 0) / cliValues.length;
-    const cliVariance = cliValues.reduce((sum, val) => sum + Math.pow(val - cliMean, 2), 0) / cliValues.length;
-    const cliStdDev = Math.sqrt(cliVariance);
-    
-    // Check if SMI and CLI are extreme values (more than 1 SD from mean)
-    const smiIsExtreme = Math.abs(subjectSMI - smiMean) > smiStdDev;
-    const cliIsExtreme = Math.abs(subjectCLI - cliMean) > cliStdDev;
-    
-    console.log(`Database stats - SMI: mean=${smiMean.toFixed(2)}, stdDev=${smiStdDev.toFixed(2)}`);
-    console.log(`Database stats - CLI: mean=${cliMean.toFixed(2)}, stdDev=${cliStdDev.toFixed(2)}`);
-    console.log(`Subject artwork - SMI: ${subjectSMI} (extreme: ${smiIsExtreme}), CLI: ${subjectCLI} (extreme: ${cliIsExtreme})`);
-    
-    // Step 1: Initial RI filter
-    let filteredRecords = activeRecords.filter(record => record.ri === subjectRI);
-    let riExpanded = false;
-    
-    console.log(`Initial RI filter (RI=${subjectRI}) found ${filteredRecords.length} records`);
-    
-    // If we don't have enough records (at least 10), expand RI by +/- 1
-    if (filteredRecords.length < 10) {
-      const expandedRiMin = Math.max(1, subjectRI - 1);
-      const expandedRiMax = Math.min(5, subjectRI + 1);
-      
-      filteredRecords = activeRecords.filter(record => 
-        record.ri >= expandedRiMin && record.ri <= expandedRiMax
-      );
-      
-      riExpanded = true;
-      console.log(`Expanded RI range to ${expandedRiMin}-${expandedRiMax}, found ${filteredRecords.length} records`);
-    }
-    
-    // Instead of returning error for insufficient records, proceed with what we have
-    if (filteredRecords.length === 0) {
-      return res.status(404).json({ 
-        error: 'No records with matching RI found, even with expanded range',
-        recommendation: 'Try adjusting the RI value or adding more records to the database'
+
+    // Step 1: Filter by targetedRI and check minimum count
+    let filteredRecords = activeRecords.filter(record => targetedRI.includes(record.ri));
+    if (filteredRecords.length < 30) {
+      return res.status(400).json({ 
+        error: `Insufficient comparable sales: only ${filteredRecords.length} records found for RI=${targetedRI.join(',')}. Minimum required is 30.` 
       });
     }
-    
-    // Calculate distance from subject artwork for each record
-    filteredRecords.forEach(record => {
-      // Calculate Euclidean distance based on SMI and CLI
+
+    // Step 2: Split by SMI relative to subject
+    const aboveSMI = filteredRecords.filter(record => record.smi >= smi);
+    const belowSMI = filteredRecords.filter(record => record.smi < smi);
+
+    // Step 3: Take top 15 by SMI from each group
+    const sortedAbove = aboveSMI.sort((a, b) => b.smi - a.smi).slice(0, 15);
+    const sortedBelow = belowSMI.sort((a, b) => b.smi - a.smi).slice(0, 15);
+    let combinedRecords = [...sortedAbove, ...sortedBelow];
+
+    // Step 4: Standardize RI and CLI, select up to 6 per group by distance
+    const riMean = activeRecords.reduce((sum, r) => sum + r.ri, 0) / activeRecords.length;
+    const riVariance = activeRecords.reduce((sum, r) => sum + Math.pow(r.ri - riMean, 2), 0) / activeRecords.length;
+    const riStdDev = Math.sqrt(riVariance);
+    const cliMean = activeRecords.reduce((sum, r) => sum + r.cli, 0) / activeRecords.length;
+    const cliVariance = activeRecords.reduce((sum, r) => sum + Math.pow(r.cli - cliMean, 2), 0) / activeRecords.length;
+    const cliStdDev = Math.sqrt(cliVariance);
+
+    combinedRecords.forEach(record => {
+      const standardizedRI = (record.ri - riMean) / riStdDev;
+      const standardizedCLI = (record.cli - cliMean) / cliStdDev;
+      const subjectStandardizedRI = (ri - riMean) / riStdDev;
+      const subjectStandardizedCLI = (cli - cliMean) / cliStdDev;
       record.distance = Math.sqrt(
-        Math.pow(record.smi - subjectSMI, 2) + 
-        Math.pow(record.cli - subjectCLI, 2)
+        Math.pow(standardizedRI - subjectStandardizedRI, 2) + 
+        Math.pow(standardizedCLI - subjectStandardizedCLI, 2)
       );
-      
-      // Add classification for bracketing
-      record.smiRelation = record.smi > subjectSMI ? 'above' : 
-                          record.smi < subjectSMI ? 'below' : 'equal';
-      
-      record.cliRelation = record.cli > subjectCLI ? 'above' : 
-                          record.cli < subjectCLI ? 'below' : 'equal';
+      record.smiRelation = record.smi > smi ? 'above' : record.smi < smi ? 'below' : 'equal';
+      record.cliRelation = record.cli > cli ? 'above' : record.cli < cli ? 'below' : 'equal';
     });
-    
-    // Sort by distance (closest first)
-    filteredRecords.sort((a, b) => a.distance - b.distance);
-    
-    // Select up to 10 closest records without further filtering
-    const selectedRecords = filteredRecords.slice(0, Math.min(10, filteredRecords.length));
-    
-    console.log(`Selected ${selectedRecords.length} records for valuation calculation`);
-    
-    // Calculate APPSI statistics
-    let appsiSum = 0;
-    let appsiMin = Infinity;
-    let appsiMax = -Infinity;
-    
-    selectedRecords.forEach(record => {
-      appsiSum += record.appsi;
-      appsiMin = Math.min(appsiMin, record.appsi);
-      appsiMax = Math.max(appsiMax, record.appsi);
-    });
-    
-    const appsiAvg = appsiSum / selectedRecords.length;
-    
-    // Calculate SMI statistics from selected records
-    let smiSum = 0;
-    let smiMin = Infinity;
-    let smiMax = -Infinity;
-    
-    selectedRecords.forEach(record => {
-      smiSum += record.smi;
-      smiMin = Math.min(smiMin, record.smi);
-      smiMax = Math.max(smiMax, record.smi);
-    });
-    
-    const smiAvg = smiSum / selectedRecords.length;
-    
-    // Calculate CLI statistics from selected records
-    let cliSum = 0;
-    let cliMin = Infinity;
-    let cliMax = -Infinity;
-    
-    selectedRecords.forEach(record => {
-      cliSum += record.cli;
-      cliMin = Math.min(cliMin, record.cli);
-      cliMax = Math.max(cliMax, record.cli);
-    });
-    
-    const cliAvg = cliSum / selectedRecords.length;
-    
-    // Calculate distance-weighted APPSI
-    let totalWeight = 0;
-    let weightedAppsiSum = 0;
-    
-    selectedRecords.forEach(record => {
-      // Add small constant to avoid division by zero
-      const weight = 1 / (record.distance + 0.1);
-      weightedAppsiSum += record.appsi * weight;
-      totalWeight += weight;
-    });
-    
-    const weightedAppsiAvg = weightedAppsiSum / totalWeight;
-    
-    // Apply quality adjustments based on SMI and CLI differentials
-    // If subject artwork has higher SMI or CLI than average, increase value
-    // Otherwise, decrease value
-    const smiAdjustment = (subjectSMI - smiAvg) / 5.0; // Scale by max SMI (5.0)
-    const cliAdjustment = (subjectCLI - cliAvg) / 5.0; // Scale by max CLI (5.0)
-    
-    // Weighted adjustments (SMI has more impact than CLI)
-    const qualityAdjustment = (smiAdjustment * 0.6) + (cliAdjustment * 0.4);
-    
-    // Apply adjustment to APPSI (up to 15% increase or decrease)
-    const adjustmentFactor = 1 + (qualityAdjustment * 0.15);
-    const finalAppsi = weightedAppsiAvg * adjustmentFactor;
-    
-    // Calculate final value based on APPSI and size
-    const finalValue = finalAppsi * subjectSize;
-    
-    // Calculate value range (15% above and below)
-    const valueMin = finalValue * 0.85;
-    const valueMax = finalValue * 1.15;
-    
-    console.log(`Calculated valuation - APPSI: $${finalAppsi.toFixed(2)}, Value: $${finalValue.toFixed(2)}`);
-    
-    // Prepare and return the response
-    const response = {
-      valuation: {
-        appsi: finalAppsi,
-        value: finalValue,
-        valueRange: {
-          min: valueMin,
-          max: valueMax
-        }
-      },
-      artwork: {
-        smi: subjectSMI,
-        ri: subjectRI,
-        cli: subjectCLI,
-        size: subjectSize
-      },
-      comparables: {
-        count: selectedRecords.length,
-        riExpanded: riExpanded,
-        hasBracketing: {
-          smi: {
-            above: selectedRecords.some(r => r.smi > subjectSMI),
-            below: selectedRecords.some(r => r.smi < subjectSMI)
-          },
-          cli: {
-            above: selectedRecords.some(r => r.cli > subjectCLI),
-            below: selectedRecords.some(r => r.cli < subjectCLI)
-          }
-        },
-        extremeValues: {
-          smi: smiIsExtreme,
-          cli: cliIsExtreme
-        },
-        stats: {
-          smi: {
-            avg: smiAvg,
-            min: smiMin,
-            max: smiMax
-          },
-          cli: {
-            avg: cliAvg,
-            min: cliMin,
-            max: cliMax
-          },
-          appsi: {
-            avg: appsiAvg,
-            min: appsiMin,
-            max: appsiMax,
-            weighted: weightedAppsiAvg
-          }
-        },
-        records: selectedRecords.map(r => ({
-          recordId: r.recordId,
-          artistName: r.artistName,
-          title: r.title,
-          size: r.size,
-          price: r.price,
-          appsi: r.appsi,
-          smi: r.smi,
-          ri: r.ri,
-          cli: r.cli,
-          distance: r.distance,
-          smiRelation: r.smiRelation,
-          cliRelation: r.cliRelation
-        }))
-      }
-    };
-    
-    res.json(response);
-    
-  } catch (error) {
-    console.error('Error in valuation endpoint:', error);
-    res.status(500).json({ error: error.message || 'An unknown error occurred' });
-  }
-});
 
+    const aboveGroup = combinedRecords.filter(r => r.smiRelation === 'above' || r.smiRelation === 'equal')
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 6);
+    const belowGroup = combinedRecords.filter(r => r.smiRelation === 'below')
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 6);
 
-app.post("/api/valuation", (req, res) => {
-  try {
-    console.log("Valuation endpoint called with data:", req.body);
+    let selectedRecords = [...aboveGroup, ...belowGroup];
 
-    // Validate required fields
-    const requiredFields = ['smi', 'ri', 'cli', 'size'];
-    for (const field of requiredFields) {
-      if (req.body[field] === undefined) {
-        return res.status(400).json({ error: `Missing required field: ${field}` });
-      }
+    // Step 5: Final sort by SMI descending, limit to 12
+    selectedRecords = selectedRecords
+      .sort((a, b) => b.smi - a.smi)
+      .slice(0, 12);
+
+    if (selectedRecords.length < 6) {
+      return res.status(400).json({ 
+        error: `Insufficient final comparables: only ${selectedRecords.length} records after filtering. Minimum required is 6.` 
+      });
     }
 
-    // Extract parameters
-    const subjectSMI = parseFloat(req.body.smi);
-    const subjectRIs = Array.isArray(req.body.ri) ? req.body.ri.map(r => parseInt(r)) : [parseInt(req.body.ri)];
-    const subjectCLI = parseFloat(req.body.cli);
-    const subjectSize = parseFloat(req.body.size);
-
-    // Validate values
-    if (isNaN(subjectSMI) || subjectSMI < 1 || subjectSMI > 5) throw new Error('SMI must be between 1 and 5');
-    if (subjectRIs.some(r => isNaN(r) || r < 1 || r > 5)) throw new Error('RI values must be between 1 and 5');
-    if (isNaN(subjectCLI) || subjectCLI < 1 || subjectCLI > 5) throw new Error('CLI must be between 1 and 5');
-    if (isNaN(subjectSize) || subjectSize <= 0) throw new Error('Size must be positive');
-
-    // Read database
-    const data = readDatabase();
-    const activeRecords = data.records.filter(r => r.isActive !== false && r.smi && r.ri && r.cli && r.appsi);
-
-    // Filter by RI array
-    let filteredRecords = activeRecords.filter(record => subjectRIs.includes(record.ri));
-    const riExpanded = subjectRIs.length > 1; // Mark as expanded if array has multiple values
-
-    console.log(`Filtered by RIs ${subjectRIs} - found ${filteredRecords.length} records`);
-
-    // Proceed even with fewer records
-    if (filteredRecords.length === 0) {
-      return res.status(404).json({ error: 'No matching RI records found' });
-    }
-
-    // Calculate distances
-    filteredRecords.forEach(record => {
-      record.distance = Math.sqrt(
-        Math.pow(record.smi - subjectSMI, 2) + 
-        Math.pow(record.cli - subjectCLI, 2)
-      );
-      record.smiRelation = record.smi > subjectSMI ? 'above' : record.smi < subjectSMI ? 'below' : 'equal';
-      record.cliRelation = record.cli > subjectCLI ? 'above' : record.cli < subjectCLI ? 'below' : 'equal';
-    });
-
-    // Sort and select
-    filteredRecords.sort((a, b) => a.distance - b.distance);
-    const selectedRecords = filteredRecords.slice(0, Math.min(10, filteredRecords.length));
-
-    // Calculate APPSI and valuation (same as original)
+    // Calculate valuation
     const appsiAvg = selectedRecords.reduce((sum, r) => sum + r.appsi, 0) / selectedRecords.length;
     const smiAvg = selectedRecords.reduce((sum, r) => sum + r.smi, 0) / selectedRecords.length;
     const cliAvg = selectedRecords.reduce((sum, r) => sum + r.cli, 0) / selectedRecords.length;
-    const finalAppsi = appsiAvg; // Simplified—add your adjustments if needed
-    const finalValue = finalAppsi * subjectSize;
+    const smiAdjustment = (smi - smiAvg) / 5.0;
+    const cliAdjustment = (cli - cliAvg) / 5.0;
+    const qualityAdjustment = (smiAdjustment * 0.6) + (cliAdjustment * 0.4);
+    const adjustmentFactor = 1 + (qualityAdjustment * 0.15);
+    const finalAppsi = appsiAvg * adjustmentFactor;
+    const finalValue = finalAppsi * size;
     const valueMin = finalValue * 0.85;
     const valueMax = finalValue * 1.15;
 
-    // Response
+    // Prepare stats
     const response = {
       valuation: {
         appsi: finalAppsi,
         value: finalValue,
         valueRange: { min: valueMin, max: valueMax }
       },
-      artwork: { smi: subjectSMI, ri: subjectRIs[0], cli: subjectCLI, size: subjectSize }, // Use first RI for display
+      artwork: { smi, ri, cli, size },
       comparables: {
         count: selectedRecords.length,
-        riExpanded: riExpanded,
+        riExpanded: targetedRI.length > 1,
         hasBracketing: {
-          smi: { above: selectedRecords.some(r => r.smi > subjectSMI), below: selectedRecords.some(r => r.smi < subjectSMI) },
-          cli: { above: selectedRecords.some(r => r.cli > subjectCLI), below: selectedRecords.some(r => r.cli < subjectCLI) }
+          smi: {
+            above: selectedRecords.some(r => r.smi > smi),
+            below: selectedRecords.some(r => r.smi < smi)
+          },
+          cli: {
+            above: selectedRecords.some(r => r.cli > cli),
+            below: selectedRecords.some(r => r.cli < cli)
+          }
         },
-        extremeValues: { smi: false, cli: false }, // Simplified
+        extremeValues: {
+          smi: Math.abs(smi - smiAvg) > Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.smi - smiAvg, 2), 0) / activeRecords.length),
+          cli: Math.abs(cli - cliAvg) > Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.cli - cliAvg, 2), 0) / activeRecords.length)
+        },
         stats: {
-          smi: { avg: smiAvg, min: Math.min(...selectedRecords.map(r => r.smi)), max: Math.max(...selectedRecords.map(r => r.smi)) },
-          cli: { avg: cliAvg, min: Math.min(...selectedRecords.map(r => r.cli)), max: Math.max(...selectedRecords.map(r => r.cli)) },
-          appsi: { avg: appsiAvg, min: Math.min(...selectedRecords.map(r => r.appsi)), max: Math.max(...selectedRecords.map(r => r.appsi)) }
+          smi: {
+            avg: smiAvg,
+            min: Math.min(...selectedRecords.map(r => r.smi)),
+            max: Math.max(...selectedRecords.map(r => r.smi))
+          },
+          cli: {
+            avg: cliAvg,
+            min: Math.min(...selectedRecords.map(r => r.cli)),
+            max: Math.max(...selectedRecords.map(r => r.cli))
+          },
+          appsi: {
+            avg: appsiAvg,
+            min: Math.min(...selectedRecords.map(r => r.appsi)),
+            max: Math.max(...selectedRecords.map(r => r.appsi))
+          }
         },
         records: selectedRecords.map(r => ({
           recordId: r.recordId,
