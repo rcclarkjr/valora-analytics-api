@@ -1074,6 +1074,10 @@ app.post("/api/records/recalculate-appsi", (req, res) => {
             updatedRecords: data.records.filter(r => r.appsi !== undefined).length,
             problematicRecords: problematicRecords
         });
+
+
+
+
     } catch (error) {
         console.error('Error in retroactive APPSI calculation:', error);
         res.status(500).json({ error: 'Failed to recalculate APPSI', details: error.message });
@@ -1717,8 +1721,22 @@ const subjectDistance = 0; // By definition: distance from self is 0
 const below = sortedRecords.filter(r => r.distance < subjectDistance).slice(-6); // Last 6 closest below
 const above = sortedRecords.filter(r => r.distance >= subjectDistance).slice(0, 6); // First 6 closest above
 
-// STEP 6: Merge selected records and sort by APPSI descending
+// STEP 6a: Merge selected records and sort by APPSI descending
 const selectedRecords = [...below, ...above].sort((a, b) => b.appsi - a.appsi);
+// STEP 6b: Calculate statistics for selected comparables
+const calculateStats = (records, field) => {
+  const values = records.map(r => r[field]).filter(v => typeof v === 'number');
+  const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  return { avg, min, max };
+};
+
+const stats = {
+  smi: calculateStats(selectedRecords, 'smi'),
+  cli: calculateStats(selectedRecords, 'cli'),
+  appsi: calculateStats(selectedRecords, 'appsi')
+};
 
 
     // Step 7: Calculate valuation
@@ -1741,21 +1759,24 @@ const selectedRecords = [...below, ...above].sort((a, b) => b.appsi - a.appsi);
         valueRange: { min: valueMin, max: valueMax }
       },
       artwork: { smi, ri, cli, size },
-      comparables: {
-        count: selectedRecords.length,
-	records: selectedRecords.map(r => ({
-  		recordId: r.recordId ?? r.ID ?? null,
-  		artistName: r.artistName ?? r['Artist Name'] ?? 'Unknown',
-  		title: r.title ?? r.Title ?? 'Untitled',
-  		size: r.size ?? r['Size (sq in)'] ?? null,
-  		price: r.price ?? r['Price ($)'] ?? null,
-  		appsi: r.appsi ?? null,
-  		smi: r.smi ?? null,
-  		ri: r.ri ?? null,
-  		cli: r.cli ?? null,
-  		distance: r.distance ?? null,
-  		smiRelation: r.smiRelation ?? 'unknown',
-  		cliRelation: r.cliRelation ?? 'unknown'
+
+comparables: {
+  count: selectedRecords.length,
+  stats, // <--- Add this line
+  records: selectedRecords.map(r => ({
+    recordId: r.recordId ?? r.ID ?? null,
+    artistName: r.artistName ?? r['Artist Name'] ?? 'Unknown',
+    title: r.title ?? r.Title ?? 'Untitled',
+    size: r.size ?? r['Size (sq in)'] ?? null,
+    price: r.price ?? r['Price ($)'] ?? null,
+    appsi: r.appsi ?? null,
+    smi: r.smi ?? null,
+    ri: r.ri ?? null,
+    cli: r.cli ?? null,
+    distance: r.distance ?? null,
+    smiRelation: r.smiRelation ?? 'unknown',
+    cliRelation: r.cliRelation ?? 'unknown'
+
         })) // Ends map
       }     // Ends comparables
     });     // Ends res.json
