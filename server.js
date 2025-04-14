@@ -1677,7 +1677,7 @@ app.post("/api/valuation", (req, res) => {
       return res.status(400).json({ error: 'No active records with valid metrics' });
     }
 
-// STEP 1: Compute means and standard deviations for all three metrics
+// Step 1: Compute standardized means and std deviations
 const smiMean = activeRecords.reduce((sum, r) => sum + r.smi, 0) / activeRecords.length;
 const smiStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.smi - smiMean, 2), 0) / activeRecords.length) || 1;
 
@@ -1687,42 +1687,43 @@ const riStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.ri 
 const cliMean = activeRecords.reduce((sum, r) => sum + r.cli, 0) / activeRecords.length;
 const cliStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.cli - cliMean, 2), 0) / activeRecords.length) || 1;
 
-// STEP 2: Calculate standardized distance from subject for all records
-const subjectZ = {
-  smi: (smi - smiMean) / smiStdDev,
-  ri: (ri - riMean) / riStdDev,
-  cli: (cli - cliMean) / cliStdDev
-};
+// Step 2: Standardize subject
+const zSMI = (smi - smiMean) / smiStdDev;
+const zRI = (ri - riMean) / riStdDev;
+const zCLI = (cli - cliMean) / cliStdDev;
 
+// Step 3: Weighted scalar position of subject
+const subjectPosition = (zSMI * 0.47) + (zRI * 0.33) + (zCLI * 0.20);
+
+// Step 4: Calculate position and distance for all records
 activeRecords.forEach(record => {
-  const zSmi = (record.smi - smiMean) / smiStdDev;
-  const zRi = (record.ri - riMean) / riStdDev;
-  const zCli = (record.cli - cliMean) / cliStdDev;
+  const recordZSMI = (record.smi - smiMean) / smiStdDev;
+  const recordZRI = (record.ri - riMean) / riStdDev;
+  const recordZCLI = (record.cli - cliMean) / cliStdDev;
 
-  // Weighted Euclidean distance
-  record.distance = Math.sqrt(
-    0.47 * Math.pow(zSmi - subjectZ.smi, 2) +
-    0.33 * Math.pow(zRi - subjectZ.ri, 2) +
-    0.20 * Math.pow(zCli - subjectZ.cli, 2)
-  );
+  const recordPosition = (recordZSMI * 0.47) + (recordZRI * 0.33) + (recordZCLI * 0.20);
+  record.position = recordPosition;
+  record.distance = recordPosition - subjectPosition;
 
-  // Relation tags (optional, used for UI)
+  // Optional bracket info for UI (can be removed if unused)
   record.smiRelation = record.smi > smi ? 'above' : record.smi < smi ? 'below' : 'equal';
   record.cliRelation = record.cli > cli ? 'above' : record.cli < cli ? 'below' : 'equal';
 });
 
-// STEP 3: Sort all records by distance
-const sortedRecords = activeRecords.sort((a, b) => a.distance - b.distance);
+// Step 5: Select 6 closest below and 6 closest above
+const inferior = activeRecords
+  .filter(r => r.distance < 0)
+  .sort((a, b) => Math.abs(a.distance) - Math.abs(b.distance))
+  .slice(0, 6);
 
-// STEP 4: Find the subject’s own standardized distance (same formula)
-const subjectDistance = 0; // By definition: distance from self is 0
+const superior = activeRecords
+  .filter(r => r.distance > 0)
+  .sort((a, b) => Math.abs(a.distance) - Math.abs(b.distance))
+  .slice(0, 6);
 
-// STEP 5: Split sorted list into "below" and "above" records
-const below = sortedRecords.filter(r => r.distance < subjectDistance).slice(-6); // Last 6 closest below
-const above = sortedRecords.filter(r => r.distance >= subjectDistance).slice(0, 6); // First 6 closest above
+// Step 6a: Merge and sort selected records by APPSI descending
+const selectedRecords = [...inferior, ...superior].sort((a, b) => b.appsi - a.appsi);
 
-// STEP 6a: Merge selected records and sort by APPSI descending
-const selectedRecords = [...below, ...above].sort((a, b) => b.appsi - a.appsi);
 // STEP 6b: Calculate statistics for selected comparables
 const calculateStats = (records, field) => {
   const values = records.map(r => r[field]).filter(v => typeof v === 'number');
