@@ -1673,68 +1673,55 @@ app.post("/api/valuation", (req, res) => {
       return res.status(400).json({ error: 'No active records with valid metrics' });
     }
 
-    // Step 1: Filter by targetedRI
-    let filteredRecords = activeRecords.filter(record => targetedRI.includes(record.ri));
-    console.log(`Step 1: ${filteredRecords.length} records with RI=${targetedRI.join(',')}`);
-    if (filteredRecords.length < 30) {
-      return res.status(400).json({ 
-        error: `Insufficient comparable sales: only ${filteredRecords.length} records found for RI=${targetedRI.join(',')}. Minimum required is 30.` 
-      });
-    }
+// STEP 1: Compute means and standard deviations for all three metrics
+const smiMean = activeRecords.reduce((sum, r) => sum + r.smi, 0) / activeRecords.length;
+const smiStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.smi - smiMean, 2), 0) / activeRecords.length) || 1;
 
-    // Step 2: Split into Superior and Inferior Groups
-    const superiorGroup = filteredRecords.filter(record => record.smi > smi);
-    const inferiorGroup = filteredRecords.filter(record => record.smi <= smi);
-    console.log(`Step 2: superiorGroup=${superiorGroup.length}, inferiorGroup=${inferiorGroup.length}`);
+const riMean = activeRecords.reduce((sum, r) => sum + r.ri, 0) / activeRecords.length;
+const riStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.ri - riMean, 2), 0) / activeRecords.length) || 1;
 
-    // Step 3: Sort Superior by SMI ascending
-    const sortedSuperior = superiorGroup.sort((a, b) => a.smi - b.smi);
-    const sortedInferior = inferiorGroup.sort((a, b) => a.smi - b.smi);
-    console.log(`Step 3: sortedSuperior=${sortedSuperior.length}, sortedInferior=${sortedInferior.length}`);
-    console.log(`Step 3 Superior SMI values: ${sortedSuperior.slice(0, 10).map(r => r.smi).join(', ')}`);
+const cliMean = activeRecords.reduce((sum, r) => sum + r.cli, 0) / activeRecords.length;
+const cliStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.cli - cliMean, 2), 0) / activeRecords.length) || 1;
 
-    // Step 4: Calculate CLI/RI distance
-    const riMean = activeRecords.reduce((sum, r) => sum + r.ri, 0) / activeRecords.length;
-    const riStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.ri - riMean, 2), 0) / activeRecords.length) || 1;
+// STEP 2: Calculate standardized distance from subject for all records
+const subjectZ = {
+  smi: (smi - smiMean) / smiStdDev,
+  ri: (ri - riMean) / riStdDev,
+  cli: (cli - cliMean) / cliStdDev
+};
 
-    const cliMean = activeRecords.reduce((sum, r) => sum + r.cli, 0) / activeRecords.length;
-    const cliStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.cli - cliMean, 2), 0) / activeRecords.length) || 1;
+activeRecords.forEach(record => {
+  const zSmi = (record.smi - smiMean) / smiStdDev;
+  const zRi = (record.ri - riMean) / riStdDev;
+  const zCli = (record.cli - cliMean) / cliStdDev;
 
-    const assignDistances = (records) => {
-      records.forEach(record => {
-        const standardizedRI = (record.ri - riMean) / riStdDev;
-        const standardizedCLI = (record.cli - cliMean) / cliStdDev;
-        const subjectStandardizedRI = (ri - riMean) / riStdDev;
-        const subjectStandardizedCLI = (cli - cliMean) / cliStdDev;
-        record.distance = Math.sqrt(
-          Math.pow(standardizedRI - subjectStandardizedRI, 2) +
-          Math.pow(standardizedCLI - subjectStandardizedCLI, 2)
-        );
-        record.smiRelation = record.smi > smi ? 'above' : record.smi < smi ? 'below' : 'equal';
-        record.cliRelation = record.cli > cli ? 'above' : record.cli < cli ? 'below' : 'equal';
-      });
-    };
+  // Weighted Euclidean distance
+  record.distance = Math.sqrt(
+    0.47 * Math.pow(zSmi - subjectZ.smi, 2) +
+    0.33 * Math.pow(zRi - subjectZ.ri, 2) +
+    0.20 * Math.pow(zCli - subjectZ.cli, 2)
+  );
 
-    assignDistances(sortedSuperior);
-    assignDistances(sortedInferior);
+  // Relation tags (optional, used for UI)
+  record.smiRelation = record.smi > smi ? 'above' : record.smi < smi ? 'below' : 'equal';
+  record.cliRelation = record.cli > cli ? 'above' : record.cli < cli ? 'below' : 'equal';
+});
 
-    // Step 5: Select up to 6 from each group
-    let selectedSuperior = sortedSuperior.sort((a, b) => a.distance - b.distance).slice(0, 6);
-    let selectedInferior = sortedInferior.sort((a, b) => a.distance - b.distance).slice(0, 6);
-    let selectedRecords = [...selectedSuperior, ...selectedInferior];
+// STEP 3: Sort all records by distance
+const sortedRecords = activeRecords.sort((a, b) => a.distance - b.distance);
 
-    console.log(`Step 5: selectedSuperior=${selectedSuperior.length}, selectedInferior=${selectedInferior.length}, total=${selectedRecords.length}`);
-    console.log(`Step 5 SMI values: ${selectedRecords.map(r => r.smi).join(', ')}`);
-    console.log(`Step 5 RI values: ${selectedRecords.map(r => r.ri).join(', ')}`);
-    console.log(`Step 5 CLI values: ${selectedRecords.map(r => r.cli).join(', ')}`);
+// STEP 4: Find the subject’s own standardized distance (same formula)
+const subjectDistance = 0; // By definition: distance from self is 0
 
-    if (selectedRecords.length < 6 && superiorGroup.length >= 6) {
-      return res.status(400).json({ 
-        error: `Insufficient final comparables: only ${selectedRecords.length} records after filtering. Minimum required is 6 when Superior Group is available.` 
-      });
-    }
+// STEP 5: Split sorted list into "below" and "above" records
+const below = sortedRecords.filter(r => r.distance < subjectDistance).slice(-6); // Last 6 closest below
+const above = sortedRecords.filter(r => r.distance >= subjectDistance).slice(0, 6); // First 6 closest above
 
-    // Step 6: Calculate valuation
+// STEP 6: Merge selected records and sort by APPSI descending
+const selectedRecords = [...below, ...above].sort((a, b) => b.appsi - a.appsi);
+
+
+    // Step 7: Calculate valuation
     const appsiAvg = selectedRecords.reduce((sum, r) => sum + r.appsi, 0) / selectedRecords.length;
     const smiAvg = selectedRecords.reduce((sum, r) => sum + r.smi, 0) / selectedRecords.length;
     const cliAvg = selectedRecords.reduce((sum, r) => sum + r.cli, 0) / selectedRecords.length;
