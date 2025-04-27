@@ -879,14 +879,14 @@ const IMAGES_DIR = path.join(__dirname, 'public', 'data', 'images', 'artworks');
 // Configure multer for image uploads
 const storage = multer.diskStorage({
   destination: function(req, file, cb) {
-    cb(null, IMAGES_DIR);
+    cb(null, '/opt/render/project/src/public/data/images/artworks'); // ABSOLUTE path to persistent storage
   },
   filename: function(req, file, cb) {
-    // Use the record ID from the request parameters, padded to 5 digits
     const paddedId = String(req.params.id).padStart(5, '0');
     cb(null, `${paddedId}.jpg`);
   }
 });
+
 
 const upload = multer({ 
   storage: storage,
