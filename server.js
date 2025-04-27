@@ -1818,6 +1818,122 @@ app.get('/api/debug-export', (req, res) => {
 
 
 
+// ====================================================
+// NEW ENDPOINT: Compare Subject Artwork to a Comp
+// ====================================================
+
+app.post("/api/compare-subject-comp", async (req, res) => {
+  try {
+    const { subject, comp } = req.body;
+
+    if (!subject || !comp) {
+      return res.status(400).json({ error: { message: "Missing subject or comp data" } });
+    }
+
+    if (!subject.imageBase64 || !comp.imageBase64) {
+      return res.status(400).json({ error: { message: "Both subject and comp must include imageBase64" } });
+    }
+
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: { message: "Missing OpenAI API Key" } });
+    }
+
+    console.log(`Comparing Subject to Comp ID ${comp.recordId}`);
+
+    // Build the prompt for ChatGPT
+    const comparisonPrompt = `
+You are an expert fine art evaluator.
+
+Compare the following two artworks (Subject and Comparable) based on six aesthetic criteria.
+
+For each criterion, answer Yes if the Comparable artwork is *Superior* to the Subject; otherwise, answer No.
+
+Criteria (Answer Yes or No for each):
+1. Subject Matter Appeal
+2. Design and Composition Quality
+3. Deployment of Advanced Techniques
+4. Demonstration of Core Elements of Art
+5. Visual Engagement
+6. Emotional Resonance
+
+Respond STRICTLY in the following format:
+
+Criterion 1: Yes or No
+Criterion 2: Yes or No
+Criterion 3: Yes or No
+Criterion 4: Yes or No
+Criterion 5: Yes or No
+Criterion 6: Yes or No
+`;
+
+    // Send request to OpenAI
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4-turbo",
+        messages: [
+          { role: "system", content: "You are a strict fine art evaluator following exact instructions." },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: comparisonPrompt },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subject.imageBase64}` } },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${comp.imageBase64}` } }
+            ]
+          }
+        ],
+        max_tokens: 200,
+        temperature: 0.0 // strict and deterministic
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENAI_API_KEY}`
+        }
+      }
+    );
+
+    const chatReply = response.data.choices[0].message.content;
+    console.log(`Received comparison reply for Comp ID ${comp.recordId}:`, chatReply.substring(0, 200));
+
+    // Parse results
+    const yesNoResults = chatReply.match(/Criterion\s*\d+:\s*(Yes|No)/gi);
+
+    if (!yesNoResults || yesNoResults.length !== 6) {
+      console.error("Invalid format received from ChatGPT comparison");
+      return res.status(500).json({ error: { message: "Invalid response format from ChatGPT" } });
+    }
+
+    // Define criterion weights
+    const criteriaWeights = [0.20, 0.20, 0.15, 0.10, 0.15, 0.20];
+
+    let totalScore = 0;
+
+    yesNoResults.forEach((line, idx) => {
+      const answer = line.split(":")[1].trim().toLowerCase();
+      if (answer === "yes") {
+        totalScore += criteriaWeights[idx];
+      }
+    });
+
+    // Determine final result
+    const finalResult = totalScore > 0.50 ? "Superior" : "Inferior";
+
+    res.json({
+      totalScore: Math.round(totalScore * 100), // Return as percentage
+      finalResult: finalResult
+    });
+
+  } catch (error) {
+    console.error("Error in /api/compare-subject-comp:", error.message);
+    const errMsg = error.response?.data?.error?.message || error.message || "Unknown error";
+    res.status(500).json({ error: { message: errMsg } });
+  }
+});
+
+
+
+
 
 
 //
