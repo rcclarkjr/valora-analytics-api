@@ -1590,8 +1590,6 @@ app.post("/api/images/:id", upload.single('image'), (req, res) => {
     const paddedId = String(recordId).padStart(5, '0');
     const targetPath = path.join(PERSISTENT_IMAGE_DIR, `${paddedId}.jpg`);
 
-    fs.renameSync(req.file.path, targetPath);
-
     res.json({ 
       success: true, 
       message: 'Image uploaded successfully',
