@@ -1770,6 +1770,11 @@ res.json({
 });
 
 
+  } catch (error) {
+    console.error("Error in /api/valuation:", error);
+    res.status(500).json({ error: { message: error.message } });
+  }
+});
 
 
 
