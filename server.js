@@ -1640,7 +1640,7 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
 // ART VALUATION ENDPOINT
 // ====================================================
 
-app.post("/api/valuation", (req, res) => {
+app.post('/api/valuation', async (req, res) => {
   try {
     const { smi, ri, targetedRI, cli, size } = req.body;
 
