@@ -1675,42 +1675,45 @@ app.post("/api/valuation", (req, res) => {
       return res.status(400).json({ error: 'No active records with valid metrics' });
     }
 
-// Step 1: Compute standardized means and std deviations
+
+
+
+
+
+
+
+// ===========================
+// Updated Valuation Logic (server.js)
+// ===========================
+
+// Step 1: Standardize SMI, RI, CLI and calculate scalar positions
 const smiMean = activeRecords.reduce((sum, r) => sum + r.smi, 0) / activeRecords.length;
-const smiStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.smi - smiMean, 2), 0) / activeRecords.length) || 1;
+const smiStd = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.smi - smiMean, 2), 0) / activeRecords.length) || 1;
 
 const riMean = activeRecords.reduce((sum, r) => sum + r.ri, 0) / activeRecords.length;
-const riStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.ri - riMean, 2), 0) / activeRecords.length) || 1;
+const riStd = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.ri - riMean, 2), 0) / activeRecords.length) || 1;
 
 const cliMean = activeRecords.reduce((sum, r) => sum + r.cli, 0) / activeRecords.length;
-const cliStdDev = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.cli - cliMean, 2), 0) / activeRecords.length) || 1;
+const cliStd = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.cli - cliMean, 2), 0) / activeRecords.length) || 1;
 
-// Step 2: Standardize subject
-const zSMI = (smi - smiMean) / smiStdDev;
-const zRI = (ri - riMean) / riStdDev;
-const zCLI = (cli - cliMean) / cliStdDev;
-
-// Step 3: Weighted scalar position of subject
+const zSMI = (smi - smiMean) / smiStd;
+const zRI = (ri - riMean) / riStd;
+const zCLI = (cli - cliMean) / cliStd;
 const subjectPosition = (zSMI * 0.47) + (zRI * 0.33) + (zCLI * 0.20);
 
-// Step 4: Calculate position and distance for all records
+// Step 2: Assign position/distance to all records
 activeRecords.forEach(record => {
-  const recordZSMI = (record.smi - smiMean) / smiStdDev;
-  const recordZRI = (record.ri - riMean) / riStdDev;
-  const recordZCLI = (record.cli - cliMean) / cliStdDev;
-
-  const recordPosition = (recordZSMI * 0.47) + (recordZRI * 0.33) + (recordZCLI * 0.20);
-  record.position = recordPosition;
-  record.distance = recordPosition - subjectPosition;
-
-  // Optional bracket info for UI (can be removed if unused)
-  record.smiRelation = record.smi > smi ? 'above' : record.smi < smi ? 'below' : 'equal';
-  record.cliRelation = record.cli > cli ? 'above' : record.cli < cli ? 'below' : 'equal';
+  const rZSMI = (record.smi - smiMean) / smiStd;
+  const rZRI = (record.ri - riMean) / riStd;
+  const rZCLI = (record.cli - cliMean) / cliStd;
+  const rPosition = (rZSMI * 0.47) + (rZRI * 0.33) + (rZCLI * 0.20);
+  record.position = rPosition;
+  record.distance = rPosition - subjectPosition;
 });
 
-// Step 5: Select 6 closest below and 6 closest above
+// Step 3: Select up to 6 comps on each side
 const inferior = activeRecords
-  .filter(r => r.distance < 0)
+  .filter(r => r.distance <= 0)
   .sort((a, b) => Math.abs(a.distance) - Math.abs(b.distance))
   .slice(0, 6);
 
@@ -1719,74 +1722,54 @@ const superior = activeRecords
   .sort((a, b) => Math.abs(a.distance) - Math.abs(b.distance))
   .slice(0, 6);
 
-// Step 6a: Merge and sort selected records by APPSI descending
-const selectedRecords = [...inferior, ...superior].sort((a, b) => b.appsi - a.appsi);
+const selectedComps = [...inferior, ...superior];
 
-// STEP 6b: Calculate statistics for selected comparables
-const calculateStats = (records, field) => {
-  const values = records.map(r => r[field]).filter(v => typeof v === 'number');
-  const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  return { avg, min, max };
-};
+// Step 4: Visual reclassification with GPT-4
+const reclassified = await Promise.all(
+  selectedComps.map(async comp => {
+    const prompt = `Compare this comp image to the subject and return "Superior" or "Inferior" based on equal weighting of composition/design, mastery of technique, innovation/originality, and emotional resonance.`;
+    const imageURL = comp.imageUrl || comp.image || null; // Adjust if needed
 
-const stats = {
-  smi: calculateStats(selectedRecords, 'smi'),
-  cli: calculateStats(selectedRecords, 'cli'),
-  appsi: calculateStats(selectedRecords, 'appsi')
-};
+    if (!imageURL) return { ...comp, visualComparison: 'Unknown' };
 
+    try {
+      const chatResponse = await openai.chat.completions.create({
+        model: 'gpt-4-turbo',
+        messages: [
+          { role: 'system', content: prompt },
+          {
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: subjectImageUrl } },
+              { type: 'image_url', image_url: { url: imageURL } }
+            ]
+          }
+        ],
+        max_tokens: 20
+      });
 
-    // Step 7: Calculate valuation
-    const appsiAvg = selectedRecords.reduce((sum, r) => sum + r.appsi, 0) / selectedRecords.length;
-    const smiAvg = selectedRecords.reduce((sum, r) => sum + r.smi, 0) / selectedRecords.length;
-    const cliAvg = selectedRecords.reduce((sum, r) => sum + r.cli, 0) / selectedRecords.length;
-    const smiAdjustment = (smi - smiAvg) / 5.0;
-    const cliAdjustment = (cli - cliAvg) / 5.0;
-    const qualityAdjustment = (smiAdjustment * 0.6) + (cliAdjustment * 0.4);
-    const adjustmentFactor = 1 + (qualityAdjustment * 0.15);
-    const finalAppsi = appsiAvg * adjustmentFactor;
-    const finalValue = finalAppsi * size;
-    const valueMin = finalValue * 0.85;
-    const valueMax = finalValue * 1.15;
+      const label = chatResponse.choices[0].message.content.trim();
+      return { ...comp, visualComparison: label };
+    } catch (e) {
+      console.error('GPT comparison failed:', e);
+      return { ...comp, visualComparison: 'Error' };
+    }
+  })
+);
 
-    res.json({
-      valuation: {
-        appsi: finalAppsi,
-        value: finalValue,
-        valueRange: { min: valueMin, max: valueMax }
-      },
-      artwork: { smi, ri, cli, size },
-
-comparables: {
-  count: selectedRecords.length,
-  stats, // <--- Add this line
-  records: selectedRecords.map(r => ({
+// Step 5: Return result to frontend
+res.json({
+  subject: { smi, ri, cli, size },
+  selectedComps: reclassified.map(r => ({
     recordId: r.recordId ?? r.ID ?? null,
     artistName: r.artistName ?? r['Artist Name'] ?? 'Unknown',
     title: r.title ?? r.Title ?? 'Untitled',
-    size: r.size ?? r['Size (sq in)'] ?? null,
-    price: r.price ?? r['Price ($)'] ?? null,
     appsi: r.appsi ?? null,
-    smi: r.smi ?? null,
-    ri: r.ri ?? null,
-    cli: r.cli ?? null,
-    distance: r.distance ?? null,
-    smiRelation: r.smiRelation ?? 'unknown',
-    cliRelation: r.cliRelation ?? 'unknown'
-
-        })) // Ends map
-      }     // Ends comparables
-    });     // Ends res.json
-
-
-
-  } catch (error) {
-    console.error('Error in valuation endpoint:', error);
-    res.status(500).json({ error: error.message || 'An unknown error occurred' });
-  }
+    visualComparison: r.visualComparison ?? 'Unknown'
+  }))
 });
+
+
 
 
 
