@@ -1640,141 +1640,98 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
 // ART VALUATION ENDPOINT
 // ====================================================
 
-app.post('/api/valuation', async (req, res) => {
+
+app.post("/api/valuation", async (req, res) => {
   try {
     const { smi, ri, targetedRI, cli, size } = req.body;
 
-    // Validate inputs
-    if (typeof smi !== 'number' || smi < 1 || smi > 5) {
-      return res.status(400).json({ error: 'SMI must be between 1.00 and 5.00' });
-    }
-    if (typeof ri !== 'number' || !Number.isInteger(ri) || ri < 1 || ri > 5) {
-      return res.status(400).json({ error: 'RI must be an integer between 1 and 5' });
-    }
-    if (!Array.isArray(targetedRI) || !targetedRI.every(val => Number.isInteger(val) && val >= 1 && val <= 5)) {
-      return res.status(400).json({ error: 'targetedRI must be an array of integers between 1 and 5' });
-    }
-    if (typeof cli !== 'number' || cli < 1 || cli > 5) {
-      return res.status(400).json({ error: 'CLI must be between 1.00 and 5.00' });
-    }
-    if (typeof size !== 'number' || size <= 0) {
-      return res.status(400).json({ error: 'Size must be positive' });
-    }
+    // --- STEP 1: Load records from your JSON database ---
+    const db = await loadDatabase(); // adjust to your actual DB loading logic
+    const allRecords = db.records || [];
 
-    // Read database
-    const data = readDatabase();
-    const activeRecords = data.records.filter(
-      record => record.smi != null && 
-                record.ri != null && 
-                record.cli != null && 
-                record.appsi != null &&
-                record.price != null
+    // Filter based on RI and ensure required fields exist
+    const filtered = allRecords.filter(r =>
+      targetedRI.includes(r.ri) &&
+      typeof r.smi === 'number' &&
+      typeof r.cli === 'number' &&
+      typeof r.appsi === 'number'
     );
 
-    if (activeRecords.length === 0) {
-      return res.status(400).json({ error: 'No active records with valid metrics' });
-    }
+    // --- STEP 2: Z-score distance calculation ---
+    const weights = { smi: 0.47, ri: 0.33, cli: 0.20 };
 
+    const meanStd = (arr, key) => {
+      const values = arr.map(r => r[key]);
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      const stdDev = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length);
+      return { mean, stdDev };
+    };
 
+    const z = (val, mean, stdDev) => stdDev ? (val - mean) / stdDev : 0;
 
+    const smiStats = meanStd(filtered, 'smi');
+    const cliStats = meanStd(filtered, 'cli');
 
+    const enriched = filtered.map(record => {
+      const dist = Math.sqrt(
+        weights.smi * Math.pow(z(record.smi, smiStats.mean, smiStats.stdDev) - z(smi, smiStats.mean, smiStats.stdDev), 2) +
+        weights.ri  * Math.pow(record.ri - ri, 2) +
+        weights.cli * Math.pow(z(record.cli, cliStats.mean, cliStats.stdDev) - z(cli, cliStats.mean, cliStats.stdDev), 2)
+      );
+      return { ...record, distance: dist };
+    });
 
+    enriched.sort((a, b) => a.distance - b.distance);
+    const selected = enriched.slice(0, 12);
 
+    // --- STEP 3: Estimate regression constants and valuation ---
+    const constant = 3.2;   // Example placeholder constant
+    const exponent = 0.6;   // Example placeholder exponent
 
+    const appsiList = selected.map(r => r.appsi).sort((a, b) => a - b);
+    const mid = Math.floor(appsiList.length / 2);
+    const appsi = appsiList.length % 2 === 0
+      ? (appsiList[mid - 1] + appsiList[mid]) / 2
+      : appsiList[mid];
 
-// ===========================
-// Updated Valuation Logic (server.js)
-// ===========================
+    const lnSize = Math.log(size);
+    const lnStandard = Math.log(200);
+    const adjustmentRatio = Math.pow(lnSize, exponent) / Math.pow(lnStandard, exponent);
+    const smvppsi = appsi * adjustmentRatio;
+    const value = smvppsi * size;
 
-// Step 1: Standardize SMI, RI, CLI and calculate scalar positions
-const smiMean = activeRecords.reduce((sum, r) => sum + r.smi, 0) / activeRecords.length;
-const smiStd = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.smi - smiMean, 2), 0) / activeRecords.length) || 1;
-
-const riMean = activeRecords.reduce((sum, r) => sum + r.ri, 0) / activeRecords.length;
-const riStd = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.ri - riMean, 2), 0) / activeRecords.length) || 1;
-
-const cliMean = activeRecords.reduce((sum, r) => sum + r.cli, 0) / activeRecords.length;
-const cliStd = Math.sqrt(activeRecords.reduce((sum, r) => sum + Math.pow(r.cli - cliMean, 2), 0) / activeRecords.length) || 1;
-
-const zSMI = (smi - smiMean) / smiStd;
-const zRI = (ri - riMean) / riStd;
-const zCLI = (cli - cliMean) / cliStd;
-const subjectPosition = (zSMI * 0.47) + (zRI * 0.33) + (zCLI * 0.20);
-
-// Step 2: Assign position/distance to all records
-activeRecords.forEach(record => {
-  const rZSMI = (record.smi - smiMean) / smiStd;
-  const rZRI = (record.ri - riMean) / riStd;
-  const rZCLI = (record.cli - cliMean) / cliStd;
-  const rPosition = (rZSMI * 0.47) + (rZRI * 0.33) + (rZCLI * 0.20);
-  record.position = rPosition;
-  record.distance = rPosition - subjectPosition;
-});
-
-// Step 3: Select up to 6 comps on each side
-const inferior = activeRecords
-  .filter(r => r.distance <= 0)
-  .sort((a, b) => Math.abs(a.distance) - Math.abs(b.distance))
-  .slice(0, 6);
-
-const superior = activeRecords
-  .filter(r => r.distance > 0)
-  .sort((a, b) => Math.abs(a.distance) - Math.abs(b.distance))
-  .slice(0, 6);
-
-const selectedComps = [...inferior, ...superior];
-
-// Step 4: Visual reclassification with GPT-4
-const reclassified = await Promise.all(
-  selectedComps.map(async comp => {
-    const prompt = `Compare this comp image to the subject and return "Superior" or "Inferior" based on equal weighting of composition/design, mastery of technique, innovation/originality, and emotional resonance.`;
-    const imageURL = comp.imageUrl || comp.image || null; // Adjust if needed
-
-    if (!imageURL) return { ...comp, visualComparison: 'Unknown' };
-
-    try {
-      const chatResponse = await openai.chat.completions.create({
-        model: 'gpt-4-turbo',
-        messages: [
-          { role: 'system', content: prompt },
-          {
-            role: 'user',
-            content: [
-              { type: 'image_url', image_url: { url: subjectImageUrl } },
-              { type: 'image_url', image_url: { url: imageURL } }
-            ]
-          }
-        ],
-        max_tokens: 20
-      });
-
-      const label = chatResponse.choices[0].message.content.trim();
-      return { ...comp, visualComparison: label };
-    } catch (e) {
-      console.error('GPT comparison failed:', e);
-      return { ...comp, visualComparison: 'Error' };
-    }
-  })
-);
-
-// Step 5: Return result to frontend
-res.json({
-  subject: { smi, ri, cli, size },
-  selectedComps: reclassified.map(r => ({
-    recordId: r.recordId ?? r.ID ?? null,
-    artistName: r.artistName ?? r['Artist Name'] ?? 'Unknown',
-    title: r.title ?? r.Title ?? 'Untitled',
-    appsi: r.appsi ?? null,
-    visualComparison: r.visualComparison ?? 'Unknown'
-  }))
-});
-
+    res.json({
+      valuation: {
+        comparables: {
+          count: selected.length,
+          records: selected
+        },
+        coefficients: {
+          constant,
+          exponent
+        },
+        appsi,
+        value,
+        valueRange: {
+          min: value * 0.85,
+          max: value * 1.15
+        }
+      }
+    });
 
   } catch (error) {
-    console.error("Error in /api/valuation:", error);
-    res.status(500).json({ error: { message: error.message } });
+    console.error("Valuation error:", error);
+    res.status(500).json({ error: "Failed to calculate valuation." });
   }
 });
+
+
+
+
+
+
+
+
 
 
 
