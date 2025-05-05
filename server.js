@@ -1650,10 +1650,29 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
 // ART VALUATION ENDPOINT
 // ====================================================
 
-
 app.post("/api/valuation", async (req, res) => {
   try {
     const { smi, ri, targetedRI, cli, size } = req.body;
+
+    // Validate required fields
+    if (!smi || isNaN(smi) || smi < 1 || smi > 5) {
+      return res.status(400).json({ error: "SMI must be a number between 1 and 5" });
+    }
+    if (!ri || isNaN(ri) || ri < 1 || ri > 5 || !Number.isInteger(Number(ri))) {
+      return res.status(400).json({ error: "RI must be an integer between 1 and 5" });
+    }
+    if (!targetedRI || !Array.isArray(targetedRI) || targetedRI.length === 0) {
+      return res.status(400).json({ error: "targetedRI must be a non-empty array" });
+    }
+    if (!targetedRI.every(val => Number.isInteger(Number(val)) && val >= 1 && val <= 5)) {
+      return res.status(400).json({ error: "targetedRI values must be integers between 1 and 5" });
+    }
+    if (!cli || isNaN(cli) || cli < 1 || cli > 5) {
+      return res.status(400).json({ error: "CLI must be a number between 1 and 5" });
+    }
+    if (!size || isNaN(size) || size <= 0) {
+      return res.status(400).json({ error: "Size must be a positive number" });
+    }
 
     // --- STEP 1: Load records from your JSON database ---
     const db = await loadDatabase(); // adjust to your actual DB loading logic
@@ -1661,17 +1680,22 @@ app.post("/api/valuation", async (req, res) => {
 
     // Filter based on RI and ensure required fields exist
     const filtered = allRecords.filter(r =>
-      targetedRI.includes(r.ri) &&
+      r.ri !== undefined && targetedRI.includes(r.ri) &&
       typeof r.smi === 'number' &&
       typeof r.cli === 'number' &&
       typeof r.appsi === 'number'
     );
 
+    if (filtered.length === 0) {
+      return res.status(404).json({ error: "No valid records found in database matching the provided criteria" });
+    }
+
     // --- STEP 2: Z-score distance calculation ---
     const weights = { smi: 0.47, ri: 0.33, cli: 0.20 };
 
     const meanStd = (arr, key) => {
-      const values = arr.map(r => r[key]);
+      const values = arr.map(r => r[key]).filter(v => v !== undefined);
+      if (values.length === 0) return { mean: 0, stdDev: 0 };
       const mean = values.reduce((a, b) => a + b, 0) / values.length;
       const stdDev = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length);
       return { mean, stdDev };
@@ -1696,9 +1720,12 @@ app.post("/api/valuation", async (req, res) => {
 
     // --- STEP 3: Estimate regression constants and valuation ---
     const constant = 3.2;   // Example placeholder constant
-    const exponent = 0.6;   // Example placeholder exponent
+    const exponent = 0.6;   // Example placeholder constant
 
-    const appsiList = selected.map(r => r.appsi).sort((a, b) => a - b);
+    const appsiList = selected.map(r => r.appsi).filter(v => v !== undefined).sort((a, b) => a - b);
+    if (appsiList.length === 0) {
+      return res.status(404).json({ error: "No valid APPSI values found in selected records" });
+    }
     const mid = Math.floor(appsiList.length / 2);
     const appsi = appsiList.length % 2 === 0
       ? (appsiList[mid - 1] + appsiList[mid]) / 2
@@ -1731,7 +1758,7 @@ app.post("/api/valuation", async (req, res) => {
 
   } catch (error) {
     console.error("Valuation error:", error);
-    res.status(500).json({ error: "Failed to calculate valuation." });
+    res.status(500).json({ error: `Failed to calculate valuation: ${error.message}` });
   }
 });
 
