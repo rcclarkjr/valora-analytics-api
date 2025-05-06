@@ -1704,81 +1704,144 @@ app.post("/api/valuation", async (req, res) => {
       return res.status(404).json({ error: "No valid records found in database matching the provided criteria" });
     }
 
-    // --- STEP 2: Z-score distance calculation ---
-    const weights = { smi: 0.47, ri: 0.33, cli: 0.20 };
 
-    const meanStd = (arr, key) => {
-      const values = arr.map(r => r[key]).filter(v => v !== undefined);
-      if (values.length === 0) {
-        console.warn(`No valid ${key} values for Z-score calculation`);
-        return { mean: 0, stdDev: 0 };
-      }
-      const mean = values.reduce((a, b) => a + b, 0) / values.length;
-      const stdDev = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length);
-      return { mean, stdDev };
-    };
 
-    const z = (val, mean, stdDev) => stdDev ? (val - mean) / stdDev : 0;
 
-    const smiStats = meanStd(filtered, 'smi');
-    const cliStats = meanStd(filtered, 'cli');
 
-    console.log('SMI stats:', smiStats, 'CLI stats:', cliStats);
 
-    const enriched = filtered.map(record => {
-      const dist = Math.sqrt(
-        weights.smi * Math.pow(z(record.smi, smiStats.mean, smiStats.stdDev) - z(smi, smiStats.mean, smiStats.stdDev), 2) +
-        weights.ri  * Math.pow(record.ri - ri, 2) +
-        weights.cli * Math.pow(z(record.cli, cliStats.mean, cliStats.stdDev) - z(cli, cliStats.mean, cliStats.stdDev), 2)
-      );
-      return { ...record, distance: dist };
-    });
 
-    enriched.sort((a, b) => a.distance - b.distance);
-    const selected = enriched.slice(0, 12);
 
-    console.log(`Selected ${selected.length} comparables`);
 
-    // --- STEP 3: Estimate regression constants and valuation ---
-    const constant = 3.2;   // Example placeholder constant
-    const exponent = 0.6;   // Example placeholder constant
 
-    const appsiList = selected.map(r => r.appsi).filter(v => v !== undefined).sort((a, b) => a - b);
-    if (appsiList.length === 0) {
-      console.error('No valid APPSI values in selected records');
-      return res.status(404).json({ error: "No valid APPSI values found in selected records" });
+
+// --- STEP 2: Scalar distance calculation using weighted z-scores ---
+const weights = { smi: 0.47, ri: 0.33, cli: 0.20 };
+
+const meanStd = (arr, key) => {
+  const values = arr.map(r => r[key]).filter(v => v !== undefined);
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const stdDev = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length);
+  return { mean, stdDev };
+};
+
+const z = (val, mean, stdDev) => stdDev ? (val - mean) / stdDev : 0;
+
+const smiStats = meanStd(filtered, 'smi');
+const riStats  = meanStd(filtered, 'ri');
+const cliStats = meanStd(filtered, 'cli');
+
+const zSubject = {
+  smi: z(smi, smiStats.mean, smiStats.stdDev),
+  ri:  z(ri,  riStats.mean,  riStats.stdDev),
+  cli: z(cli, cliStats.mean, cliStats.stdDev)
+};
+
+const enriched = filtered.map(record => {
+  const zComp = {
+    smi: z(record.smi, smiStats.mean, smiStats.stdDev),
+    ri:  z(record.ri,  riStats.mean,  riStats.stdDev),
+    cli: z(record.cli, cliStats.mean, cliStats.stdDev)
+  };
+  const distance = Math.sqrt(
+    weights.smi * Math.pow(zComp.smi - zSubject.smi, 2) +
+    weights.ri  * Math.pow(zComp.ri  - zSubject.ri,  2) +
+    weights.cli * Math.pow(zComp.cli - zSubject.cli, 2)
+  );
+  return { ...record, scalarDistance: distance };
+});
+
+enriched.sort((a, b) => a.scalarDistance - b.scalarDistance);
+
+// Select up to 12 comps: 6 below/equal, 6 above based on scalar distance
+const targetSum = smi + ri + cli;
+const below = enriched.filter(r => (r.smi + r.ri + r.cli) <= targetSum).slice(0, 6);
+const above = enriched.filter(r => (r.smi + r.ri + r.cli) > targetSum).slice(0, 6);
+let selected = [...below, ...above];
+
+// Fallback if too few comps
+if (selected.length < 6) {
+  selected = enriched.slice(0, 12);
+}
+
+console.log(`Selected ${selected.length} comparables`);
+
+
+
+
+
+
+
+
+
+
+
+// --- STEP 3: Classify and reclassify comps ---
+const subjectTotal = smi + ri + cli;
+
+const classified = selected.map(comp => {
+  const compTotal = comp.smi + comp.ri + comp.cli;
+  const classification = compTotal > subjectTotal ? "Superior" : "Inferior";
+  return { ...comp, classification };
+});
+
+const superiors = classified.filter(c => c.classification === "Superior");
+const inferiors = classified.filter(c => c.classification === "Inferior");
+
+// Reclassification rules:
+let topComps = [];
+
+if (superiors.length === 0) {
+  // Rule 1: all comps are Inferior → use 3 highest Inferior
+  topComps = inferiors.sort((a, b) => b.appsi - a.appsi).slice(0, 3);
+} else if (inferiors.length === 0) {
+  // Rule 2: all comps are Superior → use 3 lowest Superior
+  topComps = superiors.sort((a, b) => a.appsi - b.appsi).slice(0, 3);
+} else {
+  // Rule 3: mix → use 3 closest comps regardless
+  topComps = classified.sort((a, b) => a.scalarDistance - b.scalarDistance).slice(0, 3);
+}
+
+const appsi = topComps.reduce((sum, r) => sum + r.appsi, 0) / topComps.length;
+
+// Final valuation using logarithmic adjustment
+const lnSize = Math.log(size);
+const lnStandard = Math.log(200);
+const adjustmentRatio = Math.pow(lnSize, 0.6) / Math.pow(lnStandard, 0.6);
+const smvppsi = appsi * adjustmentRatio;
+const value = Math.round(smvppsi * size);
+
+// --- STEP 4: Final response ---
+res.json({
+  valuation: {
+    comparables: {
+      count: selected.length,
+      records: classified
+    },
+    coefficients: {
+      constant: 3.2,
+      exponent: 0.6
+    },
+    appsi,
+    smvppsi,
+    value,
+    valueRange: {
+      min: Math.round(value * 0.85),
+      max: Math.round(value * 1.15)
     }
-    const mid = Math.floor(appsiList.length / 2);
-    const appsi = appsiList.length % 2 === 0
-      ? (appsiList[mid - 1] + appsiList[mid]) / 2
-      : appsiList[mid];
+  }
+});
 
-    const lnSize = Math.log(size);
-    const lnStandard = Math.log(200);
-    const adjustmentRatio = Math.pow(lnSize, exponent) / Math.pow(lnStandard, exponent);
-    const smvppsi = appsi * adjustmentRatio;
-    const value = smvppsi * size;
 
-    console.log('Valuation calculated:', { appsi, value });
 
-    res.json({
-      valuation: {
-        comparables: {
-          count: selected.length,
-          records: selected
-        },
-        coefficients: {
-          constant,
-          exponent
-        },
-        appsi,
-        value,
-        valueRange: {
-          min: value * 0.85,
-          max: value * 1.15
-        }
-      }
-    });
+
+
+
+
+
+
+
+
+
 
   } catch (error) {
     console.error("Valuation error:", error.message, error.stack);
