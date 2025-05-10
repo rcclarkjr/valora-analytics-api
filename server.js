@@ -1760,86 +1760,21 @@ let selected = [...below, ...above];
 
 // Fallback if too few comps
 if (selected.length < 6) {
-  selected = enriched.slice(0, 12);
+  selected = enriched.slice(0, 6);
 }
 
 console.log(`Selected ${selected.length} comparables`);
 
 
 
-
-
-
-
-
-
-
-
-// --- STEP 3: Classify and reclassify comps ---
-const subjectTotal = smi + ri + cli;
-
-const classified = selected.map(comp => {
-  const compTotal = comp.smi + comp.ri + comp.cli;
-  const classification = compTotal > subjectTotal ? "Superior" : "Inferior";
-  return { ...comp, classification };
-});
-
-const superiors = classified.filter(c => c.classification === "Superior");
-const inferiors = classified.filter(c => c.classification === "Inferior");
-
-// Reclassification rules:
-let topComps = [];
-
-if (superiors.length === 0) {
-  // Rule 1: all comps are Inferior → use 3 highest Inferior
-  topComps = inferiors.sort((a, b) => b.appsi - a.appsi).slice(0, 3);
-} else if (inferiors.length === 0) {
-  // Rule 2: all comps are Superior → use 3 lowest Superior
-  topComps = superiors.sort((a, b) => a.appsi - b.appsi).slice(0, 3);
-} else {
-  // Rule 3: mix → use 3 closest comps regardless
-  topComps = classified.sort((a, b) => a.scalarDistance - b.scalarDistance).slice(0, 3);
-}
-
-const appsi = topComps.reduce((sum, r) => sum + r.appsi, 0) / topComps.length;
-
-// Final valuation using logarithmic adjustment
-const lnSize = Math.log(size);
-const lnStandard = Math.log(200);
-const adjustmentRatio = Math.pow(lnSize, 0.6) / Math.pow(lnStandard, 0.6);
-const smvppsi = appsi * adjustmentRatio;
-const value = Math.round(smvppsi * size);
-
-// --- STEP 4: Final response ---
-res.json({
+return res.json({
   valuation: {
     comparables: {
       count: selected.length,
-      records: classified
-    },
-    coefficients: {
-      constant: 3.2,
-      exponent: 0.6
-    },
-    appsi,
-    smvppsi,
-    value,
-    valueRange: {
-      min: Math.round(value * 0.85),
-      max: Math.round(value * 1.15)
+      records: selected
     }
   }
 });
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1998,6 +1933,84 @@ Criterion 6: Yes or No
 
 
 
+// ✅ NEW ENDPOINT: Generate Narrative Explanation
+app.post("/api/generate-narrative", async (req, res) => {
+  try {
+    const { superiors, inferiors, comps, ruleUsed, smvppsi } = req.body;
+
+    if (!comps || !Array.isArray(comps) || comps.length === 0 || !ruleUsed || typeof smvppsi !== "number") {
+      return res.status(400).json({
+        error: "Missing required fields: comps[], ruleUsed, smvppsi (number)"
+      });
+    }
+
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "Missing OpenAI API Key" });
+    }
+
+    // Format input summary for GPT
+    const compLines = comps.map(c => {
+      return `RecordID ${c.recordId}: SMI=${c.smi}, RI=${c.ri}, CLI=${c.cli}, APPSI=${c.appsi.toFixed(2)}, Distance=${c.scalarDistance?.toFixed(4) ?? "NA"}, Label=${c.label}`;
+    }).join("\n");
+
+    let conditionIntro = "";
+    if (ruleUsed === "All Inferior") {
+      conditionIntro = "Since all selected comparable artworks were deemed inferior to the subject,";
+    } else if (ruleUsed === "All Superior") {
+      conditionIntro = "Since all selected comparable artworks were deemed superior to the subject,";
+    } else {
+      conditionIntro = "Because the selected comparables included a mix of both superior and inferior artworks,";
+    }
+
+    const prompt = `
+You are a fine art valuation assistant. Based on the visual classification and pricing logic, generate a professional, narrative paragraph titled \"Analysis of Comparable Artworks\".
+
+Use this information:
+
+${conditionIntro}
+SMVPPSI: ${smvppsi.toFixed(2)}
+
+Comparable Records:
+${compLines}
+
+Write one professional paragraph that:
+- Describes how the condition of the selected comparables affected the valuation.
+- Refers to the comps by RecordID (not artist or title).
+- Explains how SMVPPSI was derived from APPSI.
+- Uses a straightforward, professional style of a fine art appraiser.
+- Do NOT include any headings — return just the paragraph text.
+`;
+
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4-turbo",
+        messages: [
+          { role: "system", content: "You are a fine art valuation assistant." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 400
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    const paragraph = response.data.choices[0].message.content.trim();
+    res.json({ narrative: paragraph });
+
+  } catch (error) {
+    console.error("Narrative generation error:", error);
+    res.status(500).json({
+      error: error.message || "Failed to generate narrative paragraph"
+    });
+  }
+});
 
 
 
