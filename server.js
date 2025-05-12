@@ -1711,8 +1711,10 @@ app.post("/api/valuation", async (req, res) => {
     if (topComps.length < 6) topComps = enriched.slice(0, 6);
 
     // Step 3: Compare comps visually (AI)
-    const subjectImagePath = path.join(__dirname, 'public', 'temp', 'subject.jpg');
-    const subjectImageBase64 = fs.readFileSync(subjectImagePath, { encoding: 'base64' });
+    const subjectImageBase64 = req.body.subjectImageBase64;
+    if (!subjectImageBase64) {
+      return res.status(400).json({ error: "Missing subjectImageBase64 in request body." });
+    }
 
     const visualComparisons = [];
     for (const comp of topComps) {
