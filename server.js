@@ -1759,6 +1759,10 @@ const compareRes = await axios.post("https://valora-analytics-api.onrender.com/a
     const marketValue = Math.round(size * smvppsi);
 
     // Step 5: Generate narrative
+
+const superiors = topComps.filter(c => c.label === "Superior");
+const inferiors = topComps.filter(c => c.label === "Inferior");
+
 const narrativeRes = await axios.post("https://valora-analytics-api.onrender.com/api/generate-narrative", {
   superiors,
   inferiors,
