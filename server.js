@@ -1724,7 +1724,11 @@ app.post("/api/valuation", async (req, res) => {
       if (!fs.existsSync(compImagePath)) continue;
 
       const compImageBase64 = fs.readFileSync(compImagePath, { encoding: 'base64' });
-      const compareRes = await axios.post("https://valora-analytics-api.onrender.com/api/compare-subject-comp", {subject: { imageBase64: subjectImageBase64 },comp: { imageBase64: compImageBase64, recordId: compId }});
+const compareRes = await axios.post("https://valora-analytics-api.onrender.com/api/compare-subject-comp", {
+  subject: { imageBase64: subjectImageBase64 },
+  comp: { imageBase64: compImageBase64, recordId: compId }
+});
+
 
       visualComparisons.push({
         compId,
@@ -1755,14 +1759,14 @@ app.post("/api/valuation", async (req, res) => {
     const marketValue = Math.round(size * smvppsi);
 
     // Step 5: Generate narrative
-    const narrativeRes = await axios.post("https://valora-analytics-api.onrender.com
-/api/generate-narrative", {
-      superiors: visualComparisons.filter(v => v.classification === "Superior").map(v => v.compId),
-      inferiors: visualComparisons.filter(v => v.classification === "Inferior").map(v => v.compId),
-      comps: visualComparisons,
-      ruleUsed,
-      smvppsi
-    });
+const narrativeRes = await axios.post("https://valora-analytics-api.onrender.com/api/generate-narrative", {
+  superiors,
+  inferiors,
+  comps: topComps,
+  ruleUsed,
+  smvppsi
+});
+
 
     return res.json({
       constant: coefficients.constant,
