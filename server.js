@@ -10,6 +10,7 @@ const app = express();
 
 app.use('/images/artworks', express.static(path.join(__dirname, 'public', 'data', 'images', 'artworks')));
 
+// New version as of 5/12/25 7:30 AM EDT
 
 // Allow larger image sizes (50MB) for the RI calculator
 app.use(express.json({ limit: "50mb" }));
