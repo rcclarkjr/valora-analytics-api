@@ -1724,7 +1724,10 @@ app.post("/api/valuation", async (req, res) => {
       if (!fs.existsSync(compImagePath)) continue;
 
       const compImageBase64 = fs.readFileSync(compImagePath, { encoding: 'base64' });
-      const compareRes = await axios.post("https://valora-analytics-api.onrender.com/api/compare-subject-comp", { ... });
+      const compareRes = await axios.post("https://valora-analytics-     api.onrender.com/api/compare-subject-comp", {
+  subject: { imageBase64: subjectImageBase64 },
+  comp: { imageBase64: compImageBase64, recordId: compId }
+});
 
       visualComparisons.push({
         compId,
