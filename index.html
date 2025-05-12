@@ -1,0 +1,130 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Art Valuation App</title>
+  <style>
+    body { font-family: Arial; margin: 20px; background: #f9f9f9; }
+    .section { margin-bottom: 30px; padding: 20px; background: white; border: 1px solid #ccc; border-radius: 8px; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    input, select { width: 100%; padding: 8px; margin-top: 5px; }
+    button { margin-top: 15px; padding: 10px 15px; background: #007BFF; color: white; border: none; cursor: pointer; }
+    table { width: 100%; margin-top: 15px; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+  </style>
+</head>
+<body>
+
+  <div class="section">
+    <h2>Enter Artwork Details</h2>
+    <form id="valuation-form">
+      <label for="smi">Skill Mastery Index (SMI)</label>
+      <input type="number" step="0.01" id="smi" required>
+      <label for="ri">Representational Index (RI)</label>
+      <input type="number" step="1" id="ri" required>
+      <label for="cli">Career Level Index (CLI)</label>
+      <input type="number" step="0.01" id="cli" required>
+      <label for="height">Height (inches)</label>
+      <input type="number" step="0.01" id="height" required>
+      <label for="width">Width (inches)</label>
+      <input type="number" step="0.01" id="width" required>
+      <label for="media">Media</label>
+      <select id="media" required>
+        <option value="oil">Oil</option>
+        <option value="acrylic">Acrylic</option>
+        <option value="watercolor">Watercolor</option>
+        <option value="pastel">Pastel</option>
+        <option value="other">Other</option>
+      </select>
+      <label for="image">Upload Subject Image</label>
+      <input type="file" id="image" accept="image/*" required>
+      <button type="submit">Submit for Valuation</button>
+    </form>
+  </div>
+
+  <div class="section" id="results" style="display:none;">
+    <h2>Valuation Results</h2>
+    <p><strong>Constant:</strong> <span id="constant"></span></p>
+    <p><strong>Exponent:</strong> <span id="exponent"></span></p>
+    <p><strong>SMVPPSI:</strong> <span id="smvppsi"></span></p>
+    <p><strong>Estimated Market Value:</strong> $<span id="marketValue"></span></p>
+    <p><strong>TopComps State:</strong> <span id="summaryLabel"></span></p>
+
+    <h3>Visual Comparisons</h3>
+    <table>
+      <thead>
+        <tr><th>Comp ID</th><th>Classification</th><th>APPSI</th></tr>
+      </thead>
+      <tbody id="comparison-table"></tbody>
+    </table>
+
+    <h3>Narrative</h3>
+    <p id="narrative"></p>
+  </div>
+
+  <script>
+    document.getElementById('valuation-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const smi = parseFloat(document.getElementById('smi').value);
+      const ri = parseInt(document.getElementById('ri').value);
+      const cli = parseFloat(document.getElementById('cli').value);
+      const height = parseFloat(document.getElementById('height').value);
+      const width = parseFloat(document.getElementById('width').value);
+      const size = height * width;
+      const imageFile = document.getElementById('image').files[0];
+
+      const getTargetedRI = (ri) => {
+        switch (ri) {
+          case 1: return [1, 2];
+          case 2: return [1, 2, 3];
+          case 3: return [2, 3, 4];
+          case 4: return [3, 4, 5];
+          case 5: return [4, 5];
+          default: return [];
+        }
+      };
+
+      const targetedRI = getTargetedRI(ri);
+
+      const reader = new FileReader();
+      reader.onloadend = async function () {
+        const base64Image = reader.result.split(',')[1];
+        try {
+          const response = await fetch('https://valora-analytics-api.onrender.com/api/valuation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              smi, ri, cli, size, targetedRI
+            })
+          });
+
+          const data = await response.json();
+
+          document.getElementById('constant').textContent = data.constant.toFixed(4);
+          document.getElementById('exponent').textContent = data.exponent.toFixed(4);
+          document.getElementById('smvppsi').textContent = data.smvppsi.toFixed(2);
+          document.getElementById('marketValue').textContent = data.marketValue;
+          document.getElementById('summaryLabel').textContent = data.summaryLabel;
+          document.getElementById('narrative').textContent = data.narrative;
+
+          const table = document.getElementById('comparison-table');
+          table.innerHTML = '';
+          data.visualComparisons.forEach(comp => {
+            const row = `<tr><td>${comp.compId}</td><td>${comp.classification}</td><td>${comp.appsi.toFixed(2)}</td></tr>`;
+            table.insertAdjacentHTML('beforeend', row);
+          });
+
+          document.getElementById('results').style.display = 'block';
+        } catch (err) {
+          alert('Error performing valuation.');
+          console.error(err);
+        }
+      };
+
+      reader.readAsDataURL(imageFile);
+    });
+  </script>
+</body>
+</html>
