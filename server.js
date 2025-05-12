@@ -1652,138 +1652,132 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
 
 app.post("/api/valuation", async (req, res) => {
   try {
-    const { smi, ri, targetedRI, cli, size } = req.body;
-
-    // Log incoming request
-    console.log('Received valuation request:', { smi, ri, targetedRI, cli, size });
-
-    // Validate required fields
-    if (!smi || isNaN(smi) || smi < 1 || smi > 5) {
-      console.log('Validation failed: SMI invalid');
-      return res.status(400).json({ error: "SMI must be a number between 1 and 5" });
-    }
-    if (!ri || isNaN(ri) || ri < 1 || ri > 5 || !Number.isInteger(Number(ri))) {
-      console.log('Validation failed: RI invalid');
-      return res.status(400).json({ error: "RI must be an integer between 1 and 5" });
-    }
-    if (!targetedRI || !Array.isArray(targetedRI) || targetedRI.length === 0) {
-      console.log('Validation failed: targetedRI invalid');
-      return res.status(400).json({ error: "targetedRI must be a non-empty array" });
-    }
-    if (!targetedRI.every(val => Number.isInteger(Number(val)) && val >= 1 && val <= 5)) {
-      console.log('Validation failed: targetedRI values invalid');
-      return res.status(400).json({ error: "targetedRI values must be integers between 1 and 5" });
-    }
-    if (!cli || isNaN(cli) || cli < 1 || cli > 5) {
-      console.log('Validation failed: CLI invalid');
-      return res.status(400).json({ error: "CLI must be a number between 1 and 5" });
-    }
-    if (!size || isNaN(size) || size <= 0) {
-      console.log('Validation failed: Size invalid');
-      return res.status(400).json({ error: "Size must be a positive number" });
-    }
-
-    // --- STEP 1: Load records from your JSON database ---
-    const db = await loadDatabase(); // adjust to your actual DB loading logic
+    const { smi, ri, cli, size, targetedRI } = req.body;
+    const db = loadDatabase();
     const allRecords = db.records || [];
+    const coefficients = db.metadata.coefficients;
 
-    console.log(`Loaded ${allRecords.length} records from database`);
+    if (!smi || !ri || !cli || !size || !targetedRI || !Array.isArray(targetedRI)) {
+      return res.status(400).json({ error: "Missing required valuation inputs." });
+    }
 
-    // Filter based on RI and ensure required fields exist
-    const filtered = allRecords.filter(r =>
+    // Step 1: Filter valid comps
+    const comps = allRecords.filter(r =>
       r.ri !== undefined && targetedRI.includes(r.ri) &&
       typeof r.smi === 'number' &&
       typeof r.cli === 'number' &&
       typeof r.appsi === 'number'
     );
 
-    console.log(`Filtered to ${filtered.length} records matching targetedRI:`, targetedRI);
+    // Step 2: Calculate z-score distances
+    const meanStd = (arr, key) => {
+      const values = arr.map(r => r[key]);
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      const std = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length);
+      return { mean, std };
+    };
+    const z = (v, mean, std) => std ? (v - mean) / std : 0;
 
-    if (filtered.length === 0) {
-      console.log('No records matched targetedRI:', targetedRI);
-      return res.status(404).json({ error: "No valid records found in database matching the provided criteria" });
+    const stats = {
+      smi: meanStd(comps, 'smi'),
+      ri: meanStd(comps, 'ri'),
+      cli: meanStd(comps, 'cli')
+    };
+    const zSubject = {
+      smi: z(smi, stats.smi.mean, stats.smi.std),
+      ri: z(ri, stats.ri.mean, stats.ri.std),
+      cli: z(cli, stats.cli.mean, stats.cli.std)
+    };
+    const weights = { smi: 0.47, ri: 0.33, cli: 0.20 };
+
+    const enriched = comps.map(r => {
+      const zd = {
+        smi: z(r.smi, stats.smi.mean, stats.smi.std),
+        ri: z(r.ri, stats.ri.mean, stats.ri.std),
+        cli: z(r.cli, stats.cli.mean, stats.cli.std)
+      };
+      const dist = Math.sqrt(
+        weights.smi * Math.pow(zd.smi - zSubject.smi, 2) +
+        weights.ri * Math.pow(zd.ri - zSubject.ri, 2) +
+        weights.cli * Math.pow(zd.cli - zSubject.cli, 2)
+      );
+      return { ...r, scalarDistance: dist };
+    }).sort((a, b) => a.scalarDistance - b.scalarDistance);
+
+    const subjectSum = smi + ri + cli;
+    const below = enriched.filter(r => r.smi + r.ri + r.cli <= subjectSum).slice(0, 6);
+    const above = enriched.filter(r => r.smi + r.ri + r.cli > subjectSum).slice(0, 6);
+    let topComps = [...below, ...above];
+    if (topComps.length < 6) topComps = enriched.slice(0, 6);
+
+    // Step 3: Compare comps visually (AI)
+    const subjectImagePath = path.join(__dirname, 'public', 'temp', 'subject.jpg');
+    const subjectImageBase64 = fs.readFileSync(subjectImagePath, { encoding: 'base64' });
+
+    const visualComparisons = [];
+    for (const comp of topComps) {
+      const compId = comp.recordId;
+      const compImagePath = path.join(__dirname, 'public', 'data', 'images', 'artworks', String(compId).padStart(5, '0') + '.jpg');
+      if (!fs.existsSync(compImagePath)) continue;
+
+      const compImageBase64 = fs.readFileSync(compImagePath, { encoding: 'base64' });
+      const compareRes = await axios.post("http://localhost:5000/api/compare-subject-comp", {
+        subject: { imageBase64: subjectImageBase64 },
+        comp: { imageBase64: compImageBase64, recordId: compId }
+      });
+
+      visualComparisons.push({
+        compId,
+        classification: compareRes.data.finalResult,
+        appsi: comp.appsi,
+        scalarDistance: comp.scalarDistance
+      });
     }
 
+    // Step 4: Override logic
+    const labels = visualComparisons.map(v => v.classification);
+    const allInferior = labels.every(l => l === "Inferior");
+    const allSuperior = labels.every(l => l === "Superior");
+    const ruleUsed = allInferior ? "All Inferior" : allSuperior ? "All Superior" : "Mixed";
 
-
-
-
-
-
-
-
-
-
-// --- STEP 2: Scalar distance calculation using weighted z-scores ---
-const weights = { smi: 0.47, ri: 0.33, cli: 0.20 };
-
-const meanStd = (arr, key) => {
-  const values = arr.map(r => r[key]).filter(v => v !== undefined);
-  const mean = values.reduce((a, b) => a + b, 0) / values.length;
-  const stdDev = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length);
-  return { mean, stdDev };
-};
-
-const z = (val, mean, stdDev) => stdDev ? (val - mean) / stdDev : 0;
-
-const smiStats = meanStd(filtered, 'smi');
-const riStats  = meanStd(filtered, 'ri');
-const cliStats = meanStd(filtered, 'cli');
-
-const zSubject = {
-  smi: z(smi, smiStats.mean, smiStats.stdDev),
-  ri:  z(ri,  riStats.mean,  riStats.stdDev),
-  cli: z(cli, cliStats.mean, cliStats.stdDev)
-};
-
-const enriched = filtered.map(record => {
-  const zComp = {
-    smi: z(record.smi, smiStats.mean, smiStats.stdDev),
-    ri:  z(record.ri,  riStats.mean,  riStats.stdDev),
-    cli: z(record.cli, cliStats.mean, cliStats.stdDev)
-  };
-  const distance = Math.sqrt(
-    weights.smi * Math.pow(zComp.smi - zSubject.smi, 2) +
-    weights.ri  * Math.pow(zComp.ri  - zSubject.ri,  2) +
-    weights.cli * Math.pow(zComp.cli - zSubject.cli, 2)
-  );
-  return { ...record, scalarDistance: distance };
-});
-
-enriched.sort((a, b) => a.scalarDistance - b.scalarDistance);
-
-// Select up to 12 comps: 6 below/equal, 6 above based on scalar distance
-const targetSum = smi + ri + cli;
-const below = enriched.filter(r => (r.smi + r.ri + r.cli) <= targetSum).slice(0, 6);
-const above = enriched.filter(r => (r.smi + r.ri + r.cli) > targetSum).slice(0, 6);
-let selected = [...below, ...above];
-
-// Fallback if too few comps
-if (selected.length < 6) {
-  selected = enriched.slice(0, 6);
-}
-
-console.log(`Selected ${selected.length} comparables`);
-
-
-
-return res.json({
-  valuation: {
-    comparables: {
-      count: selected.length,
-      records: selected
+    let selectedComps = [];
+    if (ruleUsed === "All Inferior") {
+      selectedComps = visualComparisons.sort((a, b) => b.appsi - a.appsi).slice(0, 3);
+    } else if (ruleUsed === "All Superior") {
+      selectedComps = visualComparisons.sort((a, b) => a.appsi - b.appsi).slice(0, 3);
+    } else {
+      selectedComps = visualComparisons.sort((a, b) => a.scalarDistance - b.scalarDistance).slice(0, 3);
     }
-  }
-});
 
+    const sappsi = selectedComps.reduce((sum, c) => sum + c.appsi, 0) / selectedComps.length;
+    const lnSize = Math.log(size);
+    const smvppsi = coefficients.constant * Math.pow(lnSize, coefficients.exponent);
+    const marketValue = Math.round(size * smvppsi);
 
+    // Step 5: Generate narrative
+    const narrativeRes = await axios.post("http://localhost:5000/api/generate-narrative", {
+      superiors: visualComparisons.filter(v => v.classification === "Superior").map(v => v.compId),
+      inferiors: visualComparisons.filter(v => v.classification === "Inferior").map(v => v.compId),
+      comps: visualComparisons,
+      ruleUsed,
+      smvppsi
+    });
+
+    return res.json({
+      constant: coefficients.constant,
+      exponent: coefficients.exponent,
+      smvppsi,
+      marketValue,
+      summaryLabel: ruleUsed === "All Inferior" ? "All Below" : ruleUsed === "All Superior" ? "All Above" : "Mixed",
+      narrative: narrativeRes.data.narrative,
+      visualComparisons
+    });
 
   } catch (error) {
-    console.error("Valuation error:", error.message, error.stack);
-    res.status(500).json({ error: `Failed to calculate valuation: ${error.message}` });
+    console.error("Valuation error:", error);
+    res.status(500).json({ error: error.message });
   }
 });
-
 
 
 
