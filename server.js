@@ -29,7 +29,7 @@ function loadDatabase() {
 app.use(cors({
   origin: [
     'https://robert-clark-4dee.mykajabi.com', 
-    'http://localhost:5000',
+    'https://valora-analytics-api.onrender.com',
     'https://advisory.valoraanalytics.com',
     'https://profound-mandazi-3e8fd7.netlify.app', // Netlify maintenance site
     'https://stunning-arithmetic-16de6b.netlify.app', // Netify valuation site
@@ -47,7 +47,7 @@ app.use((req, res, next) => {
   // Try using a specific list of allowed origins instead of '*'
   const allowedOrigins = [
     'https://robert-clark-4dee.mykajabi.com', 
-    'http://localhost:5000',
+    'https://valora-analytics-api.onrender.com',
     'https://advisory.valoraanalytics.com',
     'https://profound-mandazi-3e8fd7.netlify.app',
     'https://67eeb64d859f8b0b6c2fed45--stunning-arithmetic-16de6b.netlify.app',
@@ -1724,10 +1724,7 @@ app.post("/api/valuation", async (req, res) => {
       if (!fs.existsSync(compImagePath)) continue;
 
       const compImageBase64 = fs.readFileSync(compImagePath, { encoding: 'base64' });
-      const compareRes = await axios.post("http://localhost:5000/api/compare-subject-comp", {
-        subject: { imageBase64: subjectImageBase64 },
-        comp: { imageBase64: compImageBase64, recordId: compId }
-      });
+      const compareRes = await axios.post("https://valora-analytics-api.onrender.com/api/compare-subject-comp", { ... });
 
       visualComparisons.push({
         compId,
@@ -1758,7 +1755,8 @@ app.post("/api/valuation", async (req, res) => {
     const marketValue = Math.round(size * smvppsi);
 
     // Step 5: Generate narrative
-    const narrativeRes = await axios.post("http://localhost:5000/api/generate-narrative", {
+    const narrativeRes = await axios.post("https://valora-analytics-api.onrender.com
+/api/generate-narrative", {
       superiors: visualComparisons.filter(v => v.classification === "Superior").map(v => v.compId),
       inferiors: visualComparisons.filter(v => v.classification === "Inferior").map(v => v.compId),
       comps: visualComparisons,
