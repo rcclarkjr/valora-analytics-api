@@ -1759,6 +1759,7 @@ selectedComps.forEach(c => {
   console.log(`ID: ${c.compId}, APPSI: ${c.appsi.toFixed(2)}, Distance: ${c.scalarDistance.toFixed(4)}, Classification: ${c.classification}`);
 });
 
+
 const sappsi = selectedComps.reduce((sum, c) => sum + c.appsi, 0) / selectedComps.length;
 const sappsiCompIds = selectedComps.map(c => c.compId);
 const predictAt200 = coefficients.constant * Math.pow(Math.log(200), coefficients.exponent);
@@ -1766,9 +1767,7 @@ const predictAtSize = coefficients.constant * Math.pow(Math.log(size), coefficie
 const smvppsi = predictAtSize * (sappsi / predictAt200);
 const marketValue = Math.round(size * smvppsi);
 
-
-    // Step 5: Generate narrative
-
+// Step 5: Generate narrative
 const superiors = topComps.filter(c => c.label === "Superior");
 const inferiors = topComps.filter(c => c.label === "Inferior");
 
@@ -1785,12 +1784,14 @@ return res.json({
   exponent: coefficients.exponent,
   sappsi,
   sappsiCompIds,
-  predictedSMVPPSI,
+  smvppsi,
   marketValue,
   summaryLabel: ruleUsed === "All Inferior" ? "All Below" : ruleUsed === "All Superior" ? "All Above" : "Mixed",
   narrative: narrativeRes.data.narrative,
   visualComparisons
 });
+
+
 
   } catch (error) {
     console.error("Valuation error:", error);
