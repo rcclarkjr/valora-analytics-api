@@ -1763,7 +1763,6 @@ const sappsi = selectedComps.reduce((sum, c) => sum + c.appsi, 0) / selectedComp
 const sappsiCompIds = selectedComps.map(c => c.compId);
 const predictedSMVPPSI = coefficients.constant * Math.pow(Math.log(size), coefficients.exponent);
 
-    const sappsiCompIds = selectedComps.map(c => c.compId);
     const lnSize = Math.log(size);
     const smvppsi = coefficients.constant * Math.pow(lnSize, coefficients.exponent);
     const marketValue = Math.round(size * smvppsi);
