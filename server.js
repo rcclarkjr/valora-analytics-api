@@ -1762,8 +1762,8 @@ selectedComps.forEach(c => {
 
 const sappsi = selectedComps.reduce((sum, c) => sum + c.appsi, 0) / selectedComps.length;
 const sappsiCompIds = selectedComps.map(c => c.compId);
-const predictAt200 = coefficients.constant * Math.pow(Math.log(200), coefficients.exponent);
-const predictAtSize = coefficients.constant * Math.pow(Math.log(size), coefficients.exponent);
+const predictAt200 = coefficients.constant * Math.pow(200, coefficients.exponent);
+const predictAtSize = coefficients.constant * Math.pow(size, coefficients.exponent);
 const smvppsi = predictAtSize * (sappsi / predictAt200);
 const marketValue = Math.round(size * smvppsi);
 
