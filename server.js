@@ -1750,17 +1750,37 @@ const compareRes = await axios.post("https://valora-analytics-api.onrender.com/a
       selectedComps = visualComparisons.sort((a, b) => b.appsi - a.appsi).slice(0, 3);
     } else if (ruleUsed === "All Superior") {
       selectedComps = visualComparisons.sort((a, b) => a.appsi - b.appsi).slice(0, 3);
-    } else {
-      selectedComps = visualComparisons.sort((a, b) => a.scalarDistance - b.scalarDistance).slice(0, 3);
-    }
 
-console.log("Selected comps used for SAPPSI:");
-selectedComps.forEach(c => {
-  console.log(`ID: ${c.compId}, APPSI: ${c.appsi.toFixed(2)}, Distance: ${c.scalarDistance.toFixed(4)}, Classification: ${c.classification}`);
-});
 
-const sappsi = selectedComps.reduce((sum, c) => sum + c.appsi, 0) / selectedComps.length;
-const sappsiCompIds = selectedComps.map(c => c.compId);
+  } else {
+    // Mixed Rule: Blend of nearest 3 and midpoint between lowest Superior & highest Inferior
+    const nearestThree = visualComparisons
+      .slice()
+      .sort((a, b) => a.scalarDistance - b.scalarDistance)
+      .slice(0, 3);
+
+    const avgNearestThree = nearestThree.reduce((sum, c) => sum + c.appsi, 0) / nearestThree.length;
+
+    const lowestSuperior = Math.min(...visualComparisons
+      .filter(c => c.classification === "Superior")
+      .map(c => c.appsi));
+
+    const highestInferior = Math.max(...visualComparisons
+      .filter(c => c.classification === "Inferior")
+      .map(c => c.appsi));
+
+    const midpoint = (lowestSuperior + highestInferior) / 2;
+
+    const sappsi = 0.5 * avgNearestThree + 0.5 * midpoint;
+    const sappsiCompIds = nearestThree.map(c => c.compId);
+
+    console.log("Selected comps used for SAPPSI:");
+    nearestThree.forEach(c => {
+      console.log(`ID: ${c.compId}, APPSI: ${c.appsi.toFixed(2)}, Distance: ${c.scalarDistance.toFixed(4)}, Classification: ${c.classification}`);
+    });
+  }
+
+
 
 
 const ln200 = Math.log(200);
