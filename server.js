@@ -1759,7 +1759,11 @@ selectedComps.forEach(c => {
   console.log(`ID: ${c.compId}, APPSI: ${c.appsi.toFixed(2)}, Distance: ${c.scalarDistance.toFixed(4)}, Classification: ${c.classification}`);
 });
 
-    const sappsi = selectedComps.reduce((sum, c) => sum + c.appsi, 0) / selectedComps.length;
+const sappsi = selectedComps.reduce((sum, c) => sum + c.appsi, 0) / selectedComps.length;
+const sappsiCompIds = selectedComps.map(c => c.compId);
+const predictedSMVPPSI = coefficients.constant * Math.pow(Math.log(size), coefficients.exponent);
+
+    const sappsiCompIds = selectedComps.map(c => c.compId);
     const lnSize = Math.log(size);
     const smvppsi = coefficients.constant * Math.pow(lnSize, coefficients.exponent);
     const marketValue = Math.round(size * smvppsi);
@@ -1777,26 +1781,23 @@ const narrativeRes = await axios.post("https://valora-analytics-api.onrender.com
   smvppsi
 });
 
-
-    return res.json({
-      constant: coefficients.constant,
-      exponent: coefficients.exponent,
-      smvppsi,
-      marketValue,
-      summaryLabel: ruleUsed === "All Inferior" ? "All Below" : ruleUsed === "All Superior" ? "All Above" : "Mixed",
-      narrative: narrativeRes.data.narrative,
-      visualComparisons
-    });
+return res.json({
+  constant: coefficients.constant,
+  exponent: coefficients.exponent,
+  sappsi,
+  sappsiCompIds,
+  predictedSMVPPSI,
+  marketValue,
+  summaryLabel: ruleUsed === "All Inferior" ? "All Below" : ruleUsed === "All Superior" ? "All Above" : "Mixed",
+  narrative: narrativeRes.data.narrative,
+  visualComparisons
+});
 
   } catch (error) {
     console.error("Valuation error:", error);
     res.status(500).json({ error: error.message });
   }
 });
-
-
-
-
 
 
 
