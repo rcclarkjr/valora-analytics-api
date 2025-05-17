@@ -24,6 +24,7 @@ function loadDatabase() {
   return JSON.parse(rawData);
 }
 
+// this is a test
 
 // Configure CORS to accept requests from all your sites
 app.use(cors({
