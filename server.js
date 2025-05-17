@@ -1754,6 +1754,11 @@ const compareRes = await axios.post("https://valora-analytics-api.onrender.com/a
       selectedComps = visualComparisons.sort((a, b) => a.scalarDistance - b.scalarDistance).slice(0, 3);
     }
 
+console.log("Selected comps used for SAPPSI:");
+selectedComps.forEach(c => {
+  console.log(`ID: ${c.compId}, APPSI: ${c.appsi.toFixed(2)}, Distance: ${c.scalarDistance.toFixed(4)}, Classification: ${c.classification}`);
+});
+
     const sappsi = selectedComps.reduce((sum, c) => sum + c.appsi, 0) / selectedComps.length;
     const lnSize = Math.log(size);
     const smvppsi = coefficients.constant * Math.pow(lnSize, coefficients.exponent);
