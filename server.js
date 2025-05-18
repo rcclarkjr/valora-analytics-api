@@ -1573,12 +1573,20 @@ app.post("/api/valuation", async (req, res) => {
         comp: { imageBase64: compImageBase64, recordId: compId }
       });
 
-      visualComparisons.push({
-        compId,
-        classification: compareRes.data.finalResult,
-        appsi: comp.appsi,
-        scalarDistance: comp.scalarDistance
-      });
+
+
+visualComparisons.push({
+  compId: comp.recordId,
+  classification,
+  appsi: comp.appsi,
+  scalarDistance: comp.scalarDistance,
+  imageBase64: comp.imageBase64 || null  // Add embedded image
+});
+
+
+
+
+
     }
 
     // Step 4: Override logic
