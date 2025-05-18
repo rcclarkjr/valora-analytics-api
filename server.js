@@ -35,30 +35,17 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']
 }));
 
-// Static image route with CORS headers for html2canvas
+
+
+// Serve static images with precise CORS headers
 app.use('/images/artworks', (req, res, next) => {
   const origin = req.headers.origin;
+
   if (allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, Pragma');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  next();
-});
-
-
-
-app.use('/images/artworks', (req, res, next) => {
-  const origin = req.headers.origin;
-
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    // Fallback for image requests without origin (e.g., html2canvas)
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
 
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, Pragma');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   next();
