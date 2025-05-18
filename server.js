@@ -8,10 +8,8 @@ const multer = require("multer"); // For handling file uploads
 
 const app = express();
 
-
-// ==============================
-// UNIFIED CORS + IMAGE ROUTING
-// ==============================
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 const allowedOrigins = [
   'https://robert-clark-4dee.mykajabi.com',
