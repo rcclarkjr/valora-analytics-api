@@ -47,16 +47,6 @@ app.use('/images/artworks', (req, res, next) => {
 });
 
 
-
-const allowedOrigins = [
-  'https://robert-clark-4dee.mykajabi.com',
-  'https://valora-analytics-api.onrender.com',
-  'https://advisory.valoraanalytics.com',
-  'https://profound-mandazi-3e8fd7.netlify.app',
-  'https://67eeb64d859f8b0b6c2fed45--stunning-arithmetic-16de6b.netlify.app',
-  'https://stunning-arithmetic-16de6b.netlify.app'
-];
-
 app.use('/images/artworks', (req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
