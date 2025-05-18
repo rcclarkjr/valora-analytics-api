@@ -36,24 +36,6 @@ app.use(cors({
 }));
 
 
-
-// Final CORS-safe static image route for HTML2Canvas and PDF generation
-app.use('/images/artworks', cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn('Blocked image request from origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true
-}), express.static(path.join(__dirname, 'public', 'data', 'images', 'artworks')));
-
-
-
-
-
 // Serve static files from the "public" folder
 app.use(express.static("public"));
 
@@ -870,35 +852,6 @@ function handleApiError(error, res) {
 const DB_PATH = '/opt/render/project/src/public/data/art_database.json';
 const IMAGES_DIR = path.join(__dirname, 'public', 'data', 'images', 'artworks');
 
-//
-
-// Configure multer for image uploads
-const storage = multer.diskStorage({
-  destination: function(req, file, cb) {
-    cb(null, '/opt/render/project/src/public/data/images/artworks'); // ABSOLUTE path to persistent storage
-  },
-  filename: function(req, file, cb) {
-    const paddedId = String(req.params.id).padStart(5, '0');
-    cb(null, `${paddedId}.jpg`);
-  }
-});
-
-
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: function(req, file, cb) {
-    // Accept only image files
-    if (!file.originalname.match(/\.(jpg|jpeg|png)$/)) {
-      return cb(new Error('Only image files are allowed'));
-    }
-    cb(null, true);
-  }
-});
-
-
-
-
 
 function readDatabase() {
   try {
@@ -1218,10 +1171,16 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         }
         
         newRecord.ppsi = newRecord.price / newRecord.size;
-        
-        // Format image path using padded ID
-        const paddedId = String(newRecord.recordId).padStart(5, '0');
-        newRecord.imagePath = `images/artworks/${paddedId}.jpg`;
+
+
+
+// Remove imagePath – now using embedded Base64 images
+delete newRecord.imagePath;
+
+
+
+
+
         
         data.records.push(newRecord);
         writeDatabase(data);
@@ -1298,9 +1257,9 @@ app.put("/api/records/:id", ensureAPPSICalculation, (req, res) => {
             updatedRecord.lssi = Math.log(updatedRecord.size);
         }
         
-        // Ensure image path stays consistent
-        const paddedId = String(recordId).padStart(5, '0');
-        updatedRecord.imagePath = `images/artworks/${paddedId}.jpg`;
+// Remove imagePath – now using embedded Base64 images
+delete updatedRecord.imagePath;
+
         
         data.records[index] = updatedRecord;
         writeDatabase(data);
@@ -1533,115 +1492,6 @@ app.get("/api/sizeyourprice", (req, res) => {
     });
   }
 });
-
-
-
-
-
-
-// ====================================================
-// IMAGE HANDLING ENDPOINTS (UPDATED FOR PERSISTENT DISK)
-// ====================================================
-
-const PERSISTENT_IMAGE_DIR = path.join(__dirname, 'public', 'data', 'images', 'artworks');
-
-// Ensure persistent image directory exists
-if (!fs.existsSync(PERSISTENT_IMAGE_DIR)) {
-  fs.mkdirSync(PERSISTENT_IMAGE_DIR, { recursive: true });
-}
-
-
-
-// GET image by record ID with CORS support
-app.get("/api/images/:id", (req, res) => {
-  try {
-    const recordId = parseInt(req.params.id);
-    if (isNaN(recordId)) {
-      return res.status(400).json({ error: 'Invalid record ID' });
-    }
-
-    const paddedId = String(recordId).padStart(5, '0');
-    const imagePath = path.join(PERSISTENT_IMAGE_DIR, `${paddedId}.jpg`);
-
-    if (!fs.existsSync(imagePath)) {
-      return res.status(404).json({ error: 'Image not found' });
-    }
-
-    // ✅ Set CORS header for approved origins
-    const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-    }
-
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, Pragma');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-
-    res.sendFile(imagePath);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-
-
-
-// POST upload new image
-app.post("/api/images/:id", upload.single('image'), (req, res) => {
-  try {
-    const recordId = parseInt(req.params.id);
-    if (isNaN(recordId)) {
-      return res.status(400).json({ error: 'Invalid record ID' });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image file uploaded' });
-    }
-
-    const paddedId = String(recordId).padStart(5, '0');
-    const targetPath = path.join(PERSISTENT_IMAGE_DIR, `${paddedId}.jpg`);
-
-    res.json({ 
-      success: true, 
-      message: 'Image uploaded successfully',
-      imagePath: `images/artworks/${paddedId}.jpg`
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// PUT replace existing image
-app.put("/api/images/:id", upload.single('image'), (req, res) => {
-  try {
-    const recordId = parseInt(req.params.id);
-    if (isNaN(recordId)) {
-      return res.status(400).json({ error: 'Invalid record ID' });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image file uploaded' });
-    }
-
-    const paddedId = String(recordId).padStart(5, '0');
-    const targetPath = path.join(PERSISTENT_IMAGE_DIR, `${paddedId}.jpg`);
-
-    // Replace existing image
-    fs.renameSync(req.file.path, targetPath);
-
-    res.json({ 
-      success: true, 
-      message: 'Image replaced successfully',
-      imagePath: `images/artworks/${paddedId}.jpg`
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-
-
-
-
 
 
 
