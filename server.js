@@ -4,7 +4,6 @@ const cors = require("cors");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
-const multer = require("multer"); // For handling file uploads
 
 const app = express();
 
@@ -850,7 +849,7 @@ function handleApiError(error, res) {
 
 // Path to your JSON database and images directory
 const DB_PATH = '/opt/render/project/src/public/data/art_database.json';
-const IMAGES_DIR = path.join(__dirname, 'public', 'data', 'images', 'artworks');
+
 
 
 function readDatabase() {
@@ -1564,10 +1563,12 @@ app.post("/api/valuation", async (req, res) => {
     const visualComparisons = [];
     for (const comp of topComps) {
       const compId = comp.recordId;
-      const compImagePath = path.join(__dirname, 'public', 'data', 'images', 'artworks', String(compId).padStart(5, '0') + '.jpg');
-      if (!fs.existsSync(compImagePath)) continue;
 
-      const compImageBase64 = fs.readFileSync(compImagePath, { encoding: 'base64' });
+const compImageBase64 = comp.imageBase64;
+if (!compImageBase64) continue;
+
+
+
       const compareRes = await axios.post("https://valora-analytics-api.onrender.com/api/compare-subject-comp", {
         subject: { imageBase64: subjectImageBase64 },
         comp: { imageBase64: compImageBase64, recordId: compId }
@@ -1577,10 +1578,10 @@ app.post("/api/valuation", async (req, res) => {
 
 visualComparisons.push({
   compId: comp.recordId,
-  classification,
+  classification: compareRes.data.finalResult,
   appsi: comp.appsi,
   scalarDistance: comp.scalarDistance,
-  imageBase64: comp.imageBase64 || null  // Add embedded image
+  imageBase64: comp.imageBase64 || null
 });
 
 
