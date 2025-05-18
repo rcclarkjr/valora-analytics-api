@@ -37,19 +37,19 @@ app.use(cors({
 
 
 
-// Serve static images with precise CORS headers
-app.use('/images/artworks', (req, res, next) => {
-  const origin = req.headers.origin;
+// Final CORS-safe static image route for HTML2Canvas and PDF generation
+app.use('/images/artworks', cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn('Blocked image request from origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}), express.static(path.join(__dirname, 'public', 'data', 'images', 'artworks')));
 
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  }
-
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, Pragma');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  next();
-}, express.static(path.join(__dirname, 'public', 'data', 'images', 'artworks')));
 
 
 
