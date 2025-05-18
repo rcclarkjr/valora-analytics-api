@@ -1654,12 +1654,12 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
 
 app.post("/api/valuation", async (req, res) => {
   try {
-    const { smi, ri, cli, size, targetedRI } = req.body;
+    const { smi, ri, cli, size, targetedRI, subjectImageBase64 } = req.body;
     const db = loadDatabase();
     const allRecords = db.records || [];
     const coefficients = db.metadata.coefficients;
 
-    if (!smi || !ri || !cli || !size || !targetedRI || !Array.isArray(targetedRI)) {
+    if (!smi || !ri || !cli || !size || !targetedRI || !Array.isArray(targetedRI) || !subjectImageBase64) {
       return res.status(400).json({ error: "Missing required valuation inputs." });
     }
 
@@ -1712,12 +1712,7 @@ app.post("/api/valuation", async (req, res) => {
     let topComps = [...below, ...above];
     if (topComps.length < 6) topComps = enriched.slice(0, 6);
 
-    // Step 3: Compare comps visually (AI)
-    const subjectImageBase64 = req.body.subjectImageBase64;
-    if (!subjectImageBase64) {
-      return res.status(400).json({ error: "Missing subjectImageBase64 in request body." });
-    }
-
+    // Step 3: Visual comparison (AI)
     const visualComparisons = [];
     for (const comp of topComps) {
       const compId = comp.recordId;
@@ -1725,11 +1720,10 @@ app.post("/api/valuation", async (req, res) => {
       if (!fs.existsSync(compImagePath)) continue;
 
       const compImageBase64 = fs.readFileSync(compImagePath, { encoding: 'base64' });
-const compareRes = await axios.post("https://valora-analytics-api.onrender.com/api/compare-subject-comp", {
-  subject: { imageBase64: subjectImageBase64 },
-  comp: { imageBase64: compImageBase64, recordId: compId }
-});
-
+      const compareRes = await axios.post("https://valora-analytics-api.onrender.com/api/compare-subject-comp", {
+        subject: { imageBase64: subjectImageBase64 },
+        comp: { imageBase64: compImageBase64, recordId: compId }
+      });
 
       visualComparisons.push({
         compId,
@@ -1740,90 +1734,86 @@ const compareRes = await axios.post("https://valora-analytics-api.onrender.com/a
     }
 
     // Step 4: Override logic
+    let selectedComps = [];
+    let sappsi = 0;
+    let sappsiCompIds = [];
+
     const labels = visualComparisons.map(v => v.classification);
     const allInferior = labels.every(l => l === "Inferior");
     const allSuperior = labels.every(l => l === "Superior");
     const ruleUsed = allInferior ? "All Inferior" : allSuperior ? "All Superior" : "Mixed";
 
-    let selectedComps = [];
     if (ruleUsed === "All Inferior") {
       selectedComps = visualComparisons.sort((a, b) => b.appsi - a.appsi).slice(0, 3);
     } else if (ruleUsed === "All Superior") {
       selectedComps = visualComparisons.sort((a, b) => a.appsi - b.appsi).slice(0, 3);
+    } else {
+      // Mixed Rule
+      const nearestThree = visualComparisons
+        .slice()
+        .sort((a, b) => a.scalarDistance - b.scalarDistance)
+        .slice(0, 3);
 
+      selectedComps = nearestThree;
 
-  } else {
-    // Mixed Rule: Blend of nearest 3 and midpoint between lowest Superior & highest Inferior
-    const nearestThree = visualComparisons
-      .slice()
-      .sort((a, b) => a.scalarDistance - b.scalarDistance)
-      .slice(0, 3);
+      const avgNearestThree = nearestThree.reduce((sum, c) => sum + c.appsi, 0) / nearestThree.length;
+      const lowestSuperior = Math.min(...visualComparisons.filter(c => c.classification === "Superior").map(c => c.appsi));
+      const highestInferior = Math.max(...visualComparisons.filter(c => c.classification === "Inferior").map(c => c.appsi));
+      const midpoint = (lowestSuperior + highestInferior) / 2;
 
-    const avgNearestThree = nearestThree.reduce((sum, c) => sum + c.appsi, 0) / nearestThree.length;
+      sappsi = 0.5 * avgNearestThree + 0.5 * midpoint;
+      sappsiCompIds = nearestThree.map(c => c.compId);
 
-    const lowestSuperior = Math.min(...visualComparisons
-      .filter(c => c.classification === "Superior")
-      .map(c => c.appsi));
+      console.log("Selected comps used for SAPPSI:");
+      nearestThree.forEach(c => {
+        console.log(`ID: ${c.compId}, APPSI: ${c.appsi.toFixed(2)}, Distance: ${c.scalarDistance.toFixed(4)}, Classification: ${c.classification}`);
+      });
+    }
 
-    const highestInferior = Math.max(...visualComparisons
-      .filter(c => c.classification === "Inferior")
-      .map(c => c.appsi));
+    // If sappsi wasn't set by Mixed Rule, calculate it from selected comps
+    if (!sappsi) {
+      sappsi = selectedComps.reduce((sum, c) => sum + c.appsi, 0) / selectedComps.length;
+      sappsiCompIds = selectedComps.map(c => c.compId);
+    }
 
-    const midpoint = (lowestSuperior + highestInferior) / 2;
+    // Step 5: Final valuation
+    const ln200 = Math.log(200);
+    const lnSize = Math.log(size);
+    const predictAt200 = coefficients.constant * Math.pow(ln200, coefficients.exponent);
+    const predictAtSize = coefficients.constant * Math.pow(lnSize, coefficients.exponent);
+    const residual = sappsi / predictAt200;
+    const smvppsi = predictAtSize * residual;
+    const marketValue = Math.round(size * smvppsi);
 
-    const sappsi = 0.5 * avgNearestThree + 0.5 * midpoint;
-    const sappsiCompIds = nearestThree.map(c => c.compId);
+    // Step 6: Narrative
+    const superiors = visualComparisons.filter(c => c.classification === "Superior");
+    const inferiors = visualComparisons.filter(c => c.classification === "Inferior");
 
-    console.log("Selected comps used for SAPPSI:");
-    nearestThree.forEach(c => {
-      console.log(`ID: ${c.compId}, APPSI: ${c.appsi.toFixed(2)}, Distance: ${c.scalarDistance.toFixed(4)}, Classification: ${c.classification}`);
+    const narrativeRes = await axios.post("https://valora-analytics-api.onrender.com/api/generate-narrative", {
+      superiors,
+      inferiors,
+      comps: visualComparisons,
+      ruleUsed,
+      smvppsi
     });
-  }
 
-
-
-
-const ln200 = Math.log(200);
-const lnSize = Math.log(size);
-const predictAt200 = coefficients.constant * Math.pow(ln200, coefficients.exponent);
-const predictAtSize = coefficients.constant * Math.pow(lnSize, coefficients.exponent);
-const residual = sappsi / predictAt200;
-const smvppsi = predictAtSize * residual;
-const marketValue = Math.round(size * smvppsi);
-
-
-// Step 5: Generate narrative
-const superiors = topComps.filter(c => c.label === "Superior");
-const inferiors = topComps.filter(c => c.label === "Inferior");
-
-const narrativeRes = await axios.post("https://valora-analytics-api.onrender.com/api/generate-narrative", {
-  superiors,
-  inferiors,
-  comps: topComps,
-  ruleUsed,
-  smvppsi
-});
-
-return res.json({
-  constant: coefficients.constant,
-  exponent: coefficients.exponent,
-  sappsi,
-  sappsiCompIds,
-  smvppsi,
-  marketValue,
-  summaryLabel: ruleUsed === "All Inferior" ? "All Below" : ruleUsed === "All Superior" ? "All Above" : "Mixed",
-  narrative: narrativeRes.data.narrative,
-  visualComparisons
-});
-
-
+    return res.json({
+      constant: coefficients.constant,
+      exponent: coefficients.exponent,
+      sappsi,
+      sappsiCompIds,
+      smvppsi,
+      marketValue,
+      summaryLabel: ruleUsed === "All Inferior" ? "All Below" : ruleUsed === "All Superior" ? "All Above" : "Mixed",
+      narrative: narrativeRes.data.narrative,
+      visualComparisons
+    });
 
   } catch (error) {
     console.error("Valuation error:", error);
     res.status(500).json({ error: error.message });
   }
 });
-
 
 
 
