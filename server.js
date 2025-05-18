@@ -1648,7 +1648,7 @@ app.put("/api/images/:id", upload.single('image'), (req, res) => {
 app.post("/api/valuation", async (req, res) => {
   try {
     const { smi, ri, cli, size, targetedRI, subjectImageBase64 } = req.body;
-    const db = loadDatabase();
+    const db = readDatabase();
     const allRecords = db.records || [];
     const coefficients = db.metadata.coefficients;
 
