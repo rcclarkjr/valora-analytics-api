@@ -45,7 +45,29 @@ app.use('/images/artworks', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   next();
 });
-app.use('/images/artworks', express.static(path.join(__dirname, 'public', 'data', 'images', 'artworks')));
+
+
+
+const allowedOrigins = [
+  'https://robert-clark-4dee.mykajabi.com',
+  'https://valora-analytics-api.onrender.com',
+  'https://advisory.valoraanalytics.com',
+  'https://profound-mandazi-3e8fd7.netlify.app',
+  'https://67eeb64d859f8b0b6c2fed45--stunning-arithmetic-16de6b.netlify.app',
+  'https://stunning-arithmetic-16de6b.netlify.app'
+];
+
+app.use('/images/artworks', (req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, Pragma');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  next();
+}, express.static(path.join(__dirname, 'public', 'data', 'images', 'artworks')));
+
 
 
 
