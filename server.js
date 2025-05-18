@@ -8,66 +8,47 @@ const multer = require("multer"); // For handling file uploads
 
 const app = express();
 
-app.use('/images/artworks', express.static(path.join(__dirname, 'public', 'data', 'images', 'artworks')));
 
-// New version as of 5/12/25 7:30 AM EDT
+// ==============================
+// UNIFIED CORS + IMAGE ROUTING
+// ==============================
 
-// Allow larger image sizes (50MB) for the RI calculator
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+const allowedOrigins = [
+  'https://robert-clark-4dee.mykajabi.com',
+  'https://valora-analytics-api.onrender.com',
+  'https://advisory.valoraanalytics.com',
+  'https://profound-mandazi-3e8fd7.netlify.app',
+  'https://67eeb64d859f8b0b6c2fed45--stunning-arithmetic-16de6b.netlify.app',
+  'https://stunning-arithmetic-16de6b.netlify.app'
+];
 
-
-// ADD: Load database helper function
-function loadDatabase() {
-  const dbPath = path.join(__dirname, 'public', 'data', 'art_database.json');
-  const rawData = fs.readFileSync(dbPath);
-  return JSON.parse(rawData);
-}
-
-// this is a test
-
-// Configure CORS to accept requests from all your sites
+// Global CORS middleware for all routes
 app.use(cors({
-  origin: [
-    'https://robert-clark-4dee.mykajabi.com', 
-    'https://valora-analytics-api.onrender.com',
-    'https://advisory.valoraanalytics.com',
-    'https://profound-mandazi-3e8fd7.netlify.app', // Netlify maintenance site
-    'https://stunning-arithmetic-16de6b.netlify.app', // Netify valuation site
-    // Add any other origins you need
-  ],
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn('Blocked by CORS:', origin);
+      callback(new Error('CORS not allowed for this origin'));
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']
 }));
 
-
-
-
-// Add a fallback CORS handler for any missed routes
-app.use((req, res, next) => {
-  // Try using a specific list of allowed origins instead of '*'
-  const allowedOrigins = [
-    'https://robert-clark-4dee.mykajabi.com', 
-    'https://valora-analytics-api.onrender.com',
-    'https://advisory.valoraanalytics.com',
-    'https://profound-mandazi-3e8fd7.netlify.app',
-    'https://67eeb64d859f8b0b6c2fed45--stunning-arithmetic-16de6b.netlify.app',
-    'https://stunning-arithmetic-16de6b.netlify.app'
-  ];
-  
+// Static image route with CORS headers for html2canvas
+app.use('/images/artworks', (req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Origin', origin);
   }
-  
-  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Cache-Control, Pragma");
-  
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, Pragma');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   next();
 });
+app.use('/images/artworks', express.static(path.join(__dirname, 'public', 'data', 'images', 'artworks')));
+
 
 
 // Serve static files from the "public" folder
@@ -1566,7 +1547,9 @@ if (!fs.existsSync(PERSISTENT_IMAGE_DIR)) {
   fs.mkdirSync(PERSISTENT_IMAGE_DIR, { recursive: true });
 }
 
-// GET image by record ID
+
+
+// GET image by record ID with CORS support
 app.get("/api/images/:id", (req, res) => {
   try {
     const recordId = parseInt(req.params.id);
@@ -1581,11 +1564,23 @@ app.get("/api/images/:id", (req, res) => {
       return res.status(404).json({ error: 'Image not found' });
     }
 
+    // ✅ Set CORS header for approved origins
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, Pragma');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+
     res.sendFile(imagePath);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
 
 // POST upload new image
 app.post("/api/images/:id", upload.single('image'), (req, res) => {
