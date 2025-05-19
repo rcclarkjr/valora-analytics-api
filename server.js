@@ -1948,24 +1948,6 @@ Criterion 6: Yes or No
 
 
 
-
-    // Determine final result
-    const finalResult = totalScore > 0.50 ? "Superior" : "Inferior";
-
-    res.json({
-      totalScore: Math.round(totalScore * 100), // Return as percentage
-      finalResult: finalResult
-    });
-
-  } catch (error) {
-    console.error("Error in /api/compare-subject-comp:", error.message);
-    const errMsg = error.response?.data?.error?.message || error.message || "Unknown error";
-    res.status(500).json({ error: { message: errMsg } });
-  }
-});
-
-
-
 // ✅ NEW ENDPOINT: Generate Narrative Explanation
 app.post("/api/generate-narrative", async (req, res) => {
   try {
