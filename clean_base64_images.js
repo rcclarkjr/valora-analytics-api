@@ -1,34 +1,30 @@
 const fs = require('fs');
 const path = require('path');
 
-// Adjust path if needed
 const dbPath = path.join(__dirname, 'public/data/art_database.json');
 
 try {
-  // Load and parse the JSON file
   const rawData = fs.readFileSync(dbPath, 'utf-8');
-  const artworks = JSON.parse(rawData); // confirmed to be an array
+  const json = JSON.parse(rawData);
 
-  if (!Array.isArray(artworks)) {
-    throw new Error('Expected raw array of records in JSON file.');
+  if (!Array.isArray(json.records)) {
+    throw new Error('Expected `records` to be an array.');
   }
 
   let updated = 0;
 
-  artworks.forEach((record, index) => {
+  json.records.forEach((record) => {
     if (record.imageBase64 && typeof record.imageBase64 === 'string') {
       const parts = record.imageBase64.split(',');
       if (parts.length > 1) {
-        record.imageBase64 = parts[1]; // Keep only the base64 portion
+        record.imageBase64 = parts[1]; // Strip prefix
         updated++;
       }
     }
   });
 
-  // Write the updated records back to the file
-  fs.writeFileSync(dbPath, JSON.stringify(artworks, null, 2), 'utf-8');
-
-  console.log(`✅ Cleaned ${updated} imageBase64 field(s) in ${artworks.length} records.`);
+  fs.writeFileSync(dbPath, JSON.stringify(json, null, 2), 'utf-8');
+  console.log(`✅ Cleaned ${updated} imageBase64 field(s) in ${json.records.length} records.`);
 } catch (err) {
   console.error('❌ Error cleaning imageBase64 fields:', err.message);
 }
