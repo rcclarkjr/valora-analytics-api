@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
+
 const dbPath = path.join(__dirname, 'public/data/art_database.json');
 
 try {
