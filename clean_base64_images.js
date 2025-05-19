@@ -1,25 +1,34 @@
 const fs = require('fs');
 const path = require('path');
 
-const dbPath = path.join(__dirname, 'public/data/art_database.json'); // adjust path if needed
+const dbPath = path.join(__dirname, 'public/data/art_database.json');
 
-// Load the existing database
 let rawData = fs.readFileSync(dbPath, 'utf-8');
-let artworks = JSON.parse(rawData);
+let json = JSON.parse(rawData);
 
-// Clean the imageBase64 field in each record
+// Detect whether data is an array or wrapped under a key like "artworks"
+let records;
+if (Array.isArray(json)) {
+  records = json;
+} else if (Array.isArray(json.artworks)) {
+  records = json.artworks;
+} else {
+  throw new Error("❌ Could not find an array of artworks in the JSON file.");
+}
+
 let updated = 0;
-artworks.forEach((artwork, index) => {
+records.forEach((artwork) => {
   if (artwork.imageBase64 && typeof artwork.imageBase64 === 'string') {
     const parts = artwork.imageBase64.split(',');
     if (parts.length > 1) {
-      artwork.imageBase64 = parts[1]; // keep only the Base64 part
+      artwork.imageBase64 = parts[1]; // Strip prefix
       updated++;
     }
   }
 });
 
-// Save the cleaned database back to the file
-fs.writeFileSync(dbPath, JSON.stringify(artworks, null, 2), 'utf-8');
+// Save cleaned data
+const output = Array.isArray(json) ? records : { ...json, artworks: records };
+fs.writeFileSync(dbPath, JSON.stringify(output, null, 2), 'utf-8');
 
-console.log(`✅ Completed. Cleaned ${updated} records out of ${artworks.length}.`);
+console.log(`✅ Cleaned ${updated} artwork record(s).`);
