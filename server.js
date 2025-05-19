@@ -1501,7 +1501,16 @@ app.get("/api/sizeyourprice", (req, res) => {
 
 app.post("/api/valuation", async (req, res) => {
   try {
+    console.log("Starting valuation process");
     const { smi, ri, cli, size, targetedRI, subjectImageBase64 } = req.body;
+    
+    // Log input parameters (excluding large base64 strings)
+    console.log("Valuation inputs:", { 
+      smi, ri, cli, size, 
+      targetedRI: Array.isArray(targetedRI) ? targetedRI : 'Not an array',
+      hasSubjectImage: !!subjectImageBase64
+    });
+    
     const db = readDatabase();
     const allRecords = db.records || [];
     const coefficients = db.metadata.coefficients;
@@ -1510,14 +1519,46 @@ app.post("/api/valuation", async (req, res) => {
       return res.status(400).json({ error: "Missing required valuation inputs." });
     }
 
-    // Step 1: Filter valid comps
-    const comps = allRecords.filter(r =>
-      r.ri !== undefined && targetedRI.includes(Number(r.ri)) &&
-      typeof r.smi === 'number' &&
-      typeof r.cli === 'number' &&
-      typeof r.appsi === 'number'
-    );
+    // Step 1: Filter valid comps with detailed logging
+    console.log(`Total records in database: ${allRecords.length}`);
+    const comps = allRecords.filter(r => {
+      const isValid = r.ri !== undefined && 
+                     targetedRI.includes(Number(r.ri)) &&
+                     typeof r.smi === 'number' &&
+                     typeof r.cli === 'number' &&
+                     typeof r.appsi === 'number' &&
+                     r.imageBase64; // Ensure image exists
+                     
+      // Debug records that don't match criteria
+      if (!isValid) {
+        const issues = [];
+        if (r.ri === undefined) issues.push("missing ri");
+        else if (!targetedRI.includes(Number(r.ri))) issues.push(`ri=${r.ri} not in targetedRI=${targetedRI}`);
+        if (typeof r.smi !== 'number') issues.push(`smi type is ${typeof r.smi}`);
+        if (typeof r.cli !== 'number') issues.push(`cli type is ${typeof r.cli}`);
+        if (typeof r.appsi !== 'number') issues.push(`appsi type is ${typeof r.appsi}`);
+        if (!r.imageBase64) issues.push("missing imageBase64");
+        
+        if (issues.length > 0) {
+          console.log(`Record ${r.recordId} invalid for comparison: ${issues.join(", ")}`);
+        }
+      }
+      return isValid;
+    });
+    
+    console.log(`Found ${comps.length} valid comparison records`);
+    
+    if (comps.length === 0) {
+      return res.status(400).json({ 
+        error: "No valid comparison records found for the specified criteria.",
+        details: {
+          targetedRI,
+          totalRecords: allRecords.length
+        }
+      });
+    }
 
+    // The rest of the valuation logic remains the same...
     // Step 2: Calculate z-score distances
     const meanStd = (arr, key) => {
       const values = arr.map(r => r[key]);
@@ -1532,6 +1573,9 @@ app.post("/api/valuation", async (req, res) => {
       ri: meanStd(comps, 'ri'),
       cli: meanStd(comps, 'cli')
     };
+    
+    console.log("Calculated stats:", stats);
+    
     const zSubject = {
       smi: z(smi, stats.smi.mean, stats.smi.std),
       ri: z(ri, stats.ri.mean, stats.ri.std),
@@ -1558,37 +1602,59 @@ app.post("/api/valuation", async (req, res) => {
     const above = enriched.filter(r => r.smi + r.ri + r.cli > subjectSum).slice(0, 6);
     let topComps = [...below, ...above];
     if (topComps.length < 6) topComps = enriched.slice(0, 6);
+    
+    console.log(`Selected ${topComps.length} top comps for visual comparison`);
 
-    // Step 3: Visual comparison (AI) - UPDATED FOR NEW IMAGE STRUCTURE
+    // Step 3: Visual comparison (AI) - THIS IS LIKELY WHERE THE ERROR IS OCCURRING
     const visualComparisons = [];
     for (const comp of topComps) {
       try {
         const compId = comp.recordId;
+        console.log(`Processing visual comparison for comp ID ${compId}`);
         
-        // Skip records without image data
+        // Check if the comp has image data and log details
         if (!comp.imageBase64) {
-          console.log(`Skipping comp ID ${compId} - missing imageBase64`);
+          console.error(`Missing imageBase64 for comp ID ${compId}`);
+          console.log(`Record keys available:`, Object.keys(comp));
           continue;
         }
 
+        // Make the API call with error handling
+        console.log(`Sending comparison request for comp ID ${compId}`);
         const compareRes = await axios.post("https://valora-analytics-api.onrender.com/api/compare-subject-comp", {
           subject: { imageBase64: subjectImageBase64 },
           comp: { imageBase64: comp.imageBase64, recordId: compId }
         });
+        
+        console.log(`Received comparison result for comp ID ${compId}: ${compareRes.data.finalResult}`);
 
+        // Add to visualComparisons with proper structure
         visualComparisons.push({
           compId: comp.recordId,
           classification: compareRes.data.finalResult,
           appsi: comp.appsi,
           scalarDistance: comp.scalarDistance,
-          imageBase64: comp.imageBase64
+          imageBase64: comp.imageBase64 // Ensure imageBase64 is passed through
         });
-      } catch (compareError) {
-        console.error(`Error comparing with comp ID ${comp.recordId}:`, compareError.message);
-        // Continue to next iteration instead of breaking the whole process
+      } catch (error) {
+        console.error(`Error in visual comparison for comp:`, error.message);
+        if (error.response) {
+          console.error("Response status:", error.response.status);
+          console.error("Response data:", error.response.data);
+        }
+        // Continue to next comparison instead of failing the entire process
       }
     }
+    
+    if (visualComparisons.length === 0) {
+      return res.status(500).json({ 
+        error: "Failed to perform visual comparisons. Check server logs for details." 
+      });
+    }
+    
+    console.log(`Completed ${visualComparisons.length} visual comparisons`);
 
+    // Remainder of the valuation endpoint stays the same...
     // Step 4: Override logic
     let selectedComps = [];
     let sappsi = 0;
@@ -1614,7 +1680,7 @@ app.post("/api/valuation", async (req, res) => {
 
       const avgNearestThree = nearestThree.reduce((sum, c) => sum + c.appsi, 0) / nearestThree.length;
       
-      // Ensure we have both categories before calculating midpoint
+      // Ensure there are both superior and inferior classifications before calculating midpoint
       const superiorComps = visualComparisons.filter(c => c.classification === "Superior");
       const inferiorComps = visualComparisons.filter(c => c.classification === "Inferior");
       
@@ -1630,6 +1696,11 @@ app.post("/api/valuation", async (req, res) => {
 
       sappsi = 0.5 * avgNearestThree + 0.5 * midpoint;
       sappsiCompIds = nearestThree.map(c => c.compId);
+
+      console.log("Selected comps used for SAPPSI:");
+      nearestThree.forEach(c => {
+        console.log(`ID: ${c.compId}, APPSI: ${c.appsi.toFixed(2)}, Distance: ${c.scalarDistance.toFixed(4)}, Classification: ${c.classification}`);
+      });
     }
 
     // If sappsi wasn't set by Mixed Rule, calculate it from selected comps
@@ -1652,6 +1723,7 @@ app.post("/api/valuation", async (req, res) => {
     const inferiors = visualComparisons.filter(c => c.classification === "Inferior");
 
     try {
+      console.log("Generating narrative");
       const narrativeRes = await axios.post("https://valora-analytics-api.onrender.com/api/generate-narrative", {
         superiors,
         inferiors,
@@ -1659,7 +1731,10 @@ app.post("/api/valuation", async (req, res) => {
         ruleUsed,
         smvppsi
       });
-
+      
+      const narrative = narrativeRes.data.narrative || "Narrative not available";
+      
+      console.log("Valuation process completed successfully");
       return res.json({
         constant: coefficients.constant,
         exponent: coefficients.exponent,
@@ -1668,12 +1743,12 @@ app.post("/api/valuation", async (req, res) => {
         smvppsi,
         marketValue,
         summaryLabel: ruleUsed === "All Inferior" ? "All Below" : ruleUsed === "All Superior" ? "All Above" : "Mixed",
-        narrative: narrativeRes.data.narrative,
+        narrative: narrative,
         visualComparisons
       });
     } catch (narrativeError) {
       console.error("Error generating narrative:", narrativeError.message);
-      // Continue with a default narrative
+      // Continue even if narrative generation fails
       return res.json({
         constant: coefficients.constant,
         exponent: coefficients.exponent,
@@ -1682,16 +1757,22 @@ app.post("/api/valuation", async (req, res) => {
         smvppsi,
         marketValue,
         summaryLabel: ruleUsed === "All Inferior" ? "All Below" : ruleUsed === "All Superior" ? "All Above" : "Mixed",
-        narrative: "Analysis could not be generated at this time.",
+        narrative: "A detailed analysis could not be generated at this time.",
         visualComparisons
       });
     }
   } catch (error) {
     console.error("Valuation error:", error);
-    res.status(500).json({ error: error.message });
+    let errorDetails = error.message || "Unknown error";
+    
+    // Add more detailed error information if available
+    if (error.response) {
+      errorDetails += ` - ${JSON.stringify(error.response.data)}`;
+    }
+    
+    res.status(500).json({ error: errorDetails });
   }
 });
-
 
 
 
