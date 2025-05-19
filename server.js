@@ -1612,6 +1612,49 @@ app.post("/api/valuation", async (req, res) => {
         const compId = comp.recordId;
         console.log(`Processing visual comparison for comp ID ${compId}`);
         
+
+
+//********************************************
+
+
+// Diagnostic logging for comparison image data
+if (comp.imageBase64) {
+  console.log(`Comp ${compId} image data type: ${typeof comp.imageBase64}`);
+  console.log(`Comp ${compId} image data length: ${comp.imageBase64.length}`);
+  
+  // Is it a valid string?
+  if (typeof comp.imageBase64 !== 'string') {
+    console.log(`Comp ${compId} image data is not a string!`);
+  }
+  
+  // First few characters
+  console.log(`Comp ${compId} first 20 chars: "${comp.imageBase64.substring(0, 20)}..."`);
+  
+  // Check if it has valid base64 padding
+  const validPadding = comp.imageBase64.length % 4 === 0;
+  console.log(`Comp ${compId} has valid base64 padding: ${validPadding}`);
+  
+  // Check for base64 prefix
+  const hasPrefix = comp.imageBase64.startsWith('data:image');
+  console.log(`Comp ${compId} has image data prefix: ${hasPrefix}`);
+  
+  // Check for non-base64 characters
+  const nonBase64Chars = comp.imageBase64.replace(/[A-Za-z0-9+/=]/g, '');
+  if (nonBase64Chars.length > 0) {
+    console.log(`Comp ${compId} has ${nonBase64Chars.length} non-base64 characters`);
+    console.log(`First few non-base64 chars: '${nonBase64Chars.substring(0, 20)}'`);
+  }
+} else {
+  console.log(`Comp ${compId} has NO imageBase64 property!`);
+}
+
+
+//*********************************************
+
+
+
+
+
         // Check if the comp has image data and log details
         if (!comp.imageBase64) {
           console.error(`Missing imageBase64 for comp ID ${compId}`);
@@ -1810,6 +1853,64 @@ app.post("/api/compare-subject-comp", async (req, res) => {
     const { subject, comp } = req.body;
     
     console.log(`Starting comparison for comp ID ${comp.recordId}`);
+
+
+//****************************
+
+// Diagnostic logging for comparison image data
+if (comp.imageBase64) {
+  // Log the length of the string
+  console.log(`Comp image length: ${comp.imageBase64.length}`);
+  
+  // Check if it starts with a data URI prefix
+  const hasPrefix = comp.imageBase64.startsWith('data:image');
+  console.log(`Has data:image prefix: ${hasPrefix}`);
+  
+  // Check if it contains non-base64 characters
+  const nonBase64Chars = comp.imageBase64.replace(/[A-Za-z0-9+/=]/g, '');
+  console.log(`Non-base64 characters: '${nonBase64Chars.substring(0, 50)}...'`);
+  console.log(`Number of non-base64 characters: ${nonBase64Chars.length}`);
+  
+  // Check the first few characters
+  console.log(`First 20 chars: '${comp.imageBase64.substring(0, 20)}'`);
+  
+  // If there's a prefix, extract and check the actual base64 part
+  if (hasPrefix) {
+    const base64Part = comp.imageBase64.split(',')[1];
+    if (base64Part) {
+      console.log(`Base64 part length: ${base64Part.length}`);
+      // Check if the base64 part contains non-base64 characters
+      const nonBase64InBase64Part = base64Part.replace(/[A-Za-z0-9+/=]/g, '');
+      console.log(`Non-base64 chars in base64 part: '${nonBase64InBase64Part.substring(0, 50)}...'`);
+    } else {
+      console.log('Could not extract base64 part from data URI');
+    }
+  }
+} else {
+  console.log('No imageBase64 data for comp');
+}
+
+// Diagnostic logging for subject image data
+if (subject.imageBase64) {
+  console.log(`Subject image length: ${subject.imageBase64.length}`);
+  const hasPrefix = subject.imageBase64.startsWith('data:image');
+  console.log(`Subject has data:image prefix: ${hasPrefix}`);
+}
+
+//***************************
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     if (!subject || !comp) {
       return res.status(400).json({ error: { message: "Missing subject or comp data" } });
