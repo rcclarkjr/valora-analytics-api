@@ -1499,9 +1499,19 @@ app.get("/api/sizeyourprice", (req, res) => {
 // ART VALUATION ENDPOINT
 // ====================================================
 
+
 app.post("/api/valuation", async (req, res) => {
   try {
+    console.log("Starting valuation process");
     const { smi, ri, cli, size, targetedRI, subjectImageBase64 } = req.body;
+    
+    // Log input parameters (excluding large base64 strings)
+    console.log("Valuation inputs:", { 
+      smi, ri, cli, size, 
+      targetedRI: Array.isArray(targetedRI) ? targetedRI : 'Not an array',
+      hasSubjectImage: !!subjectImageBase64
+    });
+    
     const db = readDatabase();
     const allRecords = db.records || [];
     const coefficients = db.metadata.coefficients;
@@ -1510,14 +1520,46 @@ app.post("/api/valuation", async (req, res) => {
       return res.status(400).json({ error: "Missing required valuation inputs." });
     }
 
-    // Step 1: Filter valid comps
-    const comps = allRecords.filter(r =>
-      r.ri !== undefined && targetedRI.includes(r.ri) &&
-      typeof r.smi === 'number' &&
-      typeof r.cli === 'number' &&
-      typeof r.appsi === 'number'
-    );
+    // Step 1: Filter valid comps with detailed logging
+    console.log(`Total records in database: ${allRecords.length}`);
+    const comps = allRecords.filter(r => {
+      const isValid = r.ri !== undefined && 
+                     targetedRI.includes(Number(r.ri)) &&
+                     typeof r.smi === 'number' &&
+                     typeof r.cli === 'number' &&
+                     typeof r.appsi === 'number' &&
+                     r.imageBase64; // Ensure image exists
+                     
+      // Debug records that don't match criteria
+      if (!isValid) {
+        const issues = [];
+        if (r.ri === undefined) issues.push("missing ri");
+        else if (!targetedRI.includes(Number(r.ri))) issues.push(`ri=${r.ri} not in targetedRI=${targetedRI}`);
+        if (typeof r.smi !== 'number') issues.push(`smi type is ${typeof r.smi}`);
+        if (typeof r.cli !== 'number') issues.push(`cli type is ${typeof r.cli}`);
+        if (typeof r.appsi !== 'number') issues.push(`appsi type is ${typeof r.appsi}`);
+        if (!r.imageBase64) issues.push("missing imageBase64");
+        
+        if (issues.length > 0) {
+          console.log(`Record ${r.recordId} invalid for comparison: ${issues.join(", ")}`);
+        }
+      }
+      return isValid;
+    });
+    
+    console.log(`Found ${comps.length} valid comparison records`);
+    
+    if (comps.length === 0) {
+      return res.status(400).json({ 
+        error: "No valid comparison records found for the specified criteria.",
+        details: {
+          targetedRI,
+          totalRecords: allRecords.length
+        }
+      });
+    }
 
+    // The rest of the valuation logic remains the same...
     // Step 2: Calculate z-score distances
     const meanStd = (arr, key) => {
       const values = arr.map(r => r[key]);
@@ -1532,6 +1574,9 @@ app.post("/api/valuation", async (req, res) => {
       ri: meanStd(comps, 'ri'),
       cli: meanStd(comps, 'cli')
     };
+    
+    console.log("Calculated stats:", stats);
+    
     const zSubject = {
       smi: z(smi, stats.smi.mean, stats.smi.std),
       ri: z(ri, stats.ri.mean, stats.ri.std),
@@ -1558,38 +1603,59 @@ app.post("/api/valuation", async (req, res) => {
     const above = enriched.filter(r => r.smi + r.ri + r.cli > subjectSum).slice(0, 6);
     let topComps = [...below, ...above];
     if (topComps.length < 6) topComps = enriched.slice(0, 6);
+    
+    console.log(`Selected ${topComps.length} top comps for visual comparison`);
 
-    // Step 3: Visual comparison (AI)
+    // Step 3: Visual comparison (AI) - THIS IS LIKELY WHERE THE ERROR IS OCCURRING
     const visualComparisons = [];
     for (const comp of topComps) {
-      const compId = comp.recordId;
+      try {
+        const compId = comp.recordId;
+        console.log(`Processing visual comparison for comp ID ${compId}`);
+        
+        // Check if the comp has image data and log details
+        if (!comp.imageBase64) {
+          console.error(`Missing imageBase64 for comp ID ${compId}`);
+          console.log(`Record keys available:`, Object.keys(comp));
+          continue;
+        }
 
-const compImageBase64 = comp.imageBase64;
-if (!compImageBase64) continue;
+        // Make the API call with error handling
+        console.log(`Sending comparison request for comp ID ${compId}`);
+        const compareRes = await axios.post("https://valora-analytics-api.onrender.com/api/compare-subject-comp", {
+          subject: { imageBase64: subjectImageBase64 },
+          comp: { imageBase64: comp.imageBase64, recordId: compId }
+        });
+        
+        console.log(`Received comparison result for comp ID ${compId}: ${compareRes.data.finalResult}`);
 
-
-
-      const compareRes = await axios.post("https://valora-analytics-api.onrender.com/api/compare-subject-comp", {
-        subject: { imageBase64: subjectImageBase64 },
-        comp: { imageBase64: compImageBase64, recordId: compId }
-      });
-
-
-
-visualComparisons.push({
-  compId: comp.recordId,
-  classification: compareRes.data.finalResult,
-  appsi: comp.appsi,
-  scalarDistance: comp.scalarDistance,
-  imageBase64: comp.imageBase64 || null
-});
-
-
-
-
-
+        // Add to visualComparisons with proper structure
+        visualComparisons.push({
+          compId: comp.recordId,
+          classification: compareRes.data.finalResult,
+          appsi: comp.appsi,
+          scalarDistance: comp.scalarDistance,
+          imageBase64: comp.imageBase64 // Ensure imageBase64 is passed through
+        });
+      } catch (error) {
+        console.error(`Error in visual comparison for comp:`, error.message);
+        if (error.response) {
+          console.error("Response status:", error.response.status);
+          console.error("Response data:", error.response.data);
+        }
+        // Continue to next comparison instead of failing the entire process
+      }
     }
+    
+    if (visualComparisons.length === 0) {
+      return res.status(500).json({ 
+        error: "Failed to perform visual comparisons. Check server logs for details." 
+      });
+    }
+    
+    console.log(`Completed ${visualComparisons.length} visual comparisons`);
 
+    // Remainder of the valuation endpoint stays the same...
     // Step 4: Override logic
     let selectedComps = [];
     let sappsi = 0;
@@ -1614,9 +1680,20 @@ visualComparisons.push({
       selectedComps = nearestThree;
 
       const avgNearestThree = nearestThree.reduce((sum, c) => sum + c.appsi, 0) / nearestThree.length;
-      const lowestSuperior = Math.min(...visualComparisons.filter(c => c.classification === "Superior").map(c => c.appsi));
-      const highestInferior = Math.max(...visualComparisons.filter(c => c.classification === "Inferior").map(c => c.appsi));
-      const midpoint = (lowestSuperior + highestInferior) / 2;
+      
+      // Ensure there are both superior and inferior classifications before calculating midpoint
+      const superiorComps = visualComparisons.filter(c => c.classification === "Superior");
+      const inferiorComps = visualComparisons.filter(c => c.classification === "Inferior");
+      
+      let midpoint;
+      if (superiorComps.length > 0 && inferiorComps.length > 0) {
+        const lowestSuperior = Math.min(...superiorComps.map(c => c.appsi));
+        const highestInferior = Math.max(...inferiorComps.map(c => c.appsi));
+        midpoint = (lowestSuperior + highestInferior) / 2;
+      } else {
+        // Fallback if we don't have both categories
+        midpoint = avgNearestThree;
+      }
 
       sappsi = 0.5 * avgNearestThree + 0.5 * midpoint;
       sappsiCompIds = nearestThree.map(c => c.compId);
@@ -1646,29 +1723,55 @@ visualComparisons.push({
     const superiors = visualComparisons.filter(c => c.classification === "Superior");
     const inferiors = visualComparisons.filter(c => c.classification === "Inferior");
 
-    const narrativeRes = await axios.post("https://valora-analytics-api.onrender.com/api/generate-narrative", {
-      superiors,
-      inferiors,
-      comps: visualComparisons,
-      ruleUsed,
-      smvppsi
-    });
-
-    return res.json({
-      constant: coefficients.constant,
-      exponent: coefficients.exponent,
-      sappsi,
-      sappsiCompIds,
-      smvppsi,
-      marketValue,
-      summaryLabel: ruleUsed === "All Inferior" ? "All Below" : ruleUsed === "All Superior" ? "All Above" : "Mixed",
-      narrative: narrativeRes.data.narrative,
-      visualComparisons
-    });
-
+    try {
+      console.log("Generating narrative");
+      const narrativeRes = await axios.post("https://valora-analytics-api.onrender.com/api/generate-narrative", {
+        superiors,
+        inferiors,
+        comps: visualComparisons,
+        ruleUsed,
+        smvppsi
+      });
+      
+      const narrative = narrativeRes.data.narrative || "Narrative not available";
+      
+      console.log("Valuation process completed successfully");
+      return res.json({
+        constant: coefficients.constant,
+        exponent: coefficients.exponent,
+        sappsi,
+        sappsiCompIds,
+        smvppsi,
+        marketValue,
+        summaryLabel: ruleUsed === "All Inferior" ? "All Below" : ruleUsed === "All Superior" ? "All Above" : "Mixed",
+        narrative: narrative,
+        visualComparisons
+      });
+    } catch (narrativeError) {
+      console.error("Error generating narrative:", narrativeError.message);
+      // Continue even if narrative generation fails
+      return res.json({
+        constant: coefficients.constant,
+        exponent: coefficients.exponent,
+        sappsi,
+        sappsiCompIds,
+        smvppsi,
+        marketValue,
+        summaryLabel: ruleUsed === "All Inferior" ? "All Below" : ruleUsed === "All Superior" ? "All Above" : "Mixed",
+        narrative: "A detailed analysis could not be generated at this time.",
+        visualComparisons
+      });
+    }
   } catch (error) {
     console.error("Valuation error:", error);
-    res.status(500).json({ error: error.message });
+    let errorDetails = error.message || "Unknown error";
+    
+    // Add more detailed error information if available
+    if (error.response) {
+      errorDetails += ` - ${JSON.stringify(error.response.data)}`;
+    }
+    
+    res.status(500).json({ error: errorDetails });
   }
 });
 
@@ -1707,13 +1810,22 @@ app.get('/api/debug-export', (req, res) => {
 app.post("/api/compare-subject-comp", async (req, res) => {
   try {
     const { subject, comp } = req.body;
+    
+    console.log(`Starting comparison for comp ID ${comp.recordId}`);
 
     if (!subject || !comp) {
       return res.status(400).json({ error: { message: "Missing subject or comp data" } });
     }
 
-    if (!subject.imageBase64 || !comp.imageBase64) {
-      return res.status(400).json({ error: { message: "Both subject and comp must include imageBase64" } });
+    // Check for image data with detailed logging
+    if (!subject.imageBase64) {
+      console.error("Missing subject imageBase64");
+      return res.status(400).json({ error: { message: "Subject must include imageBase64" } });
+    }
+    
+    if (!comp.imageBase64) {
+      console.error(`Missing comp imageBase64 for ID ${comp.recordId}`);
+      return res.status(400).json({ error: { message: "Comp must include imageBase64" } });
     }
 
     if (!OPENAI_API_KEY) {
@@ -1721,6 +1833,17 @@ app.post("/api/compare-subject-comp", async (req, res) => {
     }
 
     console.log(`Comparing Subject to Comp ID ${comp.recordId}`);
+
+    // Check image data format
+    if (!subject.imageBase64.match(/^[A-Za-z0-9+/=]+$/)) {
+      console.error("Subject image data is not valid base64");
+      return res.status(400).json({ error: { message: "Subject image data is not valid base64" } });
+    }
+    
+    if (!comp.imageBase64.match(/^[A-Za-z0-9+/=]+$/)) {
+      console.error(`Comp ID ${comp.recordId} image data is not valid base64`);
+      return res.status(400).json({ error: { message: "Comp image data is not valid base64" } });
+    }
 
     // Build the prompt for ChatGPT
     const comparisonPrompt = `
@@ -1749,6 +1872,7 @@ Criterion 6: Yes or No
 `;
 
     // Send request to OpenAI
+    console.log("Sending request to OpenAI for comparison");
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -1797,6 +1921,35 @@ Criterion 6: Yes or No
         totalScore += criteriaWeights[idx];
       }
     });
+
+    // Determine final result
+    const finalResult = totalScore > 0.50 ? "Superior" : "Inferior";
+    console.log(`Comparison result for Comp ID ${comp.recordId}: ${finalResult} (score: ${totalScore})`);
+
+    res.json({
+      totalScore: Math.round(totalScore * 100), // Return as percentage
+      finalResult: finalResult
+    });
+
+  } catch (error) {
+    console.error("Error in /api/compare-subject-comp:", error.message);
+    let errorDetails = "Unknown error";
+    
+    if (error.response) {
+      errorDetails = JSON.stringify({
+        status: error.response.status,
+        data: error.response.data
+      });
+    } else if (error.message) {
+      errorDetails = error.message;
+    }
+    
+    res.status(500).json({ error: { message: errorDetails } });
+  }
+});
+
+
+
 
     // Determine final result
     const finalResult = totalScore > 0.50 ? "Superior" : "Inferior";
