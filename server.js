@@ -4,8 +4,11 @@ const cors = require("cors");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
-
 const app = express();
+const mime = require("mime-types");
+const multer = require("multer");
+const upload = multer({ storage: multer.memoryStorage() });
+
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -850,7 +853,11 @@ function handleApiError(error, res) {
 // Path to your JSON database and images directory
 const DB_PATH = '/opt/render/project/src/public/data/art_database.json';
 
-
+function encodeImageWithMime(buffer, originalName) {
+  const mimeType = mime.lookup(originalName) || "image/jpeg";
+  const base64 = buffer.toString("base64");
+  return { imageBase64: `data:${mimeType};base64,${base64}`, mimeType };
+}
 
 function readDatabase() {
   try {
@@ -1172,13 +1179,8 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         newRecord.ppsi = newRecord.price / newRecord.size;
 
 
-
 // Remove imagePath – now using embedded Base64 images
 delete newRecord.imagePath;
-
-
-
-
 
         
         data.records.push(newRecord);
@@ -1189,6 +1191,101 @@ delete newRecord.imagePath;
         res.status(500).json({ error: error.message });
     }
 });
+
+
+
+app.post("/api/records/:id/image", upload.single("image"), (req, res) => {
+  try {
+    const recordId = parseInt(req.params.id);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: "Invalid record ID" });
+    }
+
+    const data = readDatabase();
+    const record = data.records.find(r => r.recordId === recordId);
+    if (!record) {
+      return res.status(404).json({ error: "Record not found" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No image file uploaded" });
+    }
+
+    const { imageBase64, mimeType } = encodeImageWithMime(req.file.buffer, req.file.originalname);
+
+    record.imageBase64 = imageBase64;
+    record.imageMimeType = mimeType;
+
+    writeDatabase(data);
+    res.json({ success: true, recordId: record.recordId, mimeType });
+  } catch (error) {
+    console.error("Image upload error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+app.patch("/api/records/:id/image", (req, res) => {
+  try {
+    const recordId = parseInt(req.params.id);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: "Invalid record ID" });
+    }
+
+    const { imageBase64 } = req.body;
+    if (!imageBase64 || typeof imageBase64 !== "string" || !imageBase64.startsWith("data:image")) {
+      return res.status(400).json({ error: "Invalid or missing Base64 image data" });
+    }
+
+    const data = readDatabase();
+    const record = data.records.find(r => r.recordId === recordId);
+    if (!record) {
+      return res.status(404).json({ error: "Record not found" });
+    }
+
+    // Optionally parse MIME type from data URI
+    const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
+
+    record.imageBase64 = imageBase64;
+    record.imageMimeType = mimeType;
+
+    writeDatabase(data);
+    res.json({ success: true, recordId: record.recordId, mimeType });
+  } catch (error) {
+    console.error("Error patching imageBase64:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+app.get("/api/records/:id/image", (req, res) => {
+  try {
+    const recordId = parseInt(req.params.id);
+    const data = readDatabase();
+    const record = data.records.find(r => r.recordId === recordId);
+    
+    if (!record || !record.imageBase64) {
+      return res.status(404).json({ error: "Image not found" });
+    }
+
+    const match = record.imageBase64.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.*)$/);
+    if (!match) {
+      return res.status(500).json({ error: "Malformed imageBase64 format" });
+    }
+
+    const mimeType = match[1];
+    const imageData = Buffer.from(match[2], "base64");
+
+    res.setHeader("Content-Type", mimeType);
+    res.send(imageData);
+  } catch (error) {
+    console.error("Image fetch error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 
 
@@ -2204,6 +2301,40 @@ app.get("/api/debug-record/:id", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+// ✅ DEBUG: Scan database for legacy image fields
+app.get("/api/debug-scan-images", (req, res) => {
+  try {
+    const data = readDatabase();
+    const flagged = [];
+
+    data.records.forEach((record) => {
+      const findings = {};
+      if ('imagePath' in record) findings.imagePath = record.imagePath;
+      if ('imageFile' in record) findings.imageFile = record.imageFile;
+      if (record.imageBase64 && typeof record.imageBase64 === 'string' && record.imageBase64.includes('http')) {
+        findings.imageBase64 = record.imageBase64;
+      }
+      if (Object.keys(findings).length > 0) {
+        flagged.push({
+          recordId: record.recordId,
+          findings
+        });
+      }
+    });
+
+    res.json({
+      totalRecords: data.records.length,
+      flaggedCount: flagged.length,
+      flagged
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 
 app.post("/api/records/calculate-lssi", (req, res) => {
     try {
