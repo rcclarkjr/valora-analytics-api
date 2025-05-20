@@ -2335,6 +2335,47 @@ app.get("/api/debug-scan-images", (req, res) => {
 });
 
 
+app.post("/api/debug-clean-images", (req, res) => {
+  try {
+    const data = readDatabase();
+    let cleanedCount = 0;
+    let fixedBase64Count = 0;
+
+    data.records.forEach(record => {
+      // Remove legacy fields
+      if ('imagePath' in record) {
+        delete record.imagePath;
+        cleanedCount++;
+      }
+      if ('imageFile' in record) {
+        delete record.imageFile;
+        cleanedCount++;
+      }
+
+      // Fix raw base64 (no prefix)
+      if (record.imageBase64 &&
+          typeof record.imageBase64 === "string" &&
+          !record.imageBase64.startsWith("data:image")) {
+        record.imageBase64 = `data:image/jpeg;base64,${record.imageBase64}`;
+        fixedBase64Count++;
+      }
+    });
+
+    writeDatabase(data);
+
+    res.json({
+      success: true,
+      cleanedLegacyFields: cleanedCount,
+      fixedRawBase64: fixedBase64Count,
+      message: `Cleaned ${cleanedCount} legacy fields and fixed ${fixedBase64Count} raw base64 images.`
+    });
+  } catch (error) {
+    console.error("Cleanup error:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 
 app.post("/api/records/calculate-lssi", (req, res) => {
     try {
