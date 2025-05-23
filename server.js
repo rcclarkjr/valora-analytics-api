@@ -2386,38 +2386,41 @@ app.post("/api/debug-clean-images", (req, res) => {
   }
 });
 
-// POST /api/images/:id — Upload and embed image as Base64 in the record
-app.post('/api/images/:id', upload.single('image'), (req, res) => {
+
+
+
+app.post('/api/images/:id', upload.single('image'), async (req, res) => {
   try {
     const recordId = parseInt(req.params.id);
-    const file = req.file;
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    if (!file) {
-      return res.status(400).json({ error: 'No image file uploaded.' });
-    }
+    // Resize and convert to JPEG using sharp
+    const resizedBuffer = await sharp(req.file.buffer)
+      .resize({ width: 1000, height: 1000, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toBuffer();
 
-    const mimeType = mime.lookup(file.originalname) || 'image/jpeg';
-    const imageBase64 = file.buffer.toString('base64');
+    const imageBase64 = resizedBuffer.toString('base64');
 
     const db = readDatabase();
     const record = db.records.find(r => parseInt(r.recordId) === recordId);
 
-    if (!record) {
-      return res.status(404).json({ error: 'Record not found.' });
-    }
+    if (!record) return res.status(404).json({ error: 'Record not found' });
 
     record.imageBase64 = imageBase64;
-    record.imageMimeType = mimeType;
+    record.imageMimeType = 'image/jpeg';
 
     db.metadata.lastUpdated = new Date().toISOString();
-    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+    writeDatabase(db);
 
-    res.json({ success: true, message: 'Image embedded successfully.' });
-  } catch (error) {
-    console.error('Error uploading image:', error);
-    res.status(500).json({ error: 'Image upload failed.' });
+    res.json({ success: true, message: 'Image uploaded and resized successfully.' });
+  } catch (err) {
+    console.error('Upload error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
 
 
 app.post("/api/records/calculate-lssi", (req, res) => {
