@@ -877,8 +877,19 @@ function readDatabase() {
       return emptyDb;
     }
 
-    const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-    return data;
+const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+
+// Ensure all records have imageMimeType if imageBase64 is present
+if (Array.isArray(data.records)) {
+  data.records.forEach(record => {
+    if (record.imageBase64 && !record.imageMimeType) {
+      record.imageMimeType = 'image/jpeg'; // default fallback
+    }
+  });
+}
+
+return data;
+
   } catch (error) {
     console.error('Error reading database:', error);
     throw new Error('Database error: ' + error.message);
