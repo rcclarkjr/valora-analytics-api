@@ -970,6 +970,27 @@ function updateAllAPPSI(data) {
 
 
 
+app.post('/api/admin/create-backup', (req, res) => {
+  try {
+    const dbPath = path.join(__dirname, 'public/data/art_database.json');
+    const backupDir = path.join(__dirname, 'public/data');
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').slice(0, 15);
+    const backupFileName = `backup_art_database_${timestamp}.json`;
+    const backupPath = path.join(backupDir, backupFileName);
+
+    const data = fs.readFileSync(dbPath, 'utf-8');
+    fs.writeFileSync(backupPath, data);
+
+    console.log(`✅ Backup created: ${backupFileName}`);
+    res.json({ message: `Backup created: ${backupFileName}` });
+  } catch (err) {
+    console.error("❌ Failed to create backup:", err);
+    res.status(500).json({ error: "Failed to create backup." });
+  }
+});
+
+
+
 
 // GET all records
 app.get("/api/records", (req, res) => {
