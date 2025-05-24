@@ -963,11 +963,39 @@ function updateAllAPPSI(data) {
 }
 
 
+// ====================================================
+// Calculate R-Squared Function
+// ====================================================
+
+function calculateRSquared(points, constant, exponent) {
+  let sumResidualSquared = 0;
+  let sumTotalSquared = 0;
+  const meanY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+  
+  for (const point of points) {
+    const predicted = constant * Math.pow(point.x, exponent);
+    sumResidualSquared += Math.pow(point.y - predicted, 2);
+    sumTotalSquared += Math.pow(point.y - meanY, 2);
+  }
+  
+  return 1 - (sumResidualSquared / sumTotalSquared);
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ====================================================
 // DATA ACCESS ENDPOINTS
 // ====================================================
-
 
 
 app.post('/api/admin/create-backup', (req, res) => {
@@ -1010,11 +1038,6 @@ app.get("/api/records", (req, res) => {
   }
 });
 
-
-
-// ====================================================
-// POST Recalculate APPSI Endpoint
-// ====================================================
 
 app.post("/api/records/recalculate-appsi", (req, res) => {
     try {
@@ -1073,9 +1096,7 @@ app.post("/api/records/recalculate-appsi", (req, res) => {
 });
 
 
-// ====================================================
-// POST Deactivate Multiple Records (Soft Delete)
-// ====================================================
+
 app.post("/api/records/deactivate", (req, res) => {
   try {
     const { recordIds } = req.body;
@@ -1166,17 +1187,7 @@ const activeRecords = data.records.filter(record => {
   }
 });
 
-// ====================================================
-// DATA MODIFICATION ENDPOINTS
-// ====================================================
 
-
-    
-
-
-// ====================================================
-// POST Add New Record Endpoint
-// ===================================================
 
 app.post("/api/records", ensureAPPSICalculation, (req, res) => {
     try {
@@ -1346,9 +1357,7 @@ app.get("/api/records/:id", (req, res) => {
 
 
 
-// ====================================================
-// PUT Update Existing Record Endpoint
-// ====================================================
+
 
 app.put("/api/records/:id", ensureAPPSICalculation, (req, res) => {
     try {
@@ -1403,12 +1412,6 @@ delete updatedRecord.imagePath;
 
 
 
-
-
-
-// ====================================================
-// APPSI MANAGEMENT ENDPOINTS
-// ====================================================
 
 // GET current coefficients
 app.get("/api/coefficients", (req, res) => {
@@ -1477,35 +1480,7 @@ app.delete("/api/records/:id", (req, res) => {
 
 
 
-// ====================================================
-// COMPLETE REPLACEMENT: Calculate R-Squared Function
-// ====================================================
 
-function calculateRSquared(points, constant, exponent) {
-  let sumResidualSquared = 0;
-  let sumTotalSquared = 0;
-  const meanY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-  
-  for (const point of points) {
-    const predicted = constant * Math.pow(point.x, exponent);
-    sumResidualSquared += Math.pow(point.y - predicted, 2);
-    sumTotalSquared += Math.pow(point.y - meanY, 2);
-  }
-  
-  return 1 - (sumResidualSquared / sumTotalSquared);
-}
-
-
-
-
-
-
-
-
-
-// ====================================================
-// COMPLETE REPLACEMENT: Calculate Proposed Coefficients Endpoint
-// ====================================================
 
 app.get("/api/coefficients/calculate", (req, res) => {
   try {
@@ -1591,10 +1566,6 @@ app.get("/api/coefficients/calculate", (req, res) => {
 
 
 
-// ====================================================
-// COMPLETE REPLACEMENT: POST Apply Coefficients Endpoint
-// ====================================================
-
 app.post("/api/coefficients", (req, res) => {
   try {
     if (!req.body.exponent || !req.body.constant) {
@@ -1627,9 +1598,7 @@ app.post("/api/coefficients", (req, res) => {
 
 
 
-// ====================================================
-// SIZE YOUR PRICE ENDPOINT
-// ====================================================
+
 app.get("/api/sizeyourprice", (req, res) => {
   try {
     const data = readDatabase();
@@ -1654,9 +1623,6 @@ app.get("/api/sizeyourprice", (req, res) => {
 
 
 
-// ====================================================
-// ART VALUATION ENDPOINT
-// ====================================================
 
 app.post("/api/valuation", async (req, res) => {
   try {
@@ -1773,7 +1739,6 @@ app.post("/api/valuation", async (req, res) => {
         
 
 
-//********************************************
 
 
 // Diagnostic logging for comparison image data
@@ -1806,9 +1771,6 @@ if (comp.imageBase64) {
 } else {
   console.log(`Comp ${compId} has NO imageBase64 property!`);
 }
-
-
-//*********************************************
 
 
 
@@ -2003,10 +1965,6 @@ app.get('/api/debug-export', (req, res) => {
 
 
 
-// ====================================================
-// NEW ENDPOINT: Compare Subject Artwork to a Comp
-// ====================================================
-
 app.post("/api/compare-subject-comp", async (req, res) => {
   try {
     const { subject, comp } = req.body;
@@ -2014,7 +1972,6 @@ app.post("/api/compare-subject-comp", async (req, res) => {
     console.log(`Starting comparison for comp ID ${comp.recordId}`);
 
 
-//****************************
 
 // Diagnostic logging for comparison image data
 if (comp.imageBase64) {
@@ -2055,20 +2012,6 @@ if (subject.imageBase64) {
   const hasPrefix = subject.imageBase64.startsWith('data:image');
   console.log(`Subject has data:image prefix: ${hasPrefix}`);
 }
-
-//***************************
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     if (!subject || !comp) {
@@ -2289,10 +2232,6 @@ Write one professional paragraph that:
 
 
 
-//
-// ===========================================
-//     DEBUG ENDPOINTS
-// ===========================================
 
 app.get("/api/debug-database", (req, res) => {
   try {
@@ -2320,9 +2259,6 @@ app.get("/api/debug-database", (req, res) => {
     });
   }
 });
-
-
-
 
 
 
@@ -2513,6 +2449,23 @@ app.post("/api/records/calculate-lssi", (req, res) => {
         console.error('Error in LSSI calculation endpoint:', error);
         res.status(500).json({ error: 'Failed to calculate LSSI', details: error.message });
     }
+});
+
+
+app.get('/download/:filename', (req, res) => {
+  const { filename } = req.params;
+  const filePath = path.join(__dirname, 'public/data', filename);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('File not found.');
+  }
+
+  res.download(filePath, filename, (err) => {
+    if (err) {
+      console.error("❌ Download failed:", err);
+      res.status(500).send("Error downloading file.");
+    }
+  });
 });
 
 
