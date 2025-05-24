@@ -1400,6 +1400,46 @@ app.get("/api/coefficients", (req, res) => {
 
 
 
+const multer = require("multer");
+const upload = multer({ storage: multer.memoryStorage() });
+
+let allowDatabaseReplace = true; // toggle this to false after use
+
+app.post('/api/admin/replace-database', upload.single('file'), (req, res) => {
+  if (!allowDatabaseReplace) {
+    return res.status(403).json({ error: "Database replacement is no longer allowed." });
+  }
+
+  try {
+    const uploadedBuffer = req.file.buffer;
+    const json = JSON.parse(uploadedBuffer.toString());
+
+    if (!Array.isArray(json.records)) {
+      return res.status(400).json({ error: "Uploaded file must include a 'records' array." });
+    }
+
+    const db = {
+      metadata: {
+        replacedBy: 'admin',
+        replacedAt: new Date().toISOString()
+      },
+      records: json.records
+    };
+
+    fs.writeFileSync(path.join(__dirname, 'public/data/art_database.json'), JSON.stringify(db, null, 2));
+    console.log("Database successfully replaced.");
+
+    allowDatabaseReplace = false; // disable after one use
+    res.json({ message: "Database replaced successfully." });
+  } catch (err) {
+    console.error("Failed to replace database:", err);
+    res.status(500).json({ error: "Failed to replace database." });
+  }
+});
+
+
+
+
 app.delete("/api/records/:id", (req, res) => {
   const recordId = req.params.id;
   const index = database.records.findIndex(record => record.id === recordId);
