@@ -9,7 +9,6 @@ const mime = require("mime-types");
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
 
-
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -19,7 +18,8 @@ const allowedOrigins = [
   'https://advisory.valoraanalytics.com',
   'https://profound-mandazi-3e8fd7.netlify.app',
   'https://67eeb64d859f8b0b6c2fed45--stunning-arithmetic-16de6b.netlify.app',
-  'https://stunning-arithmetic-16de6b.netlify.app'
+  'https://stunning-arithmetic-16de6b.netlify.app',
+  'https://jazzy-cucurucho-2ca5c7.netlify.app'
 ];
 
 // Global CORS middleware for all routes
