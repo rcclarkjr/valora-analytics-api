@@ -1,3 +1,7 @@
+// ====================
+// IMPORTS AND SETUP
+// ====================
+
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -38,12 +42,157 @@ app.use(cors({
 }));
 
 
-// Serve static files from the "public" folder
-app.use(express.static("public"));
-
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// =============== PROMPTS ENDPOINT ===============
+
+// ====================
+// UTILITY FUNCTIONS
+// ====================
+
+function calculateAPPSI(size, ppsi, coefficients) {
+    const lssi = Math.log(size);
+    const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
+    const residualPercentage = (ppsi - predictedPPSI) / predictedPPSI;
+    const standardLSSI = Math.log(200);
+    const predictedPPSIStandard = coefficients.constant * Math.pow(standardLSSI, coefficients.exponent);
+    return predictedPPSIStandard * (1 + residualPercentage);
+}
+
+
+function ensureAPPSICalculation(req, res, next) {
+    try {
+        const data = readDatabase();
+        const coefficients = data.metadata.coefficients;
+
+        // If we have height and width, calculate size and lssi if not provided
+        if (req.body.height && req.body.width && !req.body.size) {
+            req.body.size = req.body.height * req.body.width;
+        }
+        
+        // Calculate LSSI if we have size but not LSSI
+        if (req.body.size && !req.body.lssi) {
+            req.body.lssi = Math.log(req.body.size);
+        }
+        
+        // Calculate PPSI if we have price and size but not PPSI
+        if (req.body.price && req.body.size && !req.body.ppsi) {
+            req.body.ppsi = req.body.price / req.body.size;
+        }
+
+        // Calculate APPSI if we have all required values
+        if (req.body.size && req.body.ppsi) {
+            req.body.appsi = calculateAPPSI(
+                req.body.size, 
+                req.body.ppsi, 
+                coefficients
+            );
+        }
+
+        next();
+    } catch (error) {
+        console.error('Error in APPSI calculation middleware:', error);
+        res.status(500).json({ error: 'Failed to calculate APPSI: ' + error.message });
+    }
+}
+
+
+
+
+// Helper function to extract category scores from analysis text with improved regex patterns
+function extractCategoryScores(analysisText) {
+  console.log("Extracting category scores from analysis text...");
+  
+  // More robust regex patterns that look for category names followed by scores
+  const categoryScoreRegex = {
+    composition: /(?:1\.\s*)?(?:Composition\s*&\s*Design|Composition[\s:]+)[\s:]*(\d+\.?\d*)/i,
+    color: /(?:2\.\s*)?(?:Color\s+Harmony\s*&\s+Use\s+of\s+Light|Color(?:\s+&\s+Light)?[\s:]+)[\s:]*(\d+\.?\d*)/i,
+    technical: /(?:3\.\s*)?(?:Technical\s+Skill\s*&\s*Craftsmanship|Technical[\s:]+)[\s:]*(\d+\.?\d*)/i,
+    originality: /(?:4\.\s*)?(?:Originality\s*&\s*Innovation|Originality[\s:]+)[\s:]*(\d+\.?\d*)/i,
+    emotional: /(?:5\.\s*)?(?:Emotional\s*&\s*Conceptual\s+Depth|Emotional[\s:]+)[\s:]*(\d+\.?\d*)/i
+  };
+  
+  // Try to find a section that might contain all scores
+  let scoreSection = analysisText;
+  
+  // Look for sections that might contain all the category scores
+  const categorySection = analysisText.match(/(?:Category|Criteria)\s+Scores[\s\S]*?(?=\n\n|$)/i);
+  if (categorySection) {
+    scoreSection = categorySection[0];
+    console.log("Found dedicated category scores section");
+  }
+  
+  const scores = {};
+  
+  // Extract each category score and log detailed info for debugging
+  for (const [category, regex] of Object.entries(categoryScoreRegex)) {
+    const match = scoreSection.match(regex);
+    console.log(`Looking for ${category} score with regex: ${regex}`);
+    
+    if (match && match[1]) {
+      const scoreValue = parseFloat(match[1]);
+      scores[category] = scoreValue;
+      console.log(`Found ${category} score: ${scoreValue}`);
+    } else {
+      // Check the whole text if not found in the score section
+      const fullMatch = analysisText.match(regex);
+      if (fullMatch && fullMatch[1]) {
+        const scoreValue = parseFloat(fullMatch[1]);
+        scores[category] = scoreValue;
+        console.log(`Found ${category} score in full text: ${scoreValue}`);
+      } else {
+        // Don't set a default - we'll detect missing values and abort
+        console.log(`Could not find ${category} score`);
+      }
+    }
+  }
+  
+  // Also try to find scores in a different format
+  // Look for all numbers in the format "Score: X.X" or "X.X/5.0"
+  const allScores = scoreSection.match(/(?:Score|Rating):\s*(\d+\.?\d*)|(\d+\.?\d*)\/5\.0/g);
+  if (allScores && allScores.length >= 5) {
+    console.log("Found alternative score format:", allScores);
+    // If we have enough scores in this format, use them instead
+    const categories = ['composition', 'color', 'technical', 'originality', 'emotional'];
+    allScores.slice(0, 5).forEach((scoreText, index) => {
+      const scoreMatch = scoreText.match(/(\d+\.?\d*)/);
+      if (scoreMatch && scoreMatch[1] && categories[index]) {
+        scores[categories[index]] = parseFloat(scoreMatch[1]);
+        console.log(`Set ${categories[index]} score to ${scores[categories[index]]} from alternative format`);
+      }
+    });
+  }
+  
+  // Check if we have all required scores
+  const missingCategories = [];
+  for (const category of ['composition', 'color', 'technical', 'originality', 'emotional']) {
+    if (!scores[category] || isNaN(scores[category]) || scores[category] < 1.0 || scores[category] > 5.0) {
+      missingCategories.push(category);
+    }
+  }
+  
+  if (missingCategories.length > 0) {
+    console.log(`Missing or invalid scores for categories: ${missingCategories.join(', ')}`);
+    return null; // Return null to indicate missing scores
+  }
+  
+  console.log("Final extracted category scores:", scores);
+  return scores;
+}
+
+// Function to round the SMI score up to the nearest 0.25 increment
+function roundSMIUp(value) {
+  // Calculate how many 0.25 increments in the value
+  const increments = Math.ceil(value * 4) / 4;
+  // Round to 2 decimal places to avoid floating point issues
+  return Math.round(increments * 100) / 100;
+}
+
+
+
+
+// ====================
+// API ROUTES
+// ====================
 
 // Generic endpoint for serving prompts - more maintainable approach
 app.get("/prompts/:calculatorType", (req, res) => {
@@ -377,150 +526,6 @@ ${prompt}`;
 
 
 
-function calculateAPPSI(size, ppsi, coefficients) {
-    const lssi = Math.log(size);
-    const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
-    const residualPercentage = (ppsi - predictedPPSI) / predictedPPSI;
-    const standardLSSI = Math.log(200);
-    const predictedPPSIStandard = coefficients.constant * Math.pow(standardLSSI, coefficients.exponent);
-    return predictedPPSIStandard * (1 + residualPercentage);
-}
-
-
-
-
-
-function ensureAPPSICalculation(req, res, next) {
-    try {
-        const data = readDatabase();
-        const coefficients = data.metadata.coefficients;
-
-        // If we have height and width, calculate size and lssi if not provided
-        if (req.body.height && req.body.width && !req.body.size) {
-            req.body.size = req.body.height * req.body.width;
-        }
-        
-        // Calculate LSSI if we have size but not LSSI
-        if (req.body.size && !req.body.lssi) {
-            req.body.lssi = Math.log(req.body.size);
-        }
-        
-        // Calculate PPSI if we have price and size but not PPSI
-        if (req.body.price && req.body.size && !req.body.ppsi) {
-            req.body.ppsi = req.body.price / req.body.size;
-        }
-
-        // Calculate APPSI if we have all required values
-        if (req.body.size && req.body.ppsi) {
-            req.body.appsi = calculateAPPSI(
-                req.body.size, 
-                req.body.ppsi, 
-                coefficients
-            );
-        }
-
-        next();
-    } catch (error) {
-        console.error('Error in APPSI calculation middleware:', error);
-        res.status(500).json({ error: 'Failed to calculate APPSI: ' + error.message });
-    }
-}
-
-
-
-
-
-
-
-// Helper function to extract category scores from analysis text with improved regex patterns
-function extractCategoryScores(analysisText) {
-  console.log("Extracting category scores from analysis text...");
-  
-  // More robust regex patterns that look for category names followed by scores
-  const categoryScoreRegex = {
-    composition: /(?:1\.\s*)?(?:Composition\s*&\s*Design|Composition[\s:]+)[\s:]*(\d+\.?\d*)/i,
-    color: /(?:2\.\s*)?(?:Color\s+Harmony\s*&\s+Use\s+of\s+Light|Color(?:\s+&\s+Light)?[\s:]+)[\s:]*(\d+\.?\d*)/i,
-    technical: /(?:3\.\s*)?(?:Technical\s+Skill\s*&\s*Craftsmanship|Technical[\s:]+)[\s:]*(\d+\.?\d*)/i,
-    originality: /(?:4\.\s*)?(?:Originality\s*&\s*Innovation|Originality[\s:]+)[\s:]*(\d+\.?\d*)/i,
-    emotional: /(?:5\.\s*)?(?:Emotional\s*&\s*Conceptual\s+Depth|Emotional[\s:]+)[\s:]*(\d+\.?\d*)/i
-  };
-  
-  // Try to find a section that might contain all scores
-  let scoreSection = analysisText;
-  
-  // Look for sections that might contain all the category scores
-  const categorySection = analysisText.match(/(?:Category|Criteria)\s+Scores[\s\S]*?(?=\n\n|$)/i);
-  if (categorySection) {
-    scoreSection = categorySection[0];
-    console.log("Found dedicated category scores section");
-  }
-  
-  const scores = {};
-  
-  // Extract each category score and log detailed info for debugging
-  for (const [category, regex] of Object.entries(categoryScoreRegex)) {
-    const match = scoreSection.match(regex);
-    console.log(`Looking for ${category} score with regex: ${regex}`);
-    
-    if (match && match[1]) {
-      const scoreValue = parseFloat(match[1]);
-      scores[category] = scoreValue;
-      console.log(`Found ${category} score: ${scoreValue}`);
-    } else {
-      // Check the whole text if not found in the score section
-      const fullMatch = analysisText.match(regex);
-      if (fullMatch && fullMatch[1]) {
-        const scoreValue = parseFloat(fullMatch[1]);
-        scores[category] = scoreValue;
-        console.log(`Found ${category} score in full text: ${scoreValue}`);
-      } else {
-        // Don't set a default - we'll detect missing values and abort
-        console.log(`Could not find ${category} score`);
-      }
-    }
-  }
-  
-  // Also try to find scores in a different format
-  // Look for all numbers in the format "Score: X.X" or "X.X/5.0"
-  const allScores = scoreSection.match(/(?:Score|Rating):\s*(\d+\.?\d*)|(\d+\.?\d*)\/5\.0/g);
-  if (allScores && allScores.length >= 5) {
-    console.log("Found alternative score format:", allScores);
-    // If we have enough scores in this format, use them instead
-    const categories = ['composition', 'color', 'technical', 'originality', 'emotional'];
-    allScores.slice(0, 5).forEach((scoreText, index) => {
-      const scoreMatch = scoreText.match(/(\d+\.?\d*)/);
-      if (scoreMatch && scoreMatch[1] && categories[index]) {
-        scores[categories[index]] = parseFloat(scoreMatch[1]);
-        console.log(`Set ${categories[index]} score to ${scores[categories[index]]} from alternative format`);
-      }
-    });
-  }
-  
-  // Check if we have all required scores
-  const missingCategories = [];
-  for (const category of ['composition', 'color', 'technical', 'originality', 'emotional']) {
-    if (!scores[category] || isNaN(scores[category]) || scores[category] < 1.0 || scores[category] > 5.0) {
-      missingCategories.push(category);
-    }
-  }
-  
-  if (missingCategories.length > 0) {
-    console.log(`Missing or invalid scores for categories: ${missingCategories.join(', ')}`);
-    return null; // Return null to indicate missing scores
-  }
-  
-  console.log("Final extracted category scores:", scores);
-  return scores;
-}
-
-// Function to round the SMI score up to the nearest 0.25 increment
-function roundSMIUp(value) {
-  // Calculate how many 0.25 increments in the value
-  const increments = Math.ceil(value * 4) / 4;
-  // Round to 2 decimal places to avoid floating point issues
-  return Math.round(increments * 100) / 100;
-}
-
 // Endpoint for Skill Mastery Index (SMI) analysis
 app.post("/analyze-smi", async (req, res) => {
   try {
@@ -819,6 +824,9 @@ app.post("/analyze-combined", async (req, res) => {
   }
 });
 
+
+
+
 // Error handler function
 function handleApiError(error, res) {
   console.error("Error in API endpoint:", error);
@@ -1009,7 +1017,8 @@ app.post('/api/admin/create-backup', (req, res) => {
     const data = fs.readFileSync(dbPath, 'utf-8');
     fs.writeFileSync(backupPath, data);
 
-    const publicUrl = `/data/${backupFileName}`;
+    const publicUrl = `/download/${backupFileName}`;
+
     console.log(`✅ Backup created: ${backupFileName}`);
     res.json({ message: `Backup created: ${backupFileName}`, downloadUrl: publicUrl });
   } catch (err) {
@@ -2468,8 +2477,13 @@ app.get('/download/:filename', (req, res) => {
   });
 });
 
+// Serve static files from the "public" folder
+app.use(express.static("public"));
 
 
+// ====================
+// START THE SERVER
+// ====================
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
