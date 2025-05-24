@@ -1399,7 +1399,6 @@ app.get("/api/coefficients", (req, res) => {
 });
 
 
-const upload = multer({ storage: multer.memoryStorage() });
 
 let allowDatabaseReplace = true; // toggle this to false after use
 
