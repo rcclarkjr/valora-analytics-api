@@ -981,8 +981,9 @@ app.post('/api/admin/create-backup', (req, res) => {
     const data = fs.readFileSync(dbPath, 'utf-8');
     fs.writeFileSync(backupPath, data);
 
+    const publicUrl = `/data/${backupFileName}`;
     console.log(`✅ Backup created: ${backupFileName}`);
-    res.json({ message: `Backup created: ${backupFileName}` });
+    res.json({ message: `Backup created: ${backupFileName}`, downloadUrl: publicUrl });
   } catch (err) {
     console.error("❌ Failed to create backup:", err);
     res.status(500).json({ error: "Failed to create backup." });
