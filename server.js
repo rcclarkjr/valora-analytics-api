@@ -10,8 +10,7 @@ const fs = require("fs");
 const path = require("path");
 const app = express();
 const mime = require("mime-types");
-const multer = require("multer");
-const upload = multer({ storage: multer.memoryStorage() });
+
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -904,23 +903,31 @@ return data;
   }
 }
 
+
+
+
 function writeDatabase(data) {
   try {
-    const dbDir = path.dirname(DB_PATH);
-    const imgDir = IMAGES_DIR;
+    console.log(`🔍 DB_PATH: ${DB_PATH}`);
+    console.log(`🔍 Current working directory: ${process.cwd()}`);
     
+    const dbDir = path.dirname(DB_PATH);
+    console.log(`📁 Database directory: ${dbDir}`);
+    
+    // Ensure the directory for the JSON database exists
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });
-    }
-    if (!fs.existsSync(imgDir)) {
-      fs.mkdirSync(imgDir, { recursive: true });
+      console.log(`✅ Created DB directory: ${dbDir}`);
     }
     
+    console.log(`💾 About to write ${data.records.length} records to ${DB_PATH}`);
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
     console.log('✅ Database write completed successfully');
   } catch (error) {
     console.error('❌ Error writing database:', error);
-    throw error; // ✅ RE-THROW THE ERROR
+    console.error('❌ Error details:', error.message);
+    console.error('❌ Error code:', error.code);
+    throw error;
   }
 }
 
@@ -1105,44 +1112,6 @@ app.post("/api/records/recalculate-appsi", (req, res) => {
 
 
 
-app.post("/api/records/deactivate", (req, res) => {
-  try {
-    const { recordIds } = req.body;
-
-    if (!Array.isArray(recordIds) || recordIds.length === 0) {
-      return res.status(400).json({ error: "Missing or invalid 'recordIds' array." });
-    }
-
-    const data = readDatabase();
-    const updated = [];
-
-    recordIds.forEach(id => {
-      const recordId = parseInt(id);
-      const record = data.records.find(r => r.recordId === recordId);
-
-      if (record && record.isActive !== false) {
-        record.isActive = false;
-        updated.push(recordId);
-      }
-    });
-
-    writeDatabase(data);
-
-    res.json({
-      success: true,
-      message: `Deactivated ${updated.length} records.`,
-      deactivatedIds: updated
-    });
-  } catch (error) {
-    console.error("Error in /api/records/deactivate:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-
-
-
-
 
 
 // GET statistical information
@@ -1242,38 +1211,6 @@ delete newRecord.imagePath;
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
-});
-
-
-
-app.post("/api/records/:id/image", upload.single("image"), (req, res) => {
-  try {
-    const recordId = parseInt(req.params.id);
-    if (isNaN(recordId)) {
-      return res.status(400).json({ error: "Invalid record ID" });
-    }
-
-    const data = readDatabase();
-    const record = data.records.find(r => r.recordId === recordId);
-    if (!record) {
-      return res.status(404).json({ error: "Record not found" });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ error: "No image file uploaded" });
-    }
-
-    const { imageBase64, mimeType } = encodeImageWithMime(req.file.buffer, req.file.originalname);
-
-    record.imageBase64 = imageBase64;
-    record.imageMimeType = mimeType;
-
-    writeDatabase(data);
-    res.json({ success: true, recordId: record.recordId, mimeType });
-  } catch (error) {
-    console.error("Image upload error:", error);
-    res.status(500).json({ error: error.message });
-  }
 });
 
 
@@ -2391,41 +2328,6 @@ app.post("/api/debug-clean-images", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-
-
-
-app.post('/api/images/:id', upload.single('image'), async (req, res) => {
-  try {
-    const recordId = parseInt(req.params.id);
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-    // Resize and convert to JPEG using sharp
-    const resizedBuffer = await sharp(req.file.buffer)
-      .resize({ width: 1000, height: 1000, fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 85 })
-      .toBuffer();
-
-    const imageBase64 = resizedBuffer.toString('base64');
-
-    const db = readDatabase();
-    const record = db.records.find(r => parseInt(r.recordId) === recordId);
-
-    if (!record) return res.status(404).json({ error: 'Record not found' });
-
-    record.imageBase64 = imageBase64;
-    record.imageMimeType = 'image/jpeg';
-
-    db.metadata.lastUpdated = new Date().toISOString();
-    writeDatabase(db);
-
-    res.json({ success: true, message: 'Image uploaded and resized successfully.' });
-  } catch (err) {
-    console.error('Upload error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 
 
 
