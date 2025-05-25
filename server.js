@@ -1370,42 +1370,34 @@ app.get("/api/coefficients", (req, res) => {
 
 
 
-let allowDatabaseReplace = true; // toggle this to false after use
-
-app.post('/api/admin/replace-database', upload.single('file'), (req, res) => {
-  if (!allowDatabaseReplace) {
-    return res.status(403).json({ error: "Database replacement is no longer allowed." });
-  }
-
+app.post('/api/admin/replace-database', (req, res) => {
   try {
-    const uploadedBuffer = req.file.buffer;
-    const json = JSON.parse(uploadedBuffer.toString());
-
-    if (!Array.isArray(json.records)) {
-      return res.status(400).json({ error: "Uploaded file must include a 'records' array." });
+    // Now expects JSON in request body instead of file upload
+    const json = req.body;
+    
+    if (!json || !Array.isArray(json.records)) {
+      return res.status(400).json({ error: "Request body must include a 'records' array." });
     }
-
-const db = json; // Preserve entire uploaded structure, including metadata
-
-const savePath = '/mnt/data/art_database.json';
-const parentDir = path.dirname(savePath);
-if (!fs.existsSync(parentDir)) {
-  fs.mkdirSync(parentDir, { recursive: true });
-}
-fs.writeFileSync(savePath, JSON.stringify(db, null, 2));
-
-
-
-    console.log("Database successfully replaced.");
-
-    allowDatabaseReplace = false; // disable after one use
-    res.json({ message: "Database replaced successfully." });
+    
+    const db = json; // Preserve entire uploaded structure, including metadata
+    const savePath = '/mnt/data/art_database.json';
+    const parentDir = path.dirname(savePath);
+    
+    if (!fs.existsSync(parentDir)) {
+      fs.mkdirSync(parentDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(savePath, JSON.stringify(db, null, 2));
+    console.log(`Database successfully replaced with ${json.records.length} records.`);
+    res.json({ 
+      message: "Database replaced successfully.",
+      recordCount: json.records.length 
+    });
   } catch (err) {
     console.error("Failed to replace database:", err);
     res.status(500).json({ error: "Failed to replace database." });
   }
 });
-
 
 
 
