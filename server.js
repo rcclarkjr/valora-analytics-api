@@ -1014,8 +1014,8 @@ function calculateRSquared(points, constant, exponent) {
 
 app.post('/api/admin/create-backup', (req, res) => {
   try {
-    const dbPath = path.join(__dirname, 'public/data/art_database.json');
-    const backupDir = path.join(__dirname, 'public/data');
+    const dbPath = '/mnt/data/art_database.json';
+    const backupDir = '/mnt/data';
     const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').slice(0, 15);
     const backupFileName = `backup_art_database_${timestamp}.json`;
     const backupPath = path.join(backupDir, backupFileName);
