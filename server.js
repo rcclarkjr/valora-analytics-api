@@ -1449,14 +1449,7 @@ app.post('/api/admin/replace-database', upload.single('file'), (req, res) => {
       return res.status(400).json({ error: "Uploaded file must include a 'records' array." });
     }
 
-    const db = {
-      metadata: {
-        replacedBy: 'admin',
-        replacedAt: new Date().toISOString()
-      },
-      records: json.records
-    };
-
+const db = json; // Preserve entire uploaded structure, including metadata
 
 const savePath = '/mnt/data/art_database.json';
 const parentDir = path.dirname(savePath);
@@ -1464,6 +1457,7 @@ if (!fs.existsSync(parentDir)) {
   fs.mkdirSync(parentDir, { recursive: true });
 }
 fs.writeFileSync(savePath, JSON.stringify(db, null, 2));
+
 
 
     console.log("Database successfully replaced.");
