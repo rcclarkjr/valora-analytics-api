@@ -859,7 +859,7 @@ function handleApiError(error, res) {
 // =======================================
 
 // Path to your JSON database and images directory
-const DB_PATH = '/opt/render/project/src/public/data/art_database.json';
+const DB_PATH = '/mnt/data/art_database.json';
 
 function encodeImageWithMime(buffer, originalName) {
   const mimeType = mime.lookup(originalName) || "image/jpeg";
