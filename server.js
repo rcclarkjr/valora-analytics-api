@@ -1457,7 +1457,15 @@ app.post('/api/admin/replace-database', upload.single('file'), (req, res) => {
       records: json.records
     };
 
-    fs.writeFileSync(path.join(__dirname, 'public/data/art_database.json'), JSON.stringify(db, null, 2));
+
+const savePath = '/mnt/data/art_database.json';
+const parentDir = path.dirname(savePath);
+if (!fs.existsSync(parentDir)) {
+  fs.mkdirSync(parentDir, { recursive: true });
+}
+fs.writeFileSync(savePath, JSON.stringify(db, null, 2));
+
+
     console.log("Database successfully replaced.");
 
     allowDatabaseReplace = false; // disable after one use
