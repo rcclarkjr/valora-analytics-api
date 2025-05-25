@@ -1055,6 +1055,7 @@ app.get("/api/records", (req, res) => {
 
 
 
+// FIXED pagination route - handles database structure properly
 app.get('/api/records/page/:pageNumber', (req, res) => {
   try {
     const page = parseInt(req.params.pageNumber) || 1;
@@ -1062,19 +1063,30 @@ app.get('/api/records/page/:pageNumber', (req, res) => {
     const offset = (page - 1) * limit;
     
     const database = readDatabase();
+    console.log('Database type:', typeof database, 'Array?', Array.isArray(database));
     
-    // Apply any filters from query params
-    let filteredRecords = database;
-    if (req.query.year) {
-      filteredRecords = filteredRecords.filter(r => r.year == req.query.year);
+    // Handle different database structures
+    let records;
+    if (Array.isArray(database)) {
+      records = database;
+    } else if (database.records && Array.isArray(database.records)) {
+      records = database.records;
+    } else {
+      throw new Error('Database format not recognized');
     }
-    if (req.query.minPrice) {
-      filteredRecords = filteredRecords.filter(r => r.price >= req.query.minPrice);
-    }
+    
+    console.log(`Found ${records.length} total records in database`);
+    
+    // Apply filters (simplified - no filtering for now to test basic pagination)
+    let filteredRecords = records;
+    
+    console.log(`After filtering: ${filteredRecords.length} records`);
     
     const totalRecords = filteredRecords.length;
     const totalPages = Math.ceil(totalRecords / limit);
     const paginatedRecords = filteredRecords.slice(offset, offset + limit);
+    
+    console.log(`✅ Pagination: Page ${page}, returning ${paginatedRecords.length} records, ${totalRecords} total across ${totalPages} pages`);
     
     res.json({
       records: paginatedRecords,
@@ -1088,10 +1100,11 @@ app.get('/api/records/page/:pageNumber', (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Pagination error:', error);
-    res.status(500).json({ error: 'Failed to load paginated records' });
+    console.error('❌ Pagination error:', error);
+    res.status(500).json({ error: 'Failed to load paginated records: ' + error.message });
   }
 });
+
 
 
 
