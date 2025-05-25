@@ -1054,6 +1054,47 @@ app.get("/api/records", (req, res) => {
 });
 
 
+
+app.get('/api/records/page/:pageNumber', (req, res) => {
+  try {
+    const page = parseInt(req.params.pageNumber) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+    
+    const database = readDatabase();
+    
+    // Apply any filters from query params
+    let filteredRecords = database;
+    if (req.query.year) {
+      filteredRecords = filteredRecords.filter(r => r.year == req.query.year);
+    }
+    if (req.query.minPrice) {
+      filteredRecords = filteredRecords.filter(r => r.price >= req.query.minPrice);
+    }
+    
+    const totalRecords = filteredRecords.length;
+    const totalPages = Math.ceil(totalRecords / limit);
+    const paginatedRecords = filteredRecords.slice(offset, offset + limit);
+    
+    res.json({
+      records: paginatedRecords,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalRecords: totalRecords,
+        recordsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Pagination error:', error);
+    res.status(500).json({ error: 'Failed to load paginated records' });
+  }
+});
+
+
+
 app.post("/api/records/recalculate-appsi", (req, res) => {
     try {
         const data = readDatabase();
@@ -1399,6 +1440,75 @@ app.post('/api/admin/replace-database', (req, res) => {
   }
 });
 
+
+
+// Add BOTH of these routes right after the closing }); of replace-database
+
+// Pagination endpoint
+app.get('/api/records/page/:pageNumber', (req, res) => {
+  try {
+    const page = parseInt(req.params.pageNumber) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+    
+    const database = readDatabase();
+    
+    // Apply any filters from query params
+    let filteredRecords = database;
+    if (req.query.year) {
+      filteredRecords = filteredRecords.filter(r => r.year == req.query.year);
+    }
+    if (req.query.minPrice) {
+      filteredRecords = filteredRecords.filter(r => r.price >= req.query.minPrice);
+    }
+    
+    const totalRecords = filteredRecords.length;
+    const totalPages = Math.ceil(totalRecords / limit);
+    const paginatedRecords = filteredRecords.slice(offset, offset + limit);
+    
+    res.json({
+      records: paginatedRecords,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalRecords: totalRecords,
+        recordsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Pagination error:', error);
+    res.status(500).json({ error: 'Failed to load paginated records' });
+  }
+});
+
+
+
+
+// Batch delete endpoint
+app.post('/api/records/batch-delete', (req, res) => {
+  try {
+    const { recordIds } = req.body;
+    const database = readDatabase();
+    
+    const initialCount = database.length;
+    const updatedDatabase = database.filter(record => !recordIds.includes(record.id));
+    const deletedCount = initialCount - updatedDatabase.length;
+    
+    writeDatabase(updatedDatabase);
+    
+    console.log(`✅ Batch deleted ${deletedCount} records: ${recordIds.join(', ')}`);
+    res.json({ 
+      success: true, 
+      deletedCount: deletedCount,
+      remainingRecords: updatedDatabase.length 
+    });
+  } catch (error) {
+    console.error('❌ Batch delete failed:', error);
+    res.status(500).json({ error: 'Batch delete failed' });
+  }
+});
 
 
 
