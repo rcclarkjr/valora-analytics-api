@@ -2368,14 +2368,24 @@ app.post("/api/records/calculate-lssi", (req, res) => {
 app.get('/download/:filename', (req, res) => {
   const { filename } = req.params;
   const filePath = path.join('/mnt/data', filename);
+  
   if (!fs.existsSync(filePath)) {
     return res.status(404).send('File not found.');
   }
-  res.download(filePath, filename, (err) => {
-    if (err) {
-      console.error('❌ Download failed:', err);
-      res.status(500).send('Error downloading file.');
-    }
+  
+  // ✅ Add these headers for better large file handling:
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  
+  // ✅ Use streaming for better performance:
+  const fileStream = fs.createReadStream(filePath);
+  fileStream.pipe(res);
+  
+  fileStream.on('error', (err) => {
+    console.error('❌ Download failed:', err);
+    res.status(500).send('Error downloading file.');
   });
 });
 
