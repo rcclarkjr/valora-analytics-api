@@ -908,20 +908,19 @@ function writeDatabase(data) {
   try {
     const dbDir = path.dirname(DB_PATH);
     const imgDir = IMAGES_DIR;
-
-    // Ensure the directory for the JSON database exists
+    
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });
     }
-
-    // Ensure the image directory exists
     if (!fs.existsSync(imgDir)) {
       fs.mkdirSync(imgDir, { recursive: true });
     }
-
+    
     fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+    console.log('✅ Database write completed successfully');
   } catch (error) {
-    console.error('Error writing database:', error);
+    console.error('❌ Error writing database:', error);
+    throw error; // ✅ RE-THROW THE ERROR
   }
 }
 
