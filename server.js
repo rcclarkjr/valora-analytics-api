@@ -1473,21 +1473,30 @@ fs.writeFileSync(savePath, JSON.stringify(db, null, 2));
 
 
 
+
 app.delete("/api/records/:id", (req, res) => {
-  const recordId = req.params.id;
-  const index = database.records.findIndex(record => record.id === recordId);
+  try {
+    const recordId = parseInt(req.params.id);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: "Invalid record ID" });
+    }
 
-  if (index === -1) {
-    return res.status(404).json({ error: "Record not found" });
+    const data = readDatabase();
+    const index = data.records.findIndex(record => record.recordId === recordId);
+
+    if (index === -1) {
+      return res.status(404).json({ error: "Record not found" });
+    }
+
+    data.records.splice(index, 1);
+    writeDatabase(data);
+
+    res.json({ message: "Record permanently deleted" });
+  } catch (error) {
+    console.error("Error deleting record:", error.message);
+    res.status(500).json({ error: "Failed to delete record." });
   }
-
-  database.records.splice(index, 1);
-
-  fs.writeFileSync("/opt/render/project/src/public/data/art_database.json", JSON.stringify(database, null, 2));
-
-  res.json({ message: "Record permanently deleted" });
 });
-
 
 
 
