@@ -1506,7 +1506,7 @@ app.post('/api/records/batch-delete', (req, res) => {
     const database = readDatabase();
     
     const initialCount = database.length;
-    const updatedDatabase = database.filter(record => !recordIds.includes(record.id));
+    const updatedDatabase = database.filter(record => !recordIds.includes(record.recordId));
     const deletedCount = initialCount - updatedDatabase.length;
     
     writeDatabase(updatedDatabase);
