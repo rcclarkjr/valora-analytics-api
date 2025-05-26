@@ -1125,7 +1125,7 @@ app.post("/api/records/recalculate-appsi", (req, res) => {
                 
                 // Log details about problematic record
                 problematicRecords.push({
-                    recordId: record.recordId,
+                    recordId: record.id,
                     issues: {
                         size: record.size,
                         ppsi: record.ppsi,
@@ -1187,9 +1187,9 @@ const activeRecords = data.records.filter(record => {
   const hasAppsi = record.appsi !== undefined && record.appsi !== null && !isNaN(parseFloat(record.appsi));
   
   // Log failing records for debugging
-  if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
-    console.log(`Record ${record.recordId} missing metrics: smi=${hasSmi}, ri=${hasRi}, cli=${hasCli}, appsi=${hasAppsi}`);
-  }
+if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
+    console.log(`Record ${record.id} missing metrics: smi=${hasSmi}, ri=${hasRi}, cli=${hasCli}, appsi=${hasAppsi}`);
+}
   
   return hasSmi && hasRi && hasCli && hasAppsi;
 });
@@ -1234,11 +1234,11 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         
         // Get the highest existing ID and increment
         const maxId = data.records.reduce((max, record) => 
-            Math.max(max, record.recordId || 0), 0);
+            Math.max(max, record.id || 0), 0);
         
         // Create a new record
         const newRecord = {
-            recordId: maxId + 1,
+            id: maxId + 1,
             isActive: true,
             ...req.body
         };
@@ -1282,7 +1282,7 @@ app.patch("/api/records/:id/image", (req, res) => {
     }
 
     const data = readDatabase();
-    const record = data.records.find(r => r.recordId === recordId);
+    const record = data.records.find(r => r.id === recordId);
     if (!record) {
       return res.status(404).json({ error: "Record not found" });
     }
@@ -1295,7 +1295,7 @@ app.patch("/api/records/:id/image", (req, res) => {
     record.imageMimeType = mimeType;
 
     writeDatabase(data);
-    res.json({ success: true, recordId: record.recordId, mimeType });
+    res.json({ success: true, recordId: record.id, mimeType });
   } catch (error) {
     console.error("Error patching imageBase64:", error);
     res.status(500).json({ error: error.message });
@@ -1307,7 +1307,7 @@ app.get("/api/records/:id/image", (req, res) => {
   try {
     const recordId = parseInt(req.params.id);
     const data = readDatabase();
-    const record = data.records.find(r => r.recordId === recordId);
+    const record = data.records.find(r => r.id === recordId);
     
     if (!record || !record.imageBase64) {
       return res.status(404).json({ error: "Image not found" });
@@ -1341,7 +1341,7 @@ app.get("/api/records/:id", (req, res) => {
     }
     
     const data = readDatabase();
-    const record = data.records.find(r => r.recordId === recordId);
+    const record = data.records.find(r => r.id === recordId);
     
     if (!record) {
       return res.status(404).json({ error: 'Record not found' });
@@ -1366,8 +1366,8 @@ app.put("/api/records/:id", ensureAPPSICalculation, (req, res) => {
         }
         
         const data = readDatabase();
-        const index = data.records.findIndex(r => r.recordId === recordId);
-        
+        const index = data.records.findIndex(r => r.id === recordId);
+       
         if (index === -1) {
             return res.status(404).json({ error: 'Record not found' });
         }
@@ -1376,7 +1376,7 @@ app.put("/api/records/:id", ensureAPPSICalculation, (req, res) => {
         const updatedRecord = {
             ...data.records[index],
             ...req.body,
-            recordId: recordId, // Ensure ID doesn't change
+            id: recordId, // Ensure ID doesn't change
         };
         
         // Recalculate derived fields if height/width/price changed
@@ -1499,30 +1499,32 @@ app.get('/api/records/page/:pageNumber', (req, res) => {
 
 
 
-// Batch delete endpoint
 app.post('/api/records/batch-delete', (req, res) => {
   try {
     const { recordIds } = req.body;
-    const database = readDatabase();
+    const data = readDatabase(); // Using 'data' instead of 'database' for clarity
     
-    const initialCount = database.length;
-    const updatedDatabase = database.filter(record => !recordIds.includes(record.recordId));
-    const deletedCount = initialCount - updatedDatabase.length;
+    // ✅ CORRECT: Work with data.records array
+    const initialCount = data.records.length;
+    const updatedRecords = data.records.filter(record => !recordIds.includes(record.id));
+    const deletedCount = initialCount - updatedRecords.length;
     
-    writeDatabase(updatedDatabase);
+    // ✅ CORRECT: Update the records array in the data object
+    data.records = updatedRecords;
+    data.metadata.lastUpdated = new Date().toISOString(); // Also update timestamp
+    writeDatabase(data);
     
     console.log(`✅ Batch deleted ${deletedCount} records: ${recordIds.join(', ')}`);
     res.json({ 
       success: true, 
       deletedCount: deletedCount,
-      remainingRecords: updatedDatabase.length 
+      remainingRecords: updatedRecords.length 
     });
   } catch (error) {
     console.error('❌ Batch delete failed:', error);
     res.status(500).json({ error: 'Batch delete failed' });
   }
 });
-
 
 
 app.delete("/api/records/:id", (req, res) => {
@@ -1533,7 +1535,7 @@ app.delete("/api/records/:id", (req, res) => {
     }
 
     const data = readDatabase();
-    const index = data.records.findIndex(record => record.recordId === recordId);
+    const index = data.records.findIndex(record => record.id === recordId);
 
     if (index === -1) {
       return res.status(404).json({ error: "Record not found" });
@@ -1736,7 +1738,7 @@ app.post("/api/valuation", async (req, res) => {
         if (!r.imageBase64) issues.push("missing imageBase64");
         
         if (issues.length > 0) {
-          console.log(`Record ${r.recordId} invalid for comparison: ${issues.join(", ")}`);
+          console.log(`Record ${r.id} invalid for comparison: ${issues.join(", ")}`);
         }
       }
       return isValid;
@@ -1805,7 +1807,7 @@ app.post("/api/valuation", async (req, res) => {
     const visualComparisons = [];
     for (const comp of topComps) {
       try {
-        const compId = comp.recordId;
+        const compId = comp.id;
         console.log(`Processing visual comparison for comp ID ${compId}`);
         
 
@@ -1865,7 +1867,7 @@ if (comp.imageBase64) {
 
         // Add to visualComparisons with proper structure
         visualComparisons.push({
-          compId: comp.recordId,
+          compId: comp.id,
           classification: compareRes.data.finalResult,
           appsi: comp.appsi,
           scalarDistance: comp.scalarDistance,
@@ -2018,7 +2020,7 @@ app.get('/api/debug-export', (req, res) => {
   try {
     const data = readDatabase();
     const exportSubset = data.records.map(r => ({
-      ID: r.recordId,
+      ID: r.id,
       'Artist Name': r.artistName,
       Title: r.title,
       SMI: r.SMI,
@@ -2338,14 +2340,14 @@ app.get("/api/debug-record/:id", (req, res) => {
   try {
     const recordId = parseInt(req.params.id);
     const data = readDatabase();
-    const record = data.records.find(r => r.recordId === recordId);
+    const record = data.records.find(r => r.id === recordId);
     
     if (!record) {
       return res.status(404).json({ error: 'Record not found' });
     }
     
     res.json({
-      id: record.recordId,
+      id: record.id,
       isActive: record.isActive,
       metrics: {
         smi: record.smi,
@@ -2387,7 +2389,7 @@ app.get("/api/debug-scan-images", (req, res) => {
       }
       if (Object.keys(findings).length > 0) {
         flagged.push({
-          recordId: record.recordId,
+          recordId: record.id,
           findings
         });
       }
@@ -2467,7 +2469,7 @@ app.post("/api/records/calculate-lssi", (req, res) => {
                 record.lssi = Math.log(record.size);
                 recordsUpdated++;
             } catch (error) {
-                console.error(`Error calculating LSSI for record ${record.recordId}:`, error);
+                console.error(`Error calculating LSSI for record ${record.id}:`, error);
                 recordsWithErrors++;
             }
         });
