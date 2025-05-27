@@ -1168,6 +1168,9 @@ app.post("/api/records/recalculate-appsi", (req, res) => {
 
 
 
+
+
+
 // GET statistical information
 app.get("/api/stats", (req, res) => {
   try {
@@ -1209,7 +1212,6 @@ if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
       stats.avgPrice = activeRecords.reduce((sum, r) => sum + (r.price || 0), 0) / activeRecords.length;
       stats.avgSize = activeRecords.reduce((sum, r) => sum + (r.size || 0), 0) / activeRecords.length;
       stats.avgPPSI = activeRecords.reduce((sum, r) => sum + (r.ppsi || 0), 0) / activeRecords.length;
-      stats.avgAPPSI = activeRecords.reduce((sum, r) => sum + (r.appsi || 0), 0) / activeRecords.length;
     }
     
     res.json(stats);
@@ -1217,6 +1219,12 @@ if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
+
+
+
 
 
 
