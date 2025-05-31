@@ -909,32 +909,32 @@ return data;
 
 
 
+
 function writeDatabase(data) {
-  try {
-    console.log(`🔍 DB_PATH: ${DB_PATH}`);
-    console.log(`🔍 Current working directory: ${process.cwd()}`);
-    
-    const dbDir = path.dirname(DB_PATH);
-    console.log(`📁 Database directory: ${dbDir}`);
-    
-    // Ensure the directory for the JSON database exists
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-      console.log(`✅ Created DB directory: ${dbDir}`);
+    try {
+        console.log(`Writing to database: ${DB_PATH}, records: ${data.records.length}`);
+        const dbDir = path.dirname(DB_PATH);
+        if (!fs.existsSync(dbDir)) {
+            fs.mkdirSync(dbDir, { recursive: true });
+            console.log(`Created directory: ${dbDir}`);
+        }
+        fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+        console.log(`Database write successful`);
+        // Verify write
+        if (!fs.existsSync(DB_PATH)) {
+            throw new Error(`Database file not found after write: ${DB_PATH}`);
+        }
+        const writtenData = fs.readFileSync(DB_PATH, 'utf8');
+        const parsedData = JSON.parse(writtenData);
+        if (!parsedData.records || parsedData.records.length !== data.records.length) {
+            throw new Error(`Database write verification failed: record count mismatch`);
+        }
+        console.log(`Verified database write: ${parsedData.records.length} records`);
+    } catch (error) {
+        console.error(`Error writing database: ${error.message}`);
+        throw error;
     }
-    
-    console.log(`💾 About to write ${data.records.length} records to ${DB_PATH}`);
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-    console.log('✅ Database write completed successfully');
-  } catch (error) {
-    console.error('❌ Error writing database:', error);
-    console.error('❌ Error details:', error.message);
-    console.error('❌ Error code:', error.code);
-    throw error;
-  }
 }
-
-
 
 
 
@@ -1226,8 +1226,6 @@ if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
 
 
 
-
-
 app.post("/api/records", ensureAPPSICalculation, (req, res) => {
     try {
         const data = readDatabase();
@@ -1237,10 +1235,8 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
                 return res.status(400).json({ error: `Missing required field: ${field}` });
             }
         }
-        // Debug: Log records and IDs
         console.log(`Total records: ${data.records.length}`);
         console.log(`Sample IDs: ${data.records.slice(0, 5).map(r => r.id)}`);
-        // Calculate maxId safely
         const maxId = data.records.length > 0
             ? data.records.reduce((max, record) => {
                 const id = Number(record.id);
@@ -1263,7 +1259,6 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         data.records.push(newRecord);
         console.log(`New record: ID=${newRecord.id}, Artist=${newRecord.artistName}, Title=${newRecord.title}`);
         writeDatabase(data);
-        // Verify record was saved
         const updatedData = readDatabase();
         const savedRecord = updatedData.records.find(r => r.id === newId);
         if (!savedRecord) {
@@ -1273,10 +1268,11 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         console.log(`Verified saved record: ID=${savedRecord.id}`);
         res.status(201).json(savedRecord);
     } catch (error) {
-        console.error('Error saving record:', error);
+        console.error('Error saving record:', error.message);
         res.status(500).json({ error: error.message });
     }
 });
+
 
 
 
