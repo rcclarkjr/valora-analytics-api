@@ -918,6 +918,11 @@ function writeDatabase(data) {
             fs.mkdirSync(dbDir, { recursive: true });
             console.log(`Created directory: ${dbDir}`);
         }
+        // Ensure file is writable
+        if (fs.existsSync(DB_PATH)) {
+            fs.chmodSync(DB_PATH, 0o666); // Set write permissions
+            console.log(`Set write permissions for ${DB_PATH}`);
+        }
         fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), { flag: 'w' });
         console.log(`Database write successful`);
         if (!fs.existsSync(DB_PATH)) {
@@ -1224,6 +1229,7 @@ if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
 
 
 
+
 app.post("/api/records", ensureAPPSICalculation, (req, res) => {
     try {
         const data = readDatabase();
@@ -1270,7 +1276,6 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
 
 
 
