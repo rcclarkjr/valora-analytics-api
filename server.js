@@ -1234,46 +1234,38 @@ if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
 app.post("/api/records", ensureAPPSICalculation, (req, res) => {
     try {
         const data = readDatabase();
-        
-        // Validate required fields
         const requiredFields = ['artistName', 'title', 'height', 'width', 'price'];
         for (const field of requiredFields) {
             if (!req.body[field]) {
                 return res.status(400).json({ error: `Missing required field: ${field}` });
             }
         }
-        
-        // Get the highest existing ID and increment
-        const maxId = data.records.reduce((max, record) => 
-            Math.max(max, record.id || 0), 0);
-        
-        // Create a new record
+        // Debug: Log records and IDs
+        console.log(`Total records: ${data.records.length}`);
+        console.log(`Sample IDs: ${data.records.slice(0, 5).map(r => r.id)}`);
+        // Ensure maxId is calculated correctly
+        const maxId = data.records.length > 0
+            ? data.records.reduce((max, record) => Math.max(max, Number(record.id) || 0), 0)
+            : 0;
+        console.log(`Calculated maxId: ${maxId}`);
+        const newId = maxId + 1;
         const newRecord = {
-            id: maxId + 1,
+            id: newId,
             isActive: true,
             ...req.body
         };
-        
-        // Calculate derived fields (now including LSSI)
         newRecord.size = newRecord.height * newRecord.width;
-        
-        // Calculate LSSI (Log of Size in Square Inches)
         if (newRecord.size > 0) {
             newRecord.lssi = Math.log(newRecord.size);
         }
-        
         newRecord.ppsi = newRecord.price / newRecord.size;
-
-
-// Remove imagePath – now using embedded Base64 images
-delete newRecord.imagePath;
-
-        
+        delete newRecord.imagePath;
         data.records.push(newRecord);
+        console.log(`New record ID: ${newRecord.id}`);
         writeDatabase(data);
-        
         res.status(201).json(newRecord);
     } catch (error) {
+        console.error('Error saving record:', error);
         res.status(500).json({ error: error.message });
     }
 });
