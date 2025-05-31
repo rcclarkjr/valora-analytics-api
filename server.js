@@ -918,26 +918,12 @@ function writeDatabase(data) {
             fs.mkdirSync(dbDir, { recursive: true });
             console.log(`Created directory: ${dbDir}`);
         }
-        // Log file permissions and size before write
         if (fs.existsSync(DB_PATH)) {
-            const stats = fs.statSync(DB_PATH);
-            console.log(`File exists: ${DB_PATH}, size: ${stats.size} bytes, permissions: ${stats.mode.toString(8)}`);
             fs.chmodSync(DB_PATH, 0o666);
-            console.log(`Set write permissions for ${DB_PATH}`);
+            console.log(`Set permissions to 666 for ${DB_PATH}`);
         }
-        // Write with error handling
         fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), { flag: 'w' });
         console.log(`Database write successful`);
-        // Verify write
-        if (!fs.existsSync(DB_PATH)) {
-            throw new Error(`Database file not found after write: ${DB_PATH}`);
-        }
-        const writtenData = fs.readFileSync(DB_PATH, 'utf8');
-        const parsedData = JSON.parse(writtenData);
-        if (!parsedData.records || parsedData.records.length !== data.records.length) {
-            throw new Error(`Database write verification failed: record count mismatch (expected ${data.records.length}, got ${parsedData.records?.length || 0})`);
-        }
-        console.log(`Verified database write: ${parsedData.records.length} records`);
     } catch (error) {
         console.error(`Error writing database: ${error.message}, stack: ${error.stack}`);
         throw new Error(`Failed to write database: ${error.message}`);
@@ -1244,7 +1230,6 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
             }
         }
         console.log(`Total records: ${data.records.length}`);
-        console.log(`Sample IDs: ${data.records.slice(0, 5).map(r => r.id)}`);
         const maxId = data.records.length > 0
             ? data.records.reduce((max, record) => {
                 const id = Number(record.id);
@@ -1265,16 +1250,9 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         newRecord.ppsi = newRecord.price / newRecord.size;
         delete newRecord.imagePath;
         data.records.push(newRecord);
-        console.log(`New record: ID=${newRecord.id}, Artist=${newRecord.artistName}, Title=${newRecord.title}`);
+        console.log(`New record: ID=${newId}, Artist=${newRecord.artistName}, Title=${newRecord.title}`);
         writeDatabase(data);
-        const updatedData = readDatabase();
-        const savedRecord = updatedData.records.find(r => r.id === newId);
-        if (!savedRecord) {
-            console.error(`Failed to find saved record with ID ${newId}`);
-            return res.status(500).json({ error: `Failed to save record: Not found in database` });
-        }
-        console.log(`Verified saved record: ID=${savedRecord.id}`);
-        res.status(201).json(savedRecord);
+        res.status(201).json(newRecord);
     } catch (error) {
         console.error('Error saving record:', error.message, error.stack);
         res.status(500).json({ error: error.message });
