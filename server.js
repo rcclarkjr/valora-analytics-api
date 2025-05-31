@@ -1228,9 +1228,6 @@ if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
 
 
 
-
-
-
 app.post("/api/records", ensureAPPSICalculation, (req, res) => {
     try {
         const data = readDatabase();
@@ -1243,9 +1240,12 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         // Debug: Log records and IDs
         console.log(`Total records: ${data.records.length}`);
         console.log(`Sample IDs: ${data.records.slice(0, 5).map(r => r.id)}`);
-        // Ensure maxId is calculated correctly
+        // Calculate maxId safely
         const maxId = data.records.length > 0
-            ? data.records.reduce((max, record) => Math.max(max, Number(record.id) || 0), 0)
+            ? data.records.reduce((max, record) => {
+                const id = Number(record.id);
+                return isNaN(id) ? max : Math.max(max, id);
+            }, 0)
             : 0;
         console.log(`Calculated maxId: ${maxId}`);
         const newId = maxId + 1;
@@ -1261,9 +1261,17 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         newRecord.ppsi = newRecord.price / newRecord.size;
         delete newRecord.imagePath;
         data.records.push(newRecord);
-        console.log(`New record ID: ${newRecord.id}`);
+        console.log(`New record: ID=${newRecord.id}, Artist=${newRecord.artistName}, Title=${newRecord.title}`);
         writeDatabase(data);
-        res.status(201).json(newRecord);
+        // Verify record was saved
+        const updatedData = readDatabase();
+        const savedRecord = updatedData.records.find(r => r.id === newId);
+        if (!savedRecord) {
+            console.error(`Failed to find saved record with ID ${newId}`);
+            return res.status(500).json({ error: `Failed to save record: Not found in database` });
+        }
+        console.log(`Verified saved record: ID=${savedRecord.id}`);
+        res.status(201).json(savedRecord);
     } catch (error) {
         console.error('Error saving record:', error);
         res.status(500).json({ error: error.message });
@@ -1272,38 +1280,36 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
 
 
 
+
 app.patch("/api/records/:id/image", (req, res) => {
-  try {
-    const recordId = parseInt(req.params.id);
-    if (isNaN(recordId)) {
-      return res.status(400).json({ error: "Invalid record ID" });
+    console.log(`PATCH /api/records/${req.params.id}/image called`);
+    try {
+        const recordId = parseInt(req.params.id);
+        if (isNaN(recordId)) {
+            return res.status(400).json({ error: "Invalid record ID" });
+        }
+        const { imageBase64 } = req.body;
+        if (!imageBase64 || typeof imageBase64 !== "string" || !imageBase64.startsWith("data:image")) {
+            return res.status(400).json({ error: "Invalid or missing Base64 image data" });
+        }
+        const data = readDatabase();
+        const record = data.records.find(r => r.id === recordId);
+        if (!record) {
+            return res.status(404).json({ error: "Record not found" });
+        }
+        const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,/);
+        const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
+        record.imageBase64 = imageBase64;
+        record.imageMimeType = mimeType;
+        writeDatabase(data);
+        res.json({ success: true, recordId: record.id, mimeType });
+    } catch (error) {
+        console.error("Error patching imageBase64:", error);
+        res.status(500).json({ error: error.message });
     }
-
-    const { imageBase64 } = req.body;
-    if (!imageBase64 || typeof imageBase64 !== "string" || !imageBase64.startsWith("data:image")) {
-      return res.status(400).json({ error: "Invalid or missing Base64 image data" });
-    }
-
-    const data = readDatabase();
-    const record = data.records.find(r => r.id === recordId);
-    if (!record) {
-      return res.status(404).json({ error: "Record not found" });
-    }
-
-    // Optionally parse MIME type from data URI
-    const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,/);
-    const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
-
-    record.imageBase64 = imageBase64;
-    record.imageMimeType = mimeType;
-
-    writeDatabase(data);
-    res.json({ success: true, recordId: record.id, mimeType });
-  } catch (error) {
-    console.error("Error patching imageBase64:", error);
-    res.status(500).json({ error: error.message });
-  }
 });
+
+
 
 
 app.get("/api/records/:id/image", (req, res) => {
