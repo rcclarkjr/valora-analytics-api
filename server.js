@@ -1220,6 +1220,7 @@ if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
 
 
 
+// Updated POST /api/records to ensure valid ID in response (2025-05-31)
 app.post("/api/records", ensureAPPSICalculation, (req, res) => {
     try {
         const data = readDatabase();
@@ -1252,7 +1253,9 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         data.records.push(newRecord);
         console.log(`New record: ID=${newId}, Artist=${newRecord.artistName}, Title=${newRecord.title}`);
         writeDatabase(data);
-        res.status(201).json(newRecord);
+        // Ensure response includes newRecord with ID
+        console.log(`Returning record with ID: ${newRecord.id}`);
+        res.status(201).json({ ...newRecord, id: newId });
     } catch (error) {
         console.error('Error saving record:', error.message, error.stack);
         res.status(500).json({ error: error.message });
