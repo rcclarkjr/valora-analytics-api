@@ -918,13 +918,17 @@ function writeDatabase(data) {
             fs.mkdirSync(dbDir, { recursive: true });
             console.log(`Created directory: ${dbDir}`);
         }
-        // Ensure file is writable
+        // Log file permissions and size before write
         if (fs.existsSync(DB_PATH)) {
-            fs.chmodSync(DB_PATH, 0o666); // Set write permissions
+            const stats = fs.statSync(DB_PATH);
+            console.log(`File exists: ${DB_PATH}, size: ${stats.size} bytes, permissions: ${stats.mode.toString(8)}`);
+            fs.chmodSync(DB_PATH, 0o666);
             console.log(`Set write permissions for ${DB_PATH}`);
         }
+        // Write with error handling
         fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), { flag: 'w' });
         console.log(`Database write successful`);
+        // Verify write
         if (!fs.existsSync(DB_PATH)) {
             throw new Error(`Database file not found after write: ${DB_PATH}`);
         }
@@ -935,7 +939,7 @@ function writeDatabase(data) {
         }
         console.log(`Verified database write: ${parsedData.records.length} records`);
     } catch (error) {
-        console.error(`Error writing database: ${error.message}`);
+        console.error(`Error writing database: ${error.message}, stack: ${error.stack}`);
         throw new Error(`Failed to write database: ${error.message}`);
     }
 }
@@ -1272,7 +1276,7 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         console.log(`Verified saved record: ID=${savedRecord.id}`);
         res.status(201).json(savedRecord);
     } catch (error) {
-        console.error('Error saving record:', error.message);
+        console.error('Error saving record:', error.message, error.stack);
         res.status(500).json({ error: error.message });
     }
 });
