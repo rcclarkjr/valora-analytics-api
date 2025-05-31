@@ -918,21 +918,20 @@ function writeDatabase(data) {
             fs.mkdirSync(dbDir, { recursive: true });
             console.log(`Created directory: ${dbDir}`);
         }
-        fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+        fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), { flag: 'w' });
         console.log(`Database write successful`);
-        // Verify write
         if (!fs.existsSync(DB_PATH)) {
             throw new Error(`Database file not found after write: ${DB_PATH}`);
         }
         const writtenData = fs.readFileSync(DB_PATH, 'utf8');
         const parsedData = JSON.parse(writtenData);
         if (!parsedData.records || parsedData.records.length !== data.records.length) {
-            throw new Error(`Database write verification failed: record count mismatch`);
+            throw new Error(`Database write verification failed: record count mismatch (expected ${data.records.length}, got ${parsedData.records?.length || 0})`);
         }
         console.log(`Verified database write: ${parsedData.records.length} records`);
     } catch (error) {
         console.error(`Error writing database: ${error.message}`);
-        throw error;
+        throw new Error(`Failed to write database: ${error.message}`);
     }
 }
 
@@ -1222,7 +1221,6 @@ if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 
 
