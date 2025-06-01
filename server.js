@@ -1238,12 +1238,15 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         
         // FIX: Remove the id field from req.body before spreading
         const { id, ...bodyWithoutId } = req.body;
-        
-        const newRecord = {
-            id: newId,
-            isActive: true,
-            ...bodyWithoutId  // Use bodyWithoutId instead of req.body
-        };
+
+// Change it to:
+const newRecord = {
+    id: newId,
+    isActive: true,
+    dateAdded: new Date().toISOString(),
+    ...bodyWithoutId
+};
+
         newRecord.size = newRecord.height * newRecord.width;
         if (newRecord.size > 0) {
             newRecord.lssi = Math.log(newRecord.size);
@@ -1366,13 +1369,15 @@ app.put("/api/records/:id", ensureAPPSICalculation, (req, res) => {
             return res.status(404).json({ error: 'Record not found' });
         }
         
-        // Update the record, preserving recordId
-        const updatedRecord = {
-            ...data.records[index],
-            ...req.body,
-            id: recordId, // Ensure ID doesn't change
-        };
+const updatedRecord = {
+    ...data.records[index],
+    ...req.body,
+    id: recordId, // Ensure ID doesn't change
+    dateAdded: data.records[index].dateAdded // Preserve original dateAdded
+};
         
+
+
         // Recalculate derived fields if height/width/price changed
         if (req.body.height || req.body.width || req.body.price) {
             updatedRecord.size = updatedRecord.height * updatedRecord.width;
