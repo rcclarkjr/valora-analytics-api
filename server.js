@@ -1219,7 +1219,6 @@ if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
 
 
 
-
 // Updated POST /api/records to ensure valid ID in response (2025-05-31)
 app.post("/api/records", ensureAPPSICalculation, (req, res) => {
     try {
@@ -1239,10 +1238,14 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
             : 0;
         console.log(`Calculated maxId: ${maxId}`);
         const newId = maxId + 1;
+        
+        // FIX: Remove the id field from req.body before spreading
+        const { id, ...bodyWithoutId } = req.body;
+        
         const newRecord = {
             id: newId,
             isActive: true,
-            ...req.body
+            ...bodyWithoutId  // Use bodyWithoutId instead of req.body
         };
         newRecord.size = newRecord.height * newRecord.width;
         if (newRecord.size > 0) {
@@ -1261,6 +1264,7 @@ app.post("/api/records", ensureAPPSICalculation, (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
 
 
 
