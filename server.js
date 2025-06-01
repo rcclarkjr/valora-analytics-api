@@ -1526,6 +1526,8 @@ app.post('/api/records/batch-delete', (req, res) => {
 });
 
 
+
+
 app.delete("/api/records/:id", (req, res) => {
   try {
     const recordId = parseInt(req.params.id);
@@ -1549,6 +1551,41 @@ app.delete("/api/records/:id", (req, res) => {
     res.status(500).json({ error: "Failed to delete record." });
   }
 });
+
+
+
+
+
+
+
+// Backfill dateAdded for existing records
+app.post('/api/records/backfill-dates', (req, res) => {
+  try {
+    const data = readDatabase();
+    const backfillDate = '2025-02-01T00:00:00.000Z';
+    let updatedCount = 0;
+    
+    data.records.forEach(record => {
+      if (!record.dateAdded) {
+        record.dateAdded = backfillDate;
+        updatedCount++;
+      }
+    });
+    
+    writeDatabase(data);
+    
+    res.json({
+      message: 'Successfully backfilled dateAdded for records',
+      updatedRecords: updatedCount,
+      backfillDate: backfillDate
+    });
+  } catch (error) {
+    console.error('Error backfilling dates:', error);
+    res.status(500).json({ error: 'Failed to backfill dates', details: error.message });
+  }
+});
+
+
 
 
 
