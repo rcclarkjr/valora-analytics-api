@@ -1172,50 +1172,47 @@ app.post("/api/records/recalculate-appsi", (req, res) => {
 app.get("/api/stats", (req, res) => {
   try {
     const data = readDatabase();
-
-// Filter active records with valid metrics
-const activeRecords = data.records.filter(record => {
-  // Check if record is active
-  if (record.isActive === false) {
-    return false;
-  }
-  
-  // Check metrics one by one for debugging
-  const hasSmi = record.smi !== undefined && record.smi !== null && !isNaN(parseFloat(record.smi));
-  const hasRi = record.ri !== undefined && record.ri !== null && !isNaN(parseInt(record.ri));
-  const hasCli = record.cli !== undefined && record.cli !== null && !isNaN(parseFloat(record.cli));
-  const hasAppsi = record.appsi !== undefined && record.appsi !== null && !isNaN(parseFloat(record.appsi));
-  
-  // Log failing records for debugging
-if (!hasSmi || !hasRi || !hasCli || !hasAppsi) {
-    console.log(`Record ${record.id} missing metrics: smi=${hasSmi}, ri=${hasRi}, cli=${hasCli}, appsi=${hasAppsi}`);
-}
-  
-  return hasSmi && hasRi && hasCli && hasAppsi;
-});
+    
+    // All records are active (deleted records are physically removed)
+    const totalRecords = data.records.length;
+    
+    // Find records missing required fields (SMI, RI, CLI, PPSI, SSI)
+    const incompleteRecords = [];
+    
+    data.records.forEach(record => {
+      const requiredFields = ['smi', 'ri', 'cli', 'ppsi', 'size']; // size is SSI
+      const missingFields = [];
+      
+      requiredFields.forEach(field => {
+        const value = record[field];
+        // Check if field is null, undefined, or 0
+        if (value === null || value === undefined || value === 0) {
+          missingFields.push(field);
+        }
+      });
+      
+      // If any required fields are missing, add to incomplete list
+      if (missingFields.length > 0) {
+        incompleteRecords.push(record.id);
+      }
+    });
     
     const stats = {
-      totalRecords: data.records.length,
-      activeRecords: activeRecords.length,
-      inactiveRecords: data.records.length - activeRecords.length,
-      avgPrice: 0,
-      avgSize: 0,
-      avgPPSI: 0,
-      avgAPPSI: 0,
+      totalRecords: totalRecords,
+      missingRequiredFields: incompleteRecords.length,
+      missingRequiredFieldsIds: incompleteRecords,
       lastUpdated: data.metadata.lastUpdated
     };
-    
-    if (activeRecords.length > 0) {
-      stats.avgPrice = activeRecords.reduce((sum, r) => sum + (r.price || 0), 0) / activeRecords.length;
-      stats.avgSize = activeRecords.reduce((sum, r) => sum + (r.size || 0), 0) / activeRecords.length;
-      stats.avgPPSI = activeRecords.reduce((sum, r) => sum + (r.ppsi || 0), 0) / activeRecords.length;
-    }
     
     res.json(stats);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
+
 
 
 
