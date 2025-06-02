@@ -1712,6 +1712,61 @@ app.get("/api/sizeyourprice", (req, res) => {
 
 
 
+// Endpoint for general art analysis with refinement recommendations
+app.post("/analyze-art", async (req, res) => {
+  try {
+    console.log("Received art analysis request");
+    const { prompt, image, artTitle, artistName } = req.body;
+
+    if (!prompt || !image || !OPENAI_API_KEY) {
+      return res.status(400).json({ error: { message: "Missing prompt, image, or API key" } });
+    }
+
+    const finalPrompt = `Title: "${artTitle}"\nArtist: "${artistName}"\n\n${prompt}`;
+
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4-turbo",
+        messages: [
+          { role: "system", content: "You are an expert fine art analyst specializing in providing constructive feedback and refinement recommendations for artworks." },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: finalPrompt },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+            ]
+          }
+        ],
+        max_tokens: 2000
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENAI_API_KEY}`
+        }
+      }
+    );
+
+    const analysisText = response.data.choices[0]?.message?.content || "";
+
+    const finalResponse = {
+      analysis: analysisText
+    };
+
+    console.log("Sending art analysis response to client");
+    res.json(finalResponse);
+
+  } catch (error) {
+    console.error("Error in /analyze-art:", error.message);
+    const errMsg = error.response?.data?.error?.message || error.message || "Unknown error";
+    res.status(500).json({ error: { message: errMsg } });
+  }
+});
+
+
+
+
 
 app.post("/api/valuation", async (req, res) => {
   try {
