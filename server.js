@@ -1776,7 +1776,7 @@ app.post("/api/valuation", async (req, res) => {
                      typeof r.smi === 'number' &&
                      typeof r.cli === 'number' &&
                      typeof r.appsi === 'number' &&
-                     r.imageBase64; // Ensure image exists
+                     r.thumbnailBase64; // Ensure image exists
                      
       // Debug records that don't match criteria
       if (!isValid) {
@@ -1786,7 +1786,7 @@ app.post("/api/valuation", async (req, res) => {
         if (typeof r.smi !== 'number') issues.push(`smi type is ${typeof r.smi}`);
         if (typeof r.cli !== 'number') issues.push(`cli type is ${typeof r.cli}`);
         if (typeof r.appsi !== 'number') issues.push(`appsi type is ${typeof r.appsi}`);
-        if (!r.imageBase64) issues.push("missing imageBase64");
+        if (!r.thumbnailBase64) issues.push("missing thumbnailBase64");
         
         if (issues.length > 0) {
           console.log(`Record ${r.id} invalid for comparison: ${issues.join(", ")}`);
@@ -1901,19 +1901,29 @@ if (comp.imageBase64) {
 
 
         // Check if the comp has image data and log details
-        if (!comp.imageBase64) {
-          console.error(`Missing imageBase64 for comp ID ${compId}`);
-          console.log(`Record keys available:`, Object.keys(comp));
-          continue;
-        }
+if (!comp.thumbnailBase64) {
+  console.error(`Missing thumbnailBase64 for comp ID ${compId}`);
+  console.log(`Record keys available:`, Object.keys(comp));
+  continue;
+}
 
         // Make the API call with error handling
         console.log(`Sending comparison request for comp ID ${compId}`);
-        const compareRes = await axios.post("https://valora-analytics-api.onrender.com/api/compare-subject-comp", {
-          subject: { imageBase64: subjectImageBase64 },
-          comp: { imageBase64: comp.imageBase64, recordId: compId }
-        });
+
+
+// Get full-size image for AI comparison
+const fullImageResponse = await axios.get(`https://valora-analytics-api.onrender.com/api/records/${compId}/full-image`, {
+  responseType: 'arraybuffer'
+});
+const fullImageBase64 = Buffer.from(fullImageResponse.data, 'binary').toString('base64');
+
+const compareRes = await axios.post("https://valora-analytics-api.onrender.com/api/compare-subject-comp", {
+  subject: { imageBase64: subjectImageBase64 },
+  comp: { imageBase64: fullImageBase64, recordId: compId }
+});
         
+
+
         console.log(`Received comparison result for comp ID ${compId}: ${compareRes.data.finalResult}`);
 
         // Add to visualComparisons with proper structure
@@ -1922,7 +1932,7 @@ if (comp.imageBase64) {
           classification: compareRes.data.finalResult,
           appsi: comp.appsi,
           scalarDistance: comp.scalarDistance,
-          imageBase64: comp.imageBase64 // Ensure imageBase64 is passed through
+          thumbnailBase64: comp.thumbnailBase64 // Pass thumbnail for display
         });
       } catch (error) {
         console.error(`Error in visual comparison for comp:`, error.message);
@@ -2094,49 +2104,6 @@ app.post("/api/compare-subject-comp", async (req, res) => {
     const { subject, comp } = req.body;
     
     console.log(`Starting comparison for comp ID ${comp.recordId}`);
-
-
-
-// Diagnostic logging for comparison image data
-if (comp.imageBase64) {
-  // Log the length of the string
-  console.log(`Comp image length: ${comp.imageBase64.length}`);
-  
-  // Check if it starts with a data URI prefix
-  const hasPrefix = comp.imageBase64.startsWith('data:image');
-  console.log(`Has data:image prefix: ${hasPrefix}`);
-  
-  // Check if it contains non-base64 characters
-  const nonBase64Chars = comp.imageBase64.replace(/[A-Za-z0-9+/=]/g, '');
-  console.log(`Non-base64 characters: '${nonBase64Chars.substring(0, 50)}...'`);
-  console.log(`Number of non-base64 characters: ${nonBase64Chars.length}`);
-  
-  // Check the first few characters
-  console.log(`First 20 chars: '${comp.imageBase64.substring(0, 20)}'`);
-  
-  // If there's a prefix, extract and check the actual base64 part
-  if (hasPrefix) {
-    const base64Part = comp.imageBase64.split(',')[1];
-    if (base64Part) {
-      console.log(`Base64 part length: ${base64Part.length}`);
-      // Check if the base64 part contains non-base64 characters
-      const nonBase64InBase64Part = base64Part.replace(/[A-Za-z0-9+/=]/g, '');
-      console.log(`Non-base64 chars in base64 part: '${nonBase64InBase64Part.substring(0, 50)}...'`);
-    } else {
-      console.log('Could not extract base64 part from data URI');
-    }
-  }
-} else {
-  console.log('No imageBase64 data for comp');
-}
-
-// Diagnostic logging for subject image data
-if (subject.imageBase64) {
-  console.log(`Subject image length: ${subject.imageBase64.length}`);
-  const hasPrefix = subject.imageBase64.startsWith('data:image');
-  console.log(`Subject has data:image prefix: ${hasPrefix}`);
-}
-
 
     if (!subject || !comp) {
       return res.status(400).json({ error: { message: "Missing subject or comp data" } });
