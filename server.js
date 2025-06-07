@@ -11,7 +11,8 @@ const path = require("path");
 const app = express();
 const mime = require("mime-types");
 const sharp = require("sharp");
-
+const archiver = require("archiver");
+const unzipper = require("unzipper");
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -1056,24 +1057,71 @@ function calculateRSquared(points, constant, exponent) {
 // ====================================================
 
 
-app.post('/api/admin/create-backup', (req, res) => {
+app.post('/api/admin/create-backup', async (req, res) => {
   try {
     const dbPath = '/mnt/data/art_database.json';
+    const imagesDir = '/mnt/data/images';
     const backupDir = '/mnt/data';
     const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').slice(0, 15);
-    const backupFileName = `backup_art_database_${timestamp}.json`;
+    const backupFileName = `backup_art_database_${timestamp}.zip`;
     const backupPath = path.join(backupDir, backupFileName);
 
-    const data = fs.readFileSync(dbPath, 'utf-8');
-    fs.writeFileSync(backupPath, data);
+    // Read database to get list of records
+    const data = JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
+    console.log(`Creating backup with ${data.records.length} records`);
 
-    const publicUrl = `/download/${backupFileName}`;
+    // Create ZIP archive
+    const output = fs.createWriteStream(backupPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
 
-    console.log(`✅ Backup created: ${backupFileName}`);
-    res.json({ message: `Backup created: ${backupFileName}`, downloadUrl: publicUrl });
+    let missingImageCount = 0;
+
+    return new Promise((resolve, reject) => {
+      output.on('close', () => {
+        const publicUrl = `/download/${backupFileName}`;
+        console.log(`✅ Backup created: ${backupFileName} (${archive.pointer()} bytes)`);
+        if (missingImageCount > 0) {
+          console.log(`⚠️ Warning: ${missingImageCount} records had missing full images`);
+        }
+        resolve(res.json({ 
+          message: `Backup created: ${backupFileName}`, 
+          downloadUrl: publicUrl,
+          warnings: missingImageCount > 0 ? `${missingImageCount} records had missing full images` : null
+        }));
+      });
+
+      output.on('error', (err) => {
+        console.error('❌ Backup output stream error:', err);
+        reject(res.status(500).json({ error: 'Failed to create backup file.' }));
+      });
+
+      archive.on('error', (err) => {
+        console.error('❌ Archive creation error:', err);
+        reject(res.status(500).json({ error: 'Failed to create backup archive.' }));
+      });
+
+      archive.pipe(output);
+
+      // Add database JSON to root of ZIP
+      archive.file(dbPath, { name: 'art_database.json' });
+
+      // Add all image files to images/ folder in ZIP
+      data.records.forEach(record => {
+        const imagePath = path.join(imagesDir, `record_${record.id}.jpg`);
+        if (fs.existsSync(imagePath)) {
+          archive.file(imagePath, { name: `images/record_${record.id}.jpg` });
+        } else {
+          console.log(`⚠️ Warning: Missing full image for record ${record.id}`);
+          missingImageCount++;
+        }
+      });
+
+      archive.finalize();
+    });
+
   } catch (err) {
     console.error("❌ Failed to create backup:", err);
-    res.status(500).json({ error: "Failed to create backup." });
+    res.status(500).json({ error: "Failed to create backup: " + err.message });
   }
 });
 
@@ -1417,34 +1465,171 @@ app.get("/api/coefficients", (req, res) => {
 
 
 
-app.post('/api/admin/replace-database', (req, res) => {
+
+app.post('/api/admin/replace-database', async (req, res) => {
   try {
-    // Now expects JSON in request body instead of file upload
-    const json = req.body;
+    console.log('Starting full database and images restore from ZIP');
     
-    if (!json || !Array.isArray(json.records)) {
-      return res.status(400).json({ error: "Request body must include a 'records' array." });
+    if (!req.body || !req.body.zipBase64) {
+      return res.status(400).json({ error: "Request body must include 'zipBase64' field." });
     }
-    
-    const db = json; // Preserve entire uploaded structure, including metadata
-    const savePath = '/mnt/data/art_database.json';
-    const parentDir = path.dirname(savePath);
-    
-    if (!fs.existsSync(parentDir)) {
-      fs.mkdirSync(parentDir, { recursive: true });
+
+    const zipBase64 = req.body.zipBase64;
+    const tempDir = '/mnt/data/temp_restore';
+    const dbPath = '/mnt/data/art_database.json';
+    const imagesDir = '/mnt/data/images';
+    const backupDbPath = `${dbPath}.backup_${Date.now()}`;
+    const backupImagesDir = `${imagesDir}_backup_${Date.now()}`;
+
+    // Create temp directory
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true });
     }
-    
-    fs.writeFileSync(savePath, JSON.stringify(db, null, 2));
-    console.log(`Database successfully replaced with ${json.records.length} records.`);
-    res.json({ 
-      message: "Database replaced successfully.",
-      recordCount: json.records.length 
-    });
+    fs.mkdirSync(tempDir, { recursive: true });
+
+    try {
+      // Step 1: Extract ZIP to temp directory
+      console.log('Extracting ZIP file...');
+      const zipBuffer = Buffer.from(zipBase64, 'base64');
+      const tempZipPath = path.join(tempDir, 'backup.zip');
+      fs.writeFileSync(tempZipPath, zipBuffer);
+
+      // Extract ZIP contents
+      await new Promise((resolve, reject) => {
+        fs.createReadStream(tempZipPath)
+          .pipe(unzipper.Extract({ path: tempDir }))
+          .on('close', resolve)
+          .on('error', reject);
+      });
+
+      // Step 2: Validate extracted contents
+      const extractedDbPath = path.join(tempDir, 'art_database.json');
+      const extractedImagesDir = path.join(tempDir, 'images');
+
+      if (!fs.existsSync(extractedDbPath)) {
+        throw new Error('Invalid backup: art_database.json not found in ZIP');
+      }
+
+      console.log('Validating database structure...');
+      const restoredData = JSON.parse(fs.readFileSync(extractedDbPath, 'utf-8'));
+      
+      if (!restoredData.records || !Array.isArray(restoredData.records)) {
+        throw new Error('Invalid backup: missing or invalid records array');
+      }
+
+      console.log(`Validated database with ${restoredData.records.length} records`);
+
+      // Step 3: Create backups of current data
+      console.log('Creating safety backups of current data...');
+      if (fs.existsSync(dbPath)) {
+        fs.copyFileSync(dbPath, backupDbPath);
+      }
+      if (fs.existsSync(imagesDir)) {
+        fs.cpSync(imagesDir, backupImagesDir, { recursive: true });
+      }
+
+      // Step 4: Restore database
+      console.log('Restoring database...');
+      fs.writeFileSync(dbPath, JSON.stringify(restoredData, null, 2));
+
+      // Step 5: Restore images
+      console.log('Restoring images...');
+      
+      // Clear existing images directory
+      if (fs.existsSync(imagesDir)) {
+        fs.rmSync(imagesDir, { recursive: true });
+      }
+      fs.mkdirSync(imagesDir, { recursive: true });
+
+      let restoredImageCount = 0;
+      let missingImageCount = 0;
+
+      if (fs.existsSync(extractedImagesDir)) {
+        const imageFiles = fs.readdirSync(extractedImagesDir);
+        
+        for (const filename of imageFiles) {
+          const sourcePath = path.join(extractedImagesDir, filename);
+          const destPath = path.join(imagesDir, filename);
+          
+          try {
+            fs.copyFileSync(sourcePath, destPath);
+            restoredImageCount++;
+          } catch (err) {
+            console.error(`Failed to restore image ${filename}:`, err);
+            throw new Error(`Failed to restore image ${filename}: ${err.message}`);
+          }
+        }
+      }
+
+      // Verify all records have corresponding images
+      restoredData.records.forEach(record => {
+        const imagePath = path.join(imagesDir, `record_${record.id}.jpg`);
+        if (!fs.existsSync(imagePath)) {
+          console.log(`⚠️ Warning: Record ${record.id} has no corresponding full image`);
+          missingImageCount++;
+        }
+      });
+
+      // Step 6: Cleanup
+      console.log('Cleaning up temporary files...');
+      fs.rmSync(tempDir, { recursive: true });
+      
+      // Remove safety backups on success
+      if (fs.existsSync(backupDbPath)) {
+        fs.unlinkSync(backupDbPath);
+      }
+      if (fs.existsSync(backupImagesDir)) {
+        fs.rmSync(backupImagesDir, { recursive: true });
+      }
+
+      console.log('✅ Restore completed successfully');
+      res.json({ 
+        message: "Database and images restored successfully.",
+        recordCount: restoredData.records.length,
+        restoredImages: restoredImageCount,
+        missingImages: missingImageCount,
+        warnings: missingImageCount > 0 ? `${missingImageCount} records have no corresponding full image` : null
+      });
+
+    } catch (error) {
+      // ROLLBACK: Restore from safety backups
+      console.error('❌ Restore failed, rolling back changes:', error.message);
+      
+      try {
+        if (fs.existsSync(backupDbPath)) {
+          fs.copyFileSync(backupDbPath, dbPath);
+          fs.unlinkSync(backupDbPath);
+          console.log('✅ Database rollback completed');
+        }
+        
+        if (fs.existsSync(backupImagesDir)) {
+          if (fs.existsSync(imagesDir)) {
+            fs.rmSync(imagesDir, { recursive: true });
+          }
+          fs.cpSync(backupImagesDir, imagesDir, { recursive: true });
+          fs.rmSync(backupImagesDir, { recursive: true });
+          console.log('✅ Images rollback completed');
+        }
+      } catch (rollbackError) {
+        console.error('❌ Rollback failed:', rollbackError.message);
+      }
+
+      // Cleanup temp directory
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true });
+      }
+
+      throw error; // Re-throw to trigger catch block below
+    }
+
   } catch (err) {
-    console.error("Failed to replace database:", err);
-    res.status(500).json({ error: "Failed to replace database." });
+    console.error("❌ Restore operation failed:", err.message);
+    res.status(500).json({ 
+      error: "Failed to restore database and images: " + err.message 
+    });
   }
 });
+
 
 
 
