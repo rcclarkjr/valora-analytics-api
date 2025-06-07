@@ -10,6 +10,7 @@ const fs = require("fs");
 const path = require("path");
 const app = express();
 const mime = require("mime-types");
+const sharp = require("sharp");
 
 
 app.use(express.json({ limit: "50mb" }));
@@ -195,6 +196,90 @@ function roundSMIUp(value) {
 // ====================
 // API ROUTES
 // ====================
+
+
+
+
+// Migration endpoint - extract images and create thumbnails
+app.post("/api/admin/migrate-images", async (req, res) => {
+  try {
+    console.log("Starting image migration...");
+    
+    const data = readDatabase();
+    const imagesDir = "/mnt/data/images";
+    
+    // Create images directory if it doesn't exist
+    if (!fs.existsSync(imagesDir)) {
+      fs.mkdirSync(imagesDir, { recursive: true });
+      console.log("Created images directory");
+    }
+    
+    let processedCount = 0;
+    let errorCount = 0;
+    
+    for (const record of data.records) {
+      try {
+        if (record.imageBase64) {
+          console.log(`Processing record ${record.id}...`);
+          
+          // Extract base64 data (remove data:image/jpeg;base64, prefix if present)
+          let base64Data = record.imageBase64;
+          if (base64Data.startsWith("data:")) {
+            base64Data = base64Data.split(",")[1];
+          }
+          
+          // Convert to buffer
+          const imageBuffer = Buffer.from(base64Data, "base64");
+          
+          // Save full-size image
+          const fullImagePath = path.join(imagesDir, `record_${record.id}.jpg`);
+          await sharp(imageBuffer)
+            .jpeg({ quality: 90 })
+            .toFile(fullImagePath);
+          
+          // Create thumbnail (150x150)
+          const thumbnailBuffer = await sharp(imageBuffer)
+            .resize(150, 150, { fit: "inside" })
+            .jpeg({ quality: 80 })
+            .toBuffer();
+          
+          // Update record with thumbnail and remove large image
+          record.thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBuffer.toString("base64")}`;
+          record.hasFullImage = true;
+          delete record.imageBase64;
+          delete record.imageMimeType;
+          
+          processedCount++;
+          console.log(`✅ Processed record ${record.id}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error processing record ${record.id}:`, error.message);
+        errorCount++;
+      }
+    }
+    
+    // Save updated database
+    writeDatabase(data);
+    
+    console.log(`Migration complete: ${processedCount} processed, ${errorCount} errors`);
+    
+    res.json({
+      success: true,
+      message: `Migration completed successfully`,
+      processedCount,
+      errorCount,
+      totalRecords: data.records.length
+    });
+    
+  } catch (error) {
+    console.error("Migration error:", error);
+    res.status(500).json({ error: "Migration failed: " + error.message });
+  }
+});
+
+
+
+
 
 // Generic endpoint for serving prompts - more maintainable approach
 app.get("/prompts/:calculatorType", (req, res) => {
@@ -1063,59 +1148,6 @@ app.get("/api/records", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-
-
-// FIXED pagination route - handles database structure properly
-app.get('/api/records/page/:pageNumber', (req, res) => {
-  try {
-    const page = parseInt(req.params.pageNumber) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
-    
-    const database = readDatabase();
-    console.log('Database type:', typeof database, 'Array?', Array.isArray(database));
-    
-    // Handle different database structures
-    let records;
-    if (Array.isArray(database)) {
-      records = database;
-    } else if (database.records && Array.isArray(database.records)) {
-      records = database.records;
-    } else {
-      throw new Error('Database format not recognized');
-    }
-    
-    console.log(`Found ${records.length} total records in database`);
-    
-    // Apply filters (simplified - no filtering for now to test basic pagination)
-    let filteredRecords = records;
-    
-    console.log(`After filtering: ${filteredRecords.length} records`);
-    
-    const totalRecords = filteredRecords.length;
-    const totalPages = Math.ceil(totalRecords / limit);
-    const paginatedRecords = filteredRecords.slice(offset, offset + limit);
-    
-    console.log(`✅ Pagination: Page ${page}, returning ${paginatedRecords.length} records, ${totalRecords} total across ${totalPages} pages`);
-    
-    res.json({
-      records: paginatedRecords,
-      pagination: {
-        currentPage: page,
-        totalPages: totalPages,
-        totalRecords: totalRecords,
-        recordsPerPage: limit,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1
-      }
-    });
-  } catch (error) {
-    console.error('❌ Pagination error:', error);
-    res.status(500).json({ error: 'Failed to load paginated records: ' + error.message });
-  }
-});
-
 
 
 
