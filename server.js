@@ -1923,17 +1923,30 @@ const compareRes = await axios.post("https://valora-analytics-api.onrender.com/a
 });
         
 
-
         console.log(`Received comparison result for comp ID ${compId}: ${compareRes.data.finalResult}`);
 
-        // Add to visualComparisons with proper structure
-        visualComparisons.push({
-          compId: comp.id,
-          classification: compareRes.data.finalResult,
-          appsi: comp.appsi,
-          scalarDistance: comp.scalarDistance,
-          thumbnailBase64: comp.thumbnailBase64 // Pass thumbnail for display
-        });
+// Get full-resolution image for display in report
+let fullImageForDisplay;
+try {
+  const fullImageResponse = await axios.get(`http://localhost:3000/api/records/${comp.id}/full-image`, {
+    responseType: 'arraybuffer'
+  });
+  fullImageForDisplay = `data:image/jpeg;base64,${Buffer.from(fullImageResponse.data, 'binary').toString('base64')}`;
+} catch (imageError) {
+  console.error(`Failed to get full image for comp ${comp.id}:`, imageError.message);
+  // Fallback to thumbnail if full image fails
+  fullImageForDisplay = comp.thumbnailBase64;
+}
+
+// Add to visualComparisons with high-res image
+visualComparisons.push({
+  compId: comp.id,
+  classification: compareRes.data.finalResult,
+  appsi: comp.appsi,
+  scalarDistance: comp.scalarDistance,
+  imageBase64: fullImageForDisplay // Full resolution for display
+});
+
       } catch (error) {
         console.error(`Error in visual comparison for comp:`, error.message);
         if (error.response) {
