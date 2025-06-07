@@ -281,6 +281,39 @@ app.post("/api/admin/migrate-images", async (req, res) => {
 
 
 
+
+// Serve full-size images from disk
+app.get("/api/records/:id/full-image", (req, res) => {
+  try {
+    const recordId = parseInt(req.params.id);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: "Invalid record ID" });
+    }
+    
+    const imagePath = path.join("/mnt/data/images", `record_${recordId}.jpg`);
+    
+    if (!fs.existsSync(imagePath)) {
+      return res.status(404).json({ error: "Full image not found" });
+    }
+    
+    // Set appropriate headers
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 24 hours
+    
+    // Send the file
+    res.sendFile(imagePath);
+    
+  } catch (error) {
+    console.error("Error serving full image:", error);
+    res.status(500).json({ error: "Failed to serve image" });
+  }
+});
+
+
+
+
+
+
 // Generic endpoint for serving prompts - more maintainable approach
 app.get("/prompts/:calculatorType", (req, res) => {
   const { calculatorType } = req.params;
