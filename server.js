@@ -2036,6 +2036,10 @@ return res.json({
   coefficients,
   topComps
 });
+  } catch (error) {
+    console.error("Valuation error:", error);
+    res.status(500).json({ error: error.message || "Server error" });
+  }
 });
 
 
