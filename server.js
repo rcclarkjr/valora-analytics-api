@@ -1933,6 +1933,7 @@ app.post("/analyze-art", async (req, res) => {
 
 
 
+console.log("✅ /api/valuation route registered");
 
 
 app.post("/api/valuation", async (req, res) => {
