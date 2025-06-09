@@ -2009,14 +2009,26 @@ app.post("/api/valuation", async (req, res) => {
 
 // Step 3 - Select top 10 comps by scalar distance
 
+// Pre-map debug to confirm raw value before mapping
+const debug114Pre = enriched.find(r => r.id === 114);
+console.log("🔍 BEFORE MAPPING – Raw record 114:", {
+  id: debug114Pre.id,
+  framedRaw: debug114Pre["framed?"],
+  trimmed: typeof debug114Pre["framed?"] === 'string' ? debug114Pre["framed?"].trim() : null,
+  upper: typeof debug114Pre["framed?"] === 'string' ? debug114Pre["framed?"].trim().toUpperCase() : null
+});
 
+// Step 3 - Select top 10 comps by scalar distance
 const topComps = enriched.slice(0, 10).map(r => {
   const frameValue = (typeof r["framed?"] === 'string' && r["framed?"].trim().toUpperCase() === 'Y') ? 1 : 0;
 
   if (r.id === 114) {
-    console.log("🛠️ Interpreting record 114:", {
+    console.log("🔍 DURING MAPPING – Record 114 details:", {
+      id: r.id,
       framedRaw: r["framed?"],
-      frameFinal: frameValue
+      trimmed: r["framed?"]?.trim(),
+      upper: r["framed?"]?.trim().toUpperCase(),
+      frameValue
     });
   }
 
@@ -2030,6 +2042,9 @@ const topComps = enriched.slice(0, 10).map(r => {
     lnSsi: Math.log(r.size)
   };
 });
+
+
+
 
 
 // Print table for verification
