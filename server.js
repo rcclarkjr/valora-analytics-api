@@ -2009,28 +2009,28 @@ app.post("/api/valuation", async (req, res) => {
 
 // Step 3 - Select top 10 comps by scalar distance
 
-const debug114 = enriched.find(r => r.id === 114);
-console.log("🔍 Raw record 114 before mapping:", debug114);
 
-const topComps = enriched.slice(0, 10).map(r => ({
-  recId: r.id,
-  appsi: r.appsi,
-  smi: r.smi,
-  cli: r.cli,
-  notOil: (typeof r.medium === 'string' && r.medium.toLowerCase() === 'oil') ? 0 : 1,
-  frame: (typeof r["framed?"] === 'string' && r["framed?"].trim().toUpperCase() === 'Y') ? 1 : 0,
-  lnSsi: Math.log(r.size)
+const topComps = enriched.slice(0, 10).map(r => {
+  const frameValue = (typeof r["framed?"] === 'string' && r["framed?"].trim().toUpperCase() === 'Y') ? 1 : 0;
 
+  if (r.id === 114) {
+    console.log("🛠️ Interpreting record 114:", {
+      framedRaw: r["framed?"],
+      frameFinal: frameValue
+    });
+  }
 
-if (r.id === 114) {
-  console.log("🛠️ Interpreting record 114:", {
-    framedRaw: r["framed?"],
-    frameFinal: frameValue
-  });
-}
+  return {
+    recId: r.id,
+    appsi: r.appsi,
+    smi: r.smi,
+    cli: r.cli,
+    notOil: (typeof r.medium === 'string' && r.medium.toLowerCase() === 'oil') ? 0 : 1,
+    frame: frameValue,
+    lnSsi: Math.log(r.size)
+  };
+});
 
-
-}));
 
 // Print table for verification
 console.log("TopComps Table:");
