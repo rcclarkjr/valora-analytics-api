@@ -2036,8 +2036,7 @@ return res.json({
   coefficients,
   topComps
 });
-
-
+});
 
 
 
