@@ -21,6 +21,7 @@ const allowedOrigins = [
   'https://robert-clark-4dee.mykajabi.com',
   'https://valora-analytics-api.onrender.com',
   'https://advisory.valoraanalytics.com',
+  'https://stunning-arithmetic-16de6b.netlify.app'
 ];
 
 // Global CORS middleware for all routes
