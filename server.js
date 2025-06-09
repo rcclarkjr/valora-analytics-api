@@ -2014,7 +2014,7 @@ const topComps = enriched.slice(0, 10).map(r => ({
   smi: r.smi,
   cli: r.cli,
   notOil: (typeof r.medium === 'string' && r.medium.toLowerCase() === 'oil') ? 0 : 1,
-  frame: (typeof r["framed?"] === 'string' && r["framed?"].toLowerCase() === 'yes') ? 1 : 0,
+  frame: (typeof r["framed?"] === 'string' && r["framed?"].trim().toUpperCase() === 'Y') ? 1 : 0,
   lnSsi: Math.log(r.size)
 }));
 
