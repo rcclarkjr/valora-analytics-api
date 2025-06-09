@@ -26,21 +26,13 @@ const allowedOrigins = [
 
 // Global CORS middleware for all routes
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) {
-      // Allow requests with no origin (e.g., server-to-server or mobile apps)
-      return callback(null, true);
-    }
-    if (
-      allowedOrigins.includes(origin) ||
-      origin.endsWith('.netlify.app') // Allow all Netlify subdomains
-    ) {
-      callback(null, true);
-    } else {
-      console.warn('Blocked by CORS:', origin);
-      callback(new Error('CORS not allowed for this origin'));
-    }
-  },
+  origin: [
+    'https://robert-clark-4dee.mykajabi.com',
+    'https://valora-analytics-api.onrender.com',
+    'https://advisory.valoraanalytics.com',
+    'https://stunning-arithmetic-16de6b.netlify.app',
+    /\.netlify\.app$/
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']
@@ -1934,7 +1926,6 @@ app.post("/analyze-art", async (req, res) => {
 
 
 
-console.log("✅ /api/valuation route registered");
 
 
 app.post("/api/valuation", async (req, res) => {
