@@ -1951,15 +1951,18 @@ app.post("/api/valuation", async (req, res) => {
     // Step 1: Generate AI analysis of subject artwork
     let aiAnalysis = "";
     try {
-      console.log("Loading AI analysis prompt");
-      const promptUrl = "https://valora-analytics-api.onrender.com/prompts/ART_ANALYSIS.txt";
-      const promptResponse = await axios.get(promptUrl);
-      
-      if (!promptResponse.data || promptResponse.data.trim().length < 50) {
-        throw new Error("AI analysis prompt is empty or too short");
-      }
-      
-      const prompt = promptResponse.data;
+
+
+
+console.log("Loading AI analysis prompt from disk");
+const promptPath = path.join(__dirname, 'public', 'prompts', 'ART_ANALYSIS.txt');
+const prompt = fs.readFileSync(promptPath, 'utf8').trim();
+
+if (prompt.length < 50) {
+  throw new Error("Prompt for ART_ANALYSIS.txt not found or too short");
+}
+
+
       console.log("Calling OpenAI for artwork analysis");
       
       const openaiResponse = await axios.post(
