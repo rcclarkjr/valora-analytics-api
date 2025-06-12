@@ -426,6 +426,9 @@ ${explanationText}`;
   }
 });
 
+
+
+
 // Endpoint for Career Level Index (CLI) analysis
 app.post("/analyze-cli", async (req, res) => {
   try {
@@ -1926,18 +1929,15 @@ app.post("/analyze-art", async (req, res) => {
 
 
 
-
-
 app.post("/api/valuation", async (req, res) => {
   try {
     console.log("Starting valuation process");
-
-    const { smi, ri, cli, size, targetedRI, subjectImageBase64 } = req.body;
-
+    const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist } = req.body;
     console.log("Valuation inputs:", {
       smi, ri, cli, size,
       targetedRI: Array.isArray(targetedRI) ? targetedRI : 'Not an array',
-      hasSubjectImage: !!subjectImageBase64
+      hasSubjectImage: !!subjectImageBase64,
+      media, title, artist
     });
 
     const db = readDatabase();
@@ -1948,19 +1948,74 @@ app.post("/api/valuation", async (req, res) => {
       return res.status(400).json({ error: "Missing required valuation inputs." });
     }
 
-    // Step 1: Filter valid comps
+    // Step 1: Generate AI analysis of subject artwork
+    let aiAnalysis = "";
+    try {
+      console.log("Loading AI analysis prompt");
+      const promptUrl = "https://valora-analytics-api.onrender.com/prompts/ART_ANALYSIS";
+      const promptResponse = await axios.get(promptUrl);
+      
+      if (!promptResponse.data || promptResponse.data.trim().length < 50) {
+        throw new Error("AI analysis prompt is empty or too short");
+      }
+      
+      const prompt = promptResponse.data;
+      console.log("Calling OpenAI for artwork analysis");
+      
+      const openaiResponse = await axios.post(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          model: "gpt-4-turbo",
+          messages: [
+            { role: "system", content: prompt },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}` },
+                { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subjectImageBase64}` } }
+              ]
+            }
+          ],
+          max_tokens: 300
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+          }
+        }
+      );
+
+      aiAnalysis = openaiResponse.data.choices[0]?.message?.content || "";
+      console.log("AI analysis completed successfully");
+      
+    } catch (error) {
+      console.error("AI analysis failed:", error.message);
+      return res.status(500).json({ 
+        error: "AI analysis failed", 
+        details: error.response?.data?.error?.message || error.message 
+      });
+    }
+
+    // Step 2: Filter valid comps
     const comps = allRecords.filter(r => {
       const isValid = r.ri !== undefined &&
                       targetedRI.includes(Number(r.ri)) &&
                       typeof r.smi === 'number' &&
                       typeof r.cli === 'number' &&
                       typeof r.appsi === 'number' &&
-                      r.thumbnailBase64;
+                      r.thumbnailBase64 &&
+                      r.artistName &&
+                      r.title &&
+                      r.height &&
+                      r.width &&
+                      r.medium &&
+                      r.price;
       return isValid;
     });
 
     console.log(`Found ${comps.length} valid comparison records`);
-
+    
     if (comps.length === 0) {
       return res.status(400).json({
         error: "No valid comparison records found for the specified criteria.",
@@ -1968,13 +2023,14 @@ app.post("/api/valuation", async (req, res) => {
       });
     }
 
-    // Step 2: Z-score stats
+    // Step 3: Z-score stats
     const meanStd = (arr, key) => {
       const values = arr.map(r => r[key]);
       const mean = values.reduce((a, b) => a + b, 0) / values.length;
       const std = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length);
       return { mean, std };
     };
+
     const z = (v, mean, std) => std ? (v - mean) / std : 0;
 
     const stats = {
@@ -1991,7 +2047,7 @@ app.post("/api/valuation", async (req, res) => {
 
     const weights = { smi: 0.47, ri: 0.33, cli: 0.20 };
 
-    // Step 3–6: Calculate scalar distances
+    // Step 4: Calculate scalar distances and select top 10
     const enriched = comps.map(r => {
       const zd = {
         smi: z(r.smi, stats.smi.mean, stats.smi.std),
@@ -2006,22 +2062,45 @@ app.post("/api/valuation", async (req, res) => {
       return { ...r, scalarDistance: dist };
     }).sort((a, b) => a.scalarDistance - b.scalarDistance);
 
+    // Step 5: Select top 10 comps with enhanced data
+    const topComps = enriched.slice(0, 10).map(r => {
+      const frameValue = (typeof r.framed === 'string' && r.framed.trim().toUpperCase() === 'Y') ? 1 : 0;
+      return {
+        recId: r.id,
+        appsi: r.appsi,
+        smi: r.smi,
+        cli: r.cli,
+        ri: r.ri,
+        notOil: (typeof r.medium === 'string' && r.medium.toLowerCase() === 'oil') ? 0 : 1,
+        frame: frameValue,
+        lnSsi: Math.log(r.size),
+        // Enhanced data for frontend
+        artistName: r.artistName,
+        title: r.title,
+        height: r.height,
+        width: r.width,
+        medium: r.medium,
+        price: r.price,
+        thumbnailBase64: r.thumbnailBase64
+      };
+    });
 
-// Step 3 - Select top 10 comps by scalar distance
-const topComps = enriched.slice(0, 10).map(r => {
-  const frameValue = (typeof r.framed === 'string' && r.framed.trim().toUpperCase() === 'Y') ? 1 : 0;
+    console.log("Sending enhanced valuation response with AI analysis and complete comparable data");
+    
+    res.json({
+      topComps,
+      coefficients,
+      aiAnalysis
+    });
 
-  return {
-    recId: r.id,
-    appsi: r.appsi,
-    smi: r.smi,
-    cli: r.cli,
-    notOil: (typeof r.medium === 'string' && r.medium.toLowerCase() === 'oil') ? 0 : 1,
-    frame: frameValue,
-    lnSsi: Math.log(r.size)
-  };
+  } catch (error) {
+    console.error("Valuation request failed:", error.message);
+    res.status(500).json({ 
+      error: "Valuation processing failed", 
+      details: error.response?.data?.error?.message || error.message 
+    });
+  }
 });
-
 
 
 
