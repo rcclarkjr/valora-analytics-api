@@ -1952,7 +1952,7 @@ app.post("/api/valuation", async (req, res) => {
     let aiAnalysis = "";
     try {
       console.log("Loading AI analysis prompt");
-      const promptUrl = "https://valora-analytics-api.onrender.com/prompts/ART_ANALYSIS";
+      const promptUrl = "https://valora-analytics-api.onrender.com/prompts/ART_ANALYSIS.txt";
       const promptResponse = await axios.get(promptUrl);
       
       if (!promptResponse.data || promptResponse.data.trim().length < 50) {
