@@ -2092,7 +2092,6 @@ app.post("/api/valuation", async (req, res) => {
       coefficients,
       aiAnalysis
     });
-
   } catch (error) {
     console.error("Valuation request failed:", error.message);
     res.status(500).json({ 
@@ -2101,28 +2100,6 @@ app.post("/api/valuation", async (req, res) => {
     });
   }
 });
-
-
-
-
-
-// Print table for verification
-console.log("TopComps Table:");
-topComps.forEach((r, i) => {
-  console.log(`${i + 1}. RecID: ${r.recId}, APPSI: ${r.appsi}, SMI: ${r.smi}, CLI: ${r.cli}, notOil: ${r.notOil}, Frame: ${r.frame}, LN(SSI): ${r.lnSsi.toFixed(4)}`);
-});
-
-// Return only TopComps and coefficients
-return res.json({
-  coefficients,
-  topComps
-});
-  } catch (error) {
-    console.error("Valuation error:", error);
-    res.status(500).json({ error: error.message || "Server error" });
-  }
-});
-
 
 
 
