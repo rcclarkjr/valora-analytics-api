@@ -2589,67 +2589,98 @@ app.get('/download/:filename', (req, res) => {
 
 
 
-// Provide current metadata values to pre-fill the form
 app.get('/api/metadata', async (req, res) => {
   try {
-    const db = JSON.parse(fs.readFileSync(dbFilePath, 'utf8'));
-    const metadata = db.metadata?.coefficients || {};
-    res.json(metadata);
+    // Use the existing DB_PATH constant
+    const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+    
+    // Debug log to verify structure
+    console.log('Database metadata structure:', {
+      hasMetadata: !!db.metadata,
+      hasCoefficients: !!db.metadata?.coefficients,
+      lastUpdated: db.metadata?.lastUpdated
+    });
+
+    // Return coefficients or empty object if none exists
+    res.json(db.metadata?.coefficients || {});
+
   } catch (error) {
-    console.error('Failed to load metadata:', error);
-    res.status(500).json({ error: 'Failed to load metadata' });
+    console.error('Metadata endpoint error:', {
+      error: error.message,
+      dbPath: DB_PATH,
+      fileExists: fs.existsSync(DB_PATH),
+      fileAccessible: fs.accessSync ? 'Checking...' : 'Cannot check'
+    });
+    
+    res.status(500).json({ 
+      error: 'Failed to load metadata',
+      // Only show details in development
+      details: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        dbPath: DB_PATH
+      } : null
+    });
   }
 });
 
 
-
-
-
-// Save updated metadata values (coefficients and medium multipliers)
 app.post('/api/metadata/update', async (req, res) => {
   try {
-    const db = JSON.parse(fs.readFileSync(dbFilePath, 'utf8'));
-
-    const {
-      constant,
-      exponent,
-      'coef-SMI': coefSMI,
-      'coef-CLI': coefCLI,
-      'coef-Frame': coefFrame,
-      medium
-    } = req.body;
-
-    // Validate incoming types
-    if (
-      typeof constant !== 'number' ||
-      typeof exponent !== 'number' ||
-      typeof coefSMI !== 'number' ||
-      typeof coefCLI !== 'number' ||
-      typeof coefFrame !== 'number' ||
-      typeof medium !== 'object' || Array.isArray(medium)
-    ) {
-      return res.status(400).json({ error: 'Invalid metadata format submitted.' });
-    }
-
-    // Apply update
+    // Read existing database
+    const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+    
+    // Initialize metadata structure if it doesn't exist
     db.metadata = db.metadata || {};
+    db.metadata.coefficients = db.metadata.coefficients || {};
+
+    // Update with new values
     db.metadata.coefficients = {
-      constant,
-      exponent,
-      'coef-SMI': coefSMI,
-      'coef-CLI': coefCLI,
-      'coef-Frame': coefFrame,
-      medium
+      ...db.metadata.coefficients, // Keep existing values
+      ...req.body,                 // Add new values
+      lastUpdated: new Date().toISOString() // Add timestamp
     };
 
-    fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2));
-    res.json({ message: 'Metadata successfully updated.' });
+    // Save back to file
+    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+    
+    res.json({ 
+      success: true,
+      updated: db.metadata.coefficients
+    });
 
   } catch (error) {
-    console.error('Metadata update failed:', error);
-    res.status(500).json({ error: 'Internal error updating metadata.' });
+    console.error('Update failed:', error);
+    res.status(500).json({
+      error: 'Update failed',
+      details: process.env.NODE_ENV === 'development' ? error.message : null
+    });
   }
 });
+
+
+
+
+app.get('/api/health', (req, res) => {
+  try {
+    const stats = fs.statSync(DB_PATH);
+    res.json({
+      status: 'healthy',
+      db: {
+        path: DB_PATH,
+        exists: true,
+        size: stats.size,
+        lastModified: stats.mtime
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'unhealthy',
+      error: error.message,
+      dbPath: DB_PATH
+    });
+  }
+});
+
 
 
 
