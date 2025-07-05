@@ -1929,42 +1929,35 @@ app.post("/analyze-art", async (req, res) => {
 
 
 
+
+
 app.post("/api/valuation", async (req, res) => {
   try {
     console.log("Starting valuation process");
-    const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist } = req.body;
+    const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist, height, width } = req.body;
     console.log("Valuation inputs:", {
       smi, ri, cli, size,
       targetedRI: Array.isArray(targetedRI) ? targetedRI : 'Not an array',
       hasSubjectImage: !!subjectImageBase64,
-      media, title, artist
+      media, title, artist, height, width
     });
 
     const db = readDatabase();
     const allRecords = db.records || [];
     const coefficients = db.metadata.coefficients;
 
-    if (!smi || !ri || !cli || !size || !targetedRI || !Array.isArray(targetedRI) || !subjectImageBase64) {
+    if (!smi || !ri || !cli || !size || !targetedRI || !Array.isArray(targetedRI) || !subjectImageBase64 || !height || !width) {
       return res.status(400).json({ error: "Missing required valuation inputs." });
     }
 
-    // Step 1: Generate AI analysis of subject artwork
+    // Step 1: Generate AI analysis (unchanged)
     let aiAnalysis = "";
     try {
-
-
-
-console.log("Loading AI analysis prompt from disk");
-const promptPath = path.join(__dirname, 'public', 'prompts', 'ART_ANALYSIS.txt');
-const prompt = fs.readFileSync(promptPath, 'utf8').trim();
-
-if (prompt.length < 50) {
-  throw new Error("Prompt for ART_ANALYSIS.txt not found or too short");
-}
-
-
-      console.log("Calling OpenAI for artwork analysis");
-      
+      const promptPath = path.join(__dirname, 'public', 'prompts', 'ART_ANALYSIS.txt');
+      const prompt = fs.readFileSync(promptPath, 'utf8').trim();
+      if (prompt.length < 50) {
+        throw new Error("Prompt for ART_ANALYSIS.txt not found or too short");
+      }
       const openaiResponse = await axios.post(
         "https://api.openai.com/v1/chat/completions",
         {
@@ -1988,10 +1981,8 @@ if (prompt.length < 50) {
           }
         }
       );
-
       aiAnalysis = openaiResponse.data.choices[0]?.message?.content || "";
       console.log("AI analysis completed successfully");
-      
     } catch (error) {
       console.error("AI analysis failed:", error.message);
       return res.status(500).json({ 
@@ -2026,7 +2017,7 @@ if (prompt.length < 50) {
       });
     }
 
-    // Step 3: Z-score stats
+    // Step 3: Z-score stats (unchanged)
     const meanStd = (arr, key) => {
       const values = arr.map(r => r[key]);
       const mean = values.reduce((a, b) => a + b, 0) / values.length;
@@ -2065,28 +2056,59 @@ if (prompt.length < 50) {
       return { ...r, scalarDistance: dist };
     }).sort((a, b) => a.scalarDistance - b.scalarDistance);
 
-    // Step 5: Select top 10 comps with enhanced data
-    const topComps = enriched.slice(0, 10).map(r => {
-      const frameValue = (typeof r.framed === 'string' && r.framed.trim().toUpperCase() === 'Y') ? 1 : 0;
-      return {
-        recId: r.id,
-        appsi: r.appsi,
-        smi: r.smi,
-        cli: r.cli,
-        ri: r.ri,
-        notOil: (typeof r.medium === 'string' && r.medium.toLowerCase() === 'oil') ? 0 : 1,
-        frame: frameValue,
-        lnSsi: Math.log(r.size),
-        // Enhanced data for frontend
-        artistName: r.artistName,
-        title: r.title,
-        height: r.height,
-        width: r.width,
-        medium: r.medium,
-        price: r.price,
-        thumbnailBase64: r.thumbnailBase64
-      };
-    });
+    // Step 5: Calculate predictedPPSI for subject
+    const subject = {
+      smi,
+      cli,
+      medium: media,
+      frame: 0,
+      SSI: size,
+      height,
+      width
+    };
+
+    const lssi = Math.log(subject.SSI);
+    const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
+
+    // Step 6: Select top 10 comps with enhanced data and calculate adjustments
+const topComps = enriched.slice(0, 10).map(r => {
+  const frameValue = (typeof r.framed === 'string' && r.framed.trim().toUpperCase() === 'Y') ? 1 : 0;
+  const subjectMediumCoef = coefficients.medium[subject.medium] || coefficients.medium['mixed-media'];
+  const compMediumCoef = coefficients.medium[r.medium] || coefficients.medium['mixed-media'];
+  const adjustments = {
+    smi: coefficients["coef-SMI"] * (subject.smi - r.smi),
+    cli: coefficients["coef-CLI"] * (subject.cli - r.cli),
+    medium: predictedPPSI * ((subjectMediumCoef / compMediumCoef) - 1),
+    framed: coefficients["coef-Frame"] * (subject.frame - frameValue) * r.appsi,
+    sizeAdj: subject.sizeAdjFactor * r.appsi
+  };
+  return {
+    recId: r.id,
+    appsi: r.appsi,
+    smi: r.smi,
+    cli: r.cli,
+    ri: r.ri,
+    medium: r.medium,
+    frame: frameValue,
+    lnSsi: Math.log(r.height * r.width),
+    artistName: r.artistName,
+    title: r.title,
+    height: r.height,
+    width: r.width,
+    price: r.price,
+    thumbnailBase64: r.thumbnailBase64,
+    adjustments
+  };
+});
+
+
+
+
+    // Calculate sizeAdjFactor (from existing code)
+    subject.predictAt200 = coefficients.constant * Math.pow(Math.log(200), coefficients.exponent);
+    subject.predictAtSubj = predictedPPSI;
+    subject.ratio = subject.predictAtSubj / subject.predictAt200;
+    subject.sizeAdjFactor = subject.ratio - 1;
 
     console.log("Sending enhanced valuation response with AI analysis and complete comparable data");
     
@@ -2103,8 +2125,6 @@ if (prompt.length < 50) {
     });
   }
 });
-
-
 
 
 
@@ -2567,6 +2587,72 @@ app.get('/download/:filename', (req, res) => {
   });
 });
 
+
+
+// Provide current metadata values to pre-fill the form
+app.get('/api/metadata', async (req, res) => {
+  try {
+    const db = JSON.parse(fs.readFileSync(dbFilePath, 'utf8'));
+    const metadata = db.metadata?.coefficients || {};
+    res.json(metadata);
+  } catch (error) {
+    console.error('Failed to load metadata:', error);
+    res.status(500).json({ error: 'Failed to load metadata' });
+  }
+});
+
+
+
+
+
+// Save updated metadata values (coefficients and medium multipliers)
+app.post('/api/metadata/update', async (req, res) => {
+  try {
+    const db = JSON.parse(fs.readFileSync(dbFilePath, 'utf8'));
+
+    const {
+      constant,
+      exponent,
+      'coef-SMI': coefSMI,
+      'coef-CLI': coefCLI,
+      'coef-Frame': coefFrame,
+      medium
+    } = req.body;
+
+    // Validate incoming types
+    if (
+      typeof constant !== 'number' ||
+      typeof exponent !== 'number' ||
+      typeof coefSMI !== 'number' ||
+      typeof coefCLI !== 'number' ||
+      typeof coefFrame !== 'number' ||
+      typeof medium !== 'object' || Array.isArray(medium)
+    ) {
+      return res.status(400).json({ error: 'Invalid metadata format submitted.' });
+    }
+
+    // Apply update
+    db.metadata = db.metadata || {};
+    db.metadata.coefficients = {
+      constant,
+      exponent,
+      'coef-SMI': coefSMI,
+      'coef-CLI': coefCLI,
+      'coef-Frame': coefFrame,
+      medium
+    };
+
+    fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2));
+    res.json({ message: 'Metadata successfully updated.' });
+
+  } catch (error) {
+    console.error('Metadata update failed:', error);
+    res.status(500).json({ error: 'Internal error updating metadata.' });
+  }
+});
+
+
+
 // Serve static files from the "public" folder
 app.use(express.static("public"));
 
@@ -2577,4 +2663,7 @@ app.use(express.static("public"));
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
+
+
+  
 
