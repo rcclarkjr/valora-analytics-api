@@ -1825,33 +1825,53 @@ app.get("/api/coefficients/calculate", (req, res) => {
 
 app.post("/api/coefficients", (req, res) => {
   try {
-    if (!req.body.exponent || !req.body.constant) {
-      return res.status(400).json({ error: 'Missing coefficient values' });
-    }
-    
     const data = readDatabase();
     
-    // Update coefficients
-    data.metadata.coefficients = {
-      exponent: req.body.exponent,
-      constant: req.body.constant,
+    // Initialize metadata structure if missing
+    if (!data.metadata) data.metadata = {};
+    if (!data.metadata.coefficients) data.metadata.coefficients = {};
+    if (!data.metadata.medium) data.metadata.medium = {};
+    
+    // Preserve existing values and update only provided fields
+    const updatedCoefficients = {
+      ...data.metadata.coefficients,  // Keep all existing coefficient fields
+      ...req.body,                    // Apply updates from request
       lastCalculated: new Date().toISOString()
     };
     
-    // Recalculate APPSI for all records
-    const updatedData = updateAllAPPSI(data);
-    writeDatabase(updatedData);
+    // Handle medium updates separately to preserve existing medium values
+    if (req.body.medium) {
+      data.metadata.medium = {
+        ...data.metadata.medium,      // Keep existing medium multipliers
+        ...req.body.medium           // Apply medium updates
+      };
+      delete updatedCoefficients.medium; // Remove from coefficients object
+    }
+    
+    data.metadata.coefficients = updatedCoefficients;
+    data.metadata.lastUpdated = new Date().toISOString();
+    
+    // Recalculate APPSI for all records (only if constant/exponent changed)
+    if (req.body.constant || req.body.exponent) {
+      const updatedData = updateAllAPPSI(data);
+      writeDatabase(updatedData);
+    } else {
+      writeDatabase(data);
+    }
     
     res.json({ 
       success: true, 
-      message: 'Coefficients updated and APPSI recalculated for all records',
-      coefficients: data.metadata.coefficients
+      message: 'Metadata updated successfully',
+      metadata: {
+        coefficients: data.metadata.coefficients,
+        medium: data.metadata.medium
+      }
     });
   } catch (error) {
+    console.error('Error updating metadata:', error);
     res.status(500).json({ error: error.message });
   }
 });
-
 
 
 
