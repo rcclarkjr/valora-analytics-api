@@ -46,55 +46,6 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 // UTILITY FUNCTIONS
 // ====================
 
-function calculateAPPSI(size, ppsi, coefficients) {
-    const lssi = Math.log(size);
-    const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
-    const residualPercentage = (ppsi - predictedPPSI) / predictedPPSI;
-    const standardLSSI = Math.log(200);
-    const predictedPPSIStandard = coefficients.constant * Math.pow(standardLSSI, coefficients.exponent);
-    return predictedPPSIStandard * (1 + residualPercentage);
-}
-
-
-function ensureAPPSICalculation(req, res, next) {
-    try {
-        const data = readDatabase();
-        const coefficients = data.metadata.coefficients;
-
-        // If we have height and width, calculate size and lssi if not provided
-        if (req.body.height && req.body.width && !req.body.size) {
-            req.body.size = req.body.height * req.body.width;
-        }
-        
-        // Calculate LSSI if we have size but not LSSI
-        if (req.body.size && !req.body.lssi) {
-            req.body.lssi = Math.log(req.body.size);
-        }
-        
-        // Calculate PPSI if we have price and size but not PPSI
-        if (req.body.price && req.body.size && !req.body.ppsi) {
-            req.body.ppsi = req.body.price / req.body.size;
-        }
-
-        // Calculate APPSI if we have all required values
-        if (req.body.size && req.body.ppsi) {
-            req.body.appsi = calculateAPPSI(
-                req.body.size, 
-                req.body.ppsi, 
-                coefficients
-            );
-        }
-
-        next();
-    } catch (error) {
-        console.error('Error in APPSI calculation middleware:', error);
-        res.status(500).json({ error: 'Failed to calculate APPSI: ' + error.message });
-    }
-}
-
-
-
-
 // Helper function to extract category scores from analysis text with improved regex patterns
 function extractCategoryScores(analysisText) {
   console.log("Extracting category scores from analysis text...");
@@ -977,9 +928,6 @@ function writeDatabase(data) {
 
 
 
-
-
-
 // ====================================================
 // Calculate APPSI Function
 // ====================================================
@@ -1255,7 +1203,7 @@ app.get("/api/stats", (req, res) => {
 
 
 // Updated POST /api/records to ensure valid ID in response (2025-05-31)
-app.post("/api/records", ensureAPPSICalculation, (req, res) => {
+app.post("/api/records", (req, res) => {
     try {
         const data = readDatabase();
         const requiredFields = ['artistName', 'title', 'height', 'width', 'price'];
@@ -1393,7 +1341,7 @@ app.get("/api/records/:id", (req, res) => {
 
 
 
-app.put("/api/records/:id", ensureAPPSICalculation, (req, res) => {
+app.put("/api/records/:id", (req, res) => {
     try {
         const recordId = parseInt(req.params.id);
         if (isNaN(recordId)) {
