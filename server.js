@@ -1447,17 +1447,26 @@ delete updatedRecord.imagePath;
 
 
 
-
-
-// GET current coefficients
+// GET all metadata (coefficients + medium multipliers)
 app.get("/api/coefficients", (req, res) => {
   try {
     const data = readDatabase();
-    res.json(data.metadata.coefficients);
+    
+    // Return complete metadata structure
+    const metadata = {
+      coefficients: data.metadata.coefficients || {},
+      medium: data.metadata.medium || {},
+      lastUpdated: data.metadata.lastUpdated,
+      lastCalculated: data.metadata.lastCalculated
+    };
+    
+    res.json(metadata);
   } catch (error) {
+    console.error('Error loading metadata:', error);
     res.status(500).json({ error: error.message });
   }
 });
+
 
 
 
@@ -1814,8 +1823,6 @@ app.get("/api/coefficients/calculate", (req, res) => {
 
 
 
-
-
 app.post("/api/coefficients", (req, res) => {
   try {
     if (!req.body.exponent || !req.body.constant) {
@@ -1844,6 +1851,8 @@ app.post("/api/coefficients", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
 
 
 
