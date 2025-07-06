@@ -2626,28 +2626,36 @@ app.get('/api/metadata', async (req, res) => {
 
 app.post('/api/metadata/update', async (req, res) => {
   try {
-    // Read existing database
     const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
     
-    // Initialize metadata structure if it doesn't exist
+    // Initialize metadata if it doesn't exist
     db.metadata = db.metadata || {};
     db.metadata.coefficients = db.metadata.coefficients || {};
-
-    // Update with new values
-    db.metadata.coefficients = {
-      ...db.metadata.coefficients, // Keep existing values
-      ...req.body,                 // Add new values
+    
+    // Merge updates with existing values
+    const updatedCoefficients = {
+      ...db.metadata.coefficients,  // Keep existing values
+      ...req.body,                  // Apply new values
       lastUpdated: new Date().toISOString() // Add timestamp
     };
-
-    // Save back to file
+    
+    // Special handling for medium multipliers
+    if (req.body.medium) {
+      updatedCoefficients.medium = {
+        ...(db.metadata.coefficients.medium || {}), // Keep existing medium values
+        ...req.body.medium                         // Apply medium updates
+      };
+    }
+    
+    // Save the merged data
+    db.metadata.coefficients = updatedCoefficients;
     fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
     
     res.json({ 
       success: true,
-      updated: db.metadata.coefficients
+      updated: updatedCoefficients
     });
-
+    
   } catch (error) {
     console.error('Update failed:', error);
     res.status(500).json({
