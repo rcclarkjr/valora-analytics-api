@@ -2672,9 +2672,6 @@ app.get('/api/health', (req, res) => {
 
 // Add this to your backend codebase (server.js or new file migrate.js)
 
-const fs = require('fs');
-const path = require('path');
-
 // UPDATE THIS PATH to match where your JSON file is mounted
 const DATABASE_FILE_PATH = '/mnt/data/art_database.json';  // Common mount path
 // OR it might be something like:
