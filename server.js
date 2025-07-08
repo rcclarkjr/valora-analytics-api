@@ -1091,62 +1091,6 @@ app.get("/api/records", (req, res) => {
 
 
 
-app.post("/api/records/recalculate-appsi", (req, res) => {
-    try {
-        const data = readDatabase();
-        const coefficients = data.metadata.coefficients;
-
-        // Track problematic records
-        const problematicRecords = [];
-
-        // Recalculate APPSI for all records
-        data.records.forEach(record => {
-            // Add more robust validation
-            if (!record.size || !record.ppsi || 
-                isNaN(record.size) || isNaN(record.ppsi) || 
-                record.size <= 0 || record.ppsi <= 0) {
-                
-                // Log details about problematic record
-                problematicRecords.push({
-                    recordId: record.id,
-                    issues: {
-                        size: record.size,
-                        ppsi: record.ppsi,
-                        hasValidSize: !!record.size && !isNaN(record.size) && record.size > 0,
-                        hasValidPPSI: !!record.ppsi && !isNaN(record.ppsi) && record.ppsi > 0
-                    }
-                });
-                
-                return; // Skip this record
-            }
-
-            // Calculate APPSI for valid records
-            record.appsi = calculateAPPSI(
-                record.size, 
-                record.ppsi, 
-                coefficients
-            );
-        });
-
-        // Write updated database
-        writeDatabase(data);
-
-        res.json({
-            message: 'Successfully recalculated APPSI for all records',
-            totalRecords: data.records.length,
-            updatedRecords: data.records.filter(r => r.appsi !== undefined).length,
-            problematicRecords: problematicRecords
-        });
-
-
-
-
-    } catch (error) {
-        console.error('Error in retroactive APPSI calculation:', error);
-        res.status(500).json({ error: 'Failed to recalculate APPSI', details: error.message });
-    }
-});
-
 
 
 
@@ -1194,61 +1138,6 @@ app.get("/api/stats", (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-});
-
-
-
-
-
-
-
-// Updated POST /api/records to ensure valid ID in response (2025-05-31)
-app.post("/api/records", (req, res) => {
-    try {
-        const data = readDatabase();
-        const requiredFields = ['artistName', 'title', 'height', 'width', 'price'];
-        for (const field of requiredFields) {
-            if (!req.body[field]) {
-                return res.status(400).json({ error: `Missing required field: ${field}` });
-            }
-        }
-        console.log(`Total records: ${data.records.length}`);
-        const maxId = data.records.length > 0
-            ? data.records.reduce((max, record) => {
-                const id = Number(record.id);
-                return isNaN(id) ? max : Math.max(max, id);
-            }, 0)
-            : 0;
-        console.log(`Calculated maxId: ${maxId}`);
-        const newId = maxId + 1;
-        
-        // FIX: Remove the id field from req.body before spreading
-        const { id, ...bodyWithoutId } = req.body;
-
-// Change it to:
-const newRecord = {
-    id: newId,
-    isActive: true,
-    dateAdded: new Date().toISOString(),
-    ...bodyWithoutId
-};
-
-        newRecord.size = newRecord.height * newRecord.width;
-        if (newRecord.size > 0) {
-            newRecord.lssi = Math.log(newRecord.size);
-        }
-        newRecord.ppsi = newRecord.price / newRecord.size;
-        delete newRecord.imagePath;
-        data.records.push(newRecord);
-        console.log(`New record: ID=${newId}, Artist=${newRecord.artistName}, Title=${newRecord.title}`);
-        writeDatabase(data);
-        // Ensure response includes newRecord with ID
-        console.log(`Returning record with ID: ${newRecord.id}`);
-        res.status(201).json({ ...newRecord, id: newId });
-    } catch (error) {
-        console.error('Error saving record:', error.message, error.stack);
-        res.status(500).json({ error: error.message });
-    }
 });
 
 
@@ -1340,57 +1229,6 @@ app.get("/api/records/:id", (req, res) => {
 
 
 
-
-app.put("/api/records/:id", (req, res) => {
-    try {
-        const recordId = parseInt(req.params.id);
-        if (isNaN(recordId)) {
-            return res.status(400).json({ error: 'Invalid record ID' });
-        }
-        
-        const data = readDatabase();
-        const index = data.records.findIndex(r => r.id === recordId);
-       
-        if (index === -1) {
-            return res.status(404).json({ error: 'Record not found' });
-        }
-        
-const updatedRecord = {
-    ...data.records[index],
-    ...req.body,
-    id: recordId, // Ensure ID doesn't change
-    dateAdded: data.records[index].dateAdded // Preserve original dateAdded
-};
-        
-
-
-        // Recalculate derived fields if height/width/price changed
-        if (req.body.height || req.body.width || req.body.price) {
-            updatedRecord.size = updatedRecord.height * updatedRecord.width;
-            
-            // Calculate LSSI (Log of Size in Square Inches)
-            if (updatedRecord.size > 0) {
-                updatedRecord.lssi = Math.log(updatedRecord.size);
-            }
-            
-            updatedRecord.ppsi = updatedRecord.price / updatedRecord.size;
-        } else if (!updatedRecord.lssi && updatedRecord.size > 0) {
-            // Ensure LSSI exists even if height/width didn't change
-            updatedRecord.lssi = Math.log(updatedRecord.size);
-        }
-        
-// Remove imagePath – now using embedded Base64 images
-delete updatedRecord.imagePath;
-
-        
-        data.records[index] = updatedRecord;
-        writeDatabase(data);
-        
-        res.json(updatedRecord);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
 
 
 
@@ -1769,58 +1607,338 @@ app.get("/api/coefficients/calculate", (req, res) => {
 
 
 
+// Updated API endpoints with full artOnlyPrice and new APPSI calculation support
 
-
-app.post("/api/coefficients", (req, res) => {
-  try {
-    const data = readDatabase();
+// Helper function - add this near your other helper functions
+function calculateArtOnlyPrice(price, framed, frameCoefficients) {
+    if (!price || price <= 0) return 0;
     
-    // Initialize metadata structure if missing
-    if (!data.metadata) data.metadata = {};
-    if (!data.metadata.coefficients) data.metadata.coefficients = {};
-    if (!data.metadata.medium) data.metadata.medium = {};
+    let framePercent = 0;
     
-    // Preserve existing values and update only provided fields
-    const updatedCoefficients = {
-      ...data.metadata.coefficients,  // Keep all existing coefficient fields
-      ...req.body,                    // Apply updates from request
-      lastCalculated: new Date().toISOString()
-    };
-    
-    // Handle medium updates separately to preserve existing medium values
-    if (req.body.medium) {
-      data.metadata.medium = {
-        ...data.metadata.medium,      // Keep existing medium multipliers
-        ...req.body.medium           // Apply medium updates
-      };
-      delete updatedCoefficients.medium; // Remove from coefficients object
+    if (framed === 'Y' && frameCoefficients && 
+        frameCoefficients['frame-constant'] !== undefined && 
+        frameCoefficients['frame-exponent'] !== undefined) {
+        
+        framePercent = frameCoefficients['frame-constant'] * 
+                      Math.pow(price, frameCoefficients['frame-exponent']);
+        
+        // Clamp between 0 and 1 (0% to 100%)
+        framePercent = Math.max(0, Math.min(1, framePercent));
     }
     
-    data.metadata.coefficients = updatedCoefficients;
-    data.metadata.lastUpdated = new Date().toISOString();
+    const frameValue = price * framePercent;
+    const artOnlyPrice = price - frameValue;
     
-    // Recalculate APPSI for all records (only if constant/exponent changed)
-    if (req.body.constant || req.body.exponent) {
-      const updatedData = updateAllAPPSI(data);
-      writeDatabase(updatedData);
-    } else {
-      writeDatabase(data);
+    return Math.max(0, artOnlyPrice);
+}
+
+// Updated APPSI calculation function - uses artOnlyPrice instead of price
+function calculateAPPSI(size, artOnlyPrice, coefficients) {
+    if (!size || !artOnlyPrice || !coefficients || 
+        !coefficients.constant || !coefficients.exponent || 
+        size <= 0 || artOnlyPrice <= 0) return 0;
+    
+    try {
+        const artOnlyPPSI = artOnlyPrice / size; // New variable using artOnlyPrice
+        const lssi = Math.log(size);
+        const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
+        const residualPercentage = (artOnlyPPSI - predictedPPSI) / predictedPPSI; // Only change: use artOnlyPPSI
+        const standardLSSI = Math.log(200);
+        const predictedPPSIStandard = coefficients.constant * Math.pow(standardLSSI, coefficients.exponent);
+        const appsi = predictedPPSIStandard * (1 + residualPercentage);
+        
+        return isFinite(appsi) && appsi > 0 ? appsi : 0;
+    } catch (error) {
+        console.error("APPSI calculation error: " + error.message);
+        return 0;
     }
-    
-    res.json({ 
-      success: true, 
-      message: 'Metadata updated successfully',
-      metadata: {
-        coefficients: data.metadata.coefficients,
-        medium: data.metadata.medium
-      }
-    });
-  } catch (error) {
-    console.error('Error updating metadata:', error);
-    res.status(500).json({ error: error.message });
-  }
+}
+
+// Updated POST /api/records
+app.post("/api/records", (req, res) => {
+    try {
+        const data = readDatabase();
+        const requiredFields = ['artistName', 'title', 'height', 'width', 'price'];
+        for (const field of requiredFields) {
+            if (!req.body[field]) {
+                return res.status(400).json({ error: `Missing required field: ${field}` });
+            }
+        }
+        
+        console.log(`Total records: ${data.records.length}`);
+        const maxId = data.records.length > 0
+            ? data.records.reduce((max, record) => {
+                const id = Number(record.id);
+                return isNaN(id) ? max : Math.max(max, id);
+            }, 0)
+            : 0;
+        console.log(`Calculated maxId: ${maxId}`);
+        const newId = maxId + 1;
+        
+        // Remove the id field from req.body before spreading
+        const { id, ...bodyWithoutId } = req.body;
+
+        const newRecord = {
+            id: newId,
+            isActive: true,
+            dateAdded: new Date().toISOString(),
+            ...bodyWithoutId
+        };
+
+        // Calculate size and LSSI
+        newRecord.size = newRecord.height * newRecord.width;
+        if (newRecord.size > 0) {
+            newRecord.lssi = Math.log(newRecord.size);
+        }
+        
+        // Calculate PPSI (unchanged - still total price / size for reference)
+        newRecord.ppsi = newRecord.price / newRecord.size;
+        
+        // Calculate artOnlyPrice using frame coefficients
+        newRecord.artOnlyPrice = calculateArtOnlyPrice(
+            newRecord.price, 
+            newRecord.framed || 'N', 
+            data.metadata.coefficients
+        );
+        
+        // Calculate APPSI using artOnlyPrice (new method)
+        if (newRecord.size > 0 && newRecord.artOnlyPrice > 0) {
+            newRecord.appsi = calculateAPPSI(
+                newRecord.size, 
+                newRecord.artOnlyPrice, 
+                data.metadata.coefficients
+            );
+        }
+        
+        delete newRecord.imagePath;
+        data.records.push(newRecord);
+        console.log(`New record: ID=${newId}, Artist=${newRecord.artistName}, Title=${newRecord.title}, artOnlyPrice=${newRecord.artOnlyPrice}, APPSI=${newRecord.appsi}`);
+        writeDatabase(data);
+        
+        console.log(`Returning record with ID: ${newRecord.id}`);
+        res.status(201).json({ ...newRecord, id: newId });
+    } catch (error) {
+        console.error('Error saving record:', error.message, error.stack);
+        res.status(500).json({ error: error.message });
+    }
 });
 
+// Updated PUT /api/records/:id
+app.put("/api/records/:id", (req, res) => {
+    try {
+        const recordId = parseInt(req.params.id);
+        if (isNaN(recordId)) {
+            return res.status(400).json({ error: 'Invalid record ID' });
+        }
+        
+        const data = readDatabase();
+        const index = data.records.findIndex(r => r.id === recordId);
+       
+        if (index === -1) {
+            return res.status(404).json({ error: 'Record not found' });
+        }
+        
+        const updatedRecord = {
+            ...data.records[index],
+            ...req.body,
+            id: recordId, // Ensure ID doesn't change
+            dateAdded: data.records[index].dateAdded // Preserve original dateAdded
+        };
+
+        // Recalculate derived fields if height/width/price/framed changed
+        if (req.body.height || req.body.width || req.body.price || req.body.framed !== undefined) {
+            updatedRecord.size = updatedRecord.height * updatedRecord.width;
+            
+            // Calculate LSSI (Log of Size in Square Inches)
+            if (updatedRecord.size > 0) {
+                updatedRecord.lssi = Math.log(updatedRecord.size);
+            }
+            
+            // Calculate PPSI (unchanged - still total price / size for reference)
+            updatedRecord.ppsi = updatedRecord.price / updatedRecord.size;
+            
+            // Calculate artOnlyPrice using frame coefficients
+            updatedRecord.artOnlyPrice = calculateArtOnlyPrice(
+                updatedRecord.price, 
+                updatedRecord.framed || 'N', 
+                data.metadata.coefficients
+            );
+            
+            // Calculate APPSI using artOnlyPrice (new method)
+            if (updatedRecord.size > 0 && updatedRecord.artOnlyPrice > 0) {
+                updatedRecord.appsi = calculateAPPSI(
+                    updatedRecord.size, 
+                    updatedRecord.artOnlyPrice, 
+                    data.metadata.coefficients
+                );
+            }
+        } else if (!updatedRecord.lssi && updatedRecord.size > 0) {
+            // Ensure LSSI exists even if height/width didn't change
+            updatedRecord.lssi = Math.log(updatedRecord.size);
+            
+            // If artOnlyPrice doesn't exist, calculate it
+            if (!updatedRecord.artOnlyPrice) {
+                updatedRecord.artOnlyPrice = calculateArtOnlyPrice(
+                    updatedRecord.price, 
+                    updatedRecord.framed || 'N', 
+                    data.metadata.coefficients
+                );
+            }
+            
+            // Recalculate APPSI if needed
+            if (updatedRecord.size > 0 && updatedRecord.artOnlyPrice > 0) {
+                updatedRecord.appsi = calculateAPPSI(
+                    updatedRecord.size, 
+                    updatedRecord.artOnlyPrice, 
+                    data.metadata.coefficients
+                );
+            }
+        }
+        
+        // Remove imagePath – now using embedded Base64 images
+        delete updatedRecord.imagePath;
+        
+        data.records[index] = updatedRecord;
+        writeDatabase(data);
+        
+        console.log(`Updated record ${recordId}: artOnlyPrice=${updatedRecord.artOnlyPrice}, APPSI=${updatedRecord.appsi}`);
+        res.json(updatedRecord);
+    } catch (error) {
+        console.error('Error updating record:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Updated recalculate APPSI endpoint - now uses artOnlyPrice method
+app.post("/api/records/recalculate-appsi", (req, res) => {
+    try {
+        const data = readDatabase();
+        const coefficients = data.metadata.coefficients;
+        
+        // Track results
+        const results = {
+            totalRecords: data.records.length,
+            updatedRecords: 0,
+            problematicRecords: [],
+            addedArtOnlyPrice: 0
+        };
+        
+        // Recalculate APPSI for all records using new method
+        data.records.forEach(record => {
+            // Ensure artOnlyPrice exists
+            if (!record.artOnlyPrice) {
+                record.artOnlyPrice = calculateArtOnlyPrice(
+                    record.price, 
+                    record.framed || 'N', 
+                    coefficients
+                );
+                results.addedArtOnlyPrice++;
+            }
+            
+            // Validate required fields for APPSI calculation
+            if (!record.size || !record.artOnlyPrice || 
+                isNaN(record.size) || isNaN(record.artOnlyPrice) || 
+                record.size <= 0 || record.artOnlyPrice <= 0) {
+                
+                results.problematicRecords.push({
+                    recordId: record.id,
+                    issues: {
+                        size: record.size,
+                        artOnlyPrice: record.artOnlyPrice,
+                        hasValidSize: !!record.size && !isNaN(record.size) && record.size > 0,
+                        hasValidArtOnlyPrice: !!record.artOnlyPrice && !isNaN(record.artOnlyPrice) && record.artOnlyPrice > 0
+                    }
+                });
+                
+                return; // Skip this record
+            }
+            
+            // Calculate APPSI using artOnlyPrice (new method)
+            const newAPPSI = calculateAPPSI(
+                record.size, 
+                record.artOnlyPrice, 
+                coefficients
+            );
+            
+            if (newAPPSI && newAPPSI > 0) {
+                record.appsi = newAPPSI;
+                results.updatedRecords++;
+            }
+        });
+        
+        // Write updated database
+        writeDatabase(data);
+        
+        res.json({
+            message: 'Successfully recalculated APPSI using artOnlyPrice method',
+            ...results
+        });
+    } catch (error) {
+        console.error('Error in APPSI recalculation:', error);
+        res.status(500).json({ error: 'Failed to recalculate APPSI', details: error.message });
+    }
+});
+
+// Updated POST coefficients - recalculates all APPSI when coefficients change
+app.post("/api/coefficients", (req, res) => {
+    try {
+        const data = readDatabase();
+        
+        // Update coefficients
+        if (!data.metadata.coefficients) {
+            data.metadata.coefficients = {};
+        }
+        
+        // Update all coefficient fields
+        Object.keys(req.body).forEach(key => {
+            if (key !== 'medium') {
+                data.metadata.coefficients[key] = req.body[key];
+            }
+        });
+        
+        // Update medium multipliers if provided
+        if (req.body.medium) {
+            data.metadata.medium = { ...data.metadata.medium, ...req.body.medium };
+        }
+        
+        data.metadata.lastUpdated = new Date().toISOString();
+        
+        // Recalculate all artOnlyPrice and APPSI values with new coefficients
+        let recalculatedCount = 0;
+        data.records.forEach(record => {
+            // Recalculate artOnlyPrice with potentially new frame coefficients
+            if (record.price && record.price > 0) {
+                record.artOnlyPrice = calculateArtOnlyPrice(
+                    record.price, 
+                    record.framed || 'N', 
+                    data.metadata.coefficients
+                );
+            }
+            
+            // Recalculate APPSI with new coefficients and artOnlyPrice
+            if (record.size && record.artOnlyPrice && record.size > 0 && record.artOnlyPrice > 0) {
+                record.appsi = calculateAPPSI(
+                    record.size, 
+                    record.artOnlyPrice, 
+                    data.metadata.coefficients
+                );
+                recalculatedCount++;
+            }
+        });
+        
+        writeDatabase(data);
+        
+        res.json({
+            message: 'Coefficients updated successfully',
+            recalculatedRecords: recalculatedCount,
+            coefficients: data.metadata.coefficients,
+            medium: data.metadata.medium
+        });
+    } catch (error) {
+        console.error('Error updating coefficients:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
 
 
