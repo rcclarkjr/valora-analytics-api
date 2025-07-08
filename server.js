@@ -2669,9 +2669,204 @@ app.get('/api/health', (req, res) => {
 
 
 
+
+// Add this to your backend codebase (server.js or new file migrate.js)
+
+const fs = require('fs');
+const path = require('path');
+
+// UPDATE THIS PATH to match where your JSON file is mounted
+const DATABASE_FILE_PATH = '/mnt/data/art_database.json';  // Common mount path
+// OR it might be something like:
+// const DATABASE_FILE_PATH = '/app/data/art_database.json';
+// const DATABASE_FILE_PATH = process.env.DB_PATH || './art_database.json';
+
+function calculateArtOnlyPrice(price, framed, frameCoefficients) {
+    if (!price || price <= 0) return 0;
+    
+    let framePercent = 0;
+    
+    if (framed === 'Y' && frameCoefficients && 
+        frameCoefficients['frame-constant'] !== undefined && 
+        frameCoefficients['frame-exponent'] !== undefined) {
+        
+        framePercent = frameCoefficients['frame-constant'] * 
+                      Math.pow(price, frameCoefficients['frame-exponent']);
+        
+        // Clamp between 0 and 1 (0% to 100%)
+        framePercent = Math.max(0, Math.min(1, framePercent));
+    }
+    
+    const frameValue = price * framePercent;
+    const artOnlyPrice = price - frameValue;
+    
+    return Math.max(0, artOnlyPrice);
+}
+
+function migrateAddArtOnlyPrice(databaseData) {
+    console.log('Starting migration: Adding artOnlyPrice field...');
+    
+    // Get frame coefficients from metadata
+    const frameConstant = databaseData.metadata.coefficients['frame-constant'];
+    const frameExponent = databaseData.metadata.coefficients['frame-exponent'];
+    
+    console.log(`Using frame coefficients: constant=${frameConstant}, exponent=${frameExponent}`);
+    
+    let processed = 0;
+    let added = 0;
+    let skipped = 0;
+    
+    // Process each record
+    databaseData.records.forEach(record => {
+        processed++;
+        
+        // Skip if artOnlyPrice already exists
+        if (record.hasOwnProperty('artOnlyPrice')) {
+            skipped++;
+            console.log(`Record ${record.id}: Already has artOnlyPrice (${record.artOnlyPrice}), skipping`);
+            return;
+        }
+        
+        // Calculate artOnlyPrice
+        const artOnlyPrice = calculateArtOnlyPrice(
+            record.price, 
+            record.framed, 
+            databaseData.metadata.coefficients
+        );
+        
+        // Add the new field
+        record.artOnlyPrice = Math.round(artOnlyPrice * 100) / 100; // Round to 2 decimal places
+        added++;
+        
+        // Log some examples
+        if (processed <= 5) {
+            console.log(`Record ${record.id}: price=$${record.price}, framed=${record.framed}, artOnlyPrice=$${record.artOnlyPrice}`);
+        }
+    });
+    
+    // Update metadata to record migration
+    databaseData.metadata.lastUpdated = new Date().toISOString();
+    databaseData.metadata.migrations = databaseData.metadata.migrations || [];
+    databaseData.metadata.migrations.push({
+        name: 'add_artOnlyPrice',
+        date: new Date().toISOString(),
+        recordsProcessed: processed,
+        recordsUpdated: added,
+        recordsSkipped: skipped
+    });
+    
+    console.log('Migration completed:');
+    console.log(`- Records processed: ${processed}`);
+    console.log(`- Records updated: ${added}`);
+    console.log(`- Records skipped: ${skipped}`);
+    
+    return databaseData;
+}
+
+// API endpoint to run migration (add to your Express routes)
+app.post('/api/migrate/add-artOnlyPrice', (req, res) => {
+    try {
+        console.log('🚀 Starting artOnlyPrice migration via API...');
+        
+        // 1. Read the database file
+        console.log(`📖 Reading database from: ${DATABASE_FILE_PATH}`);
+        const rawData = fs.readFileSync(DATABASE_FILE_PATH, 'utf8');
+        const databaseData = JSON.parse(rawData);
+        
+        console.log(`✅ Database loaded: ${databaseData.records.length} records found`);
+        
+        // 2. Create automatic backup
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupPath = DATABASE_FILE_PATH.replace('.json', `_backup_${timestamp}.json`);
+        fs.writeFileSync(backupPath, rawData);
+        console.log(`💾 Backup created: ${backupPath}`);
+        
+        // 3. Run migration
+        const updatedDatabase = migrateAddArtOnlyPrice(databaseData);
+        
+        // 4. Save updated database
+        const updatedJson = JSON.stringify(updatedDatabase, null, 2);
+        fs.writeFileSync(DATABASE_FILE_PATH, updatedJson);
+        
+        console.log('✅ MIGRATION COMPLETED SUCCESSFULLY!');
+        
+        // 5. Verification
+        let withArtOnly = 0;
+        let framedCount = 0;
+        
+        updatedDatabase.records.forEach(record => {
+            if (record.hasOwnProperty('artOnlyPrice')) {
+                withArtOnly++;
+                if (record.framed === 'Y') framedCount++;
+            }
+        });
+        
+        const result = {
+            success: true,
+            message: 'Migration completed successfully',
+            stats: {
+                totalRecords: updatedDatabase.records.length,
+                recordsWithArtOnlyPrice: withArtOnly,
+                framedPieces: framedCount,
+                unframedPieces: withArtOnly - framedCount
+            },
+            backupFile: backupPath
+        };
+        
+        console.log('Migration stats:', result.stats);
+        res.json(result);
+        
+    } catch (error) {
+        console.error('❌ MIGRATION FAILED:', error.message);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            message: 'Migration failed - database unchanged'
+        });
+    }
+});
+
+// Optional: CLI script if you want to run it directly on server
+function runMigrationCLI() {
+    if (process.argv.includes('--migrate-artOnlyPrice')) {
+        console.log('🎨 Running artOnlyPrice migration...');
+        
+        try {
+            const rawData = fs.readFileSync(DATABASE_FILE_PATH, 'utf8');
+            const databaseData = JSON.parse(rawData);
+            
+            // Create backup
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const backupPath = DATABASE_FILE_PATH.replace('.json', `_backup_${timestamp}.json`);
+            fs.writeFileSync(backupPath, rawData);
+            
+            // Run migration
+            const updatedDatabase = migrateAddArtOnlyPrice(databaseData);
+            
+            // Save
+            fs.writeFileSync(DATABASE_FILE_PATH, JSON.stringify(updatedDatabase, null, 2));
+            
+            console.log('✅ Migration completed via CLI');
+            process.exit(0);
+            
+        } catch (error) {
+            console.error('❌ CLI Migration failed:', error);
+            process.exit(1);
+        }
+    }
+}
+
+// Run CLI migration if called with flag
+runMigrationCLI();
+
+module.exports = { migrateAddArtOnlyPrice, calculateArtOnlyPrice };
+
+
+
+
+
 // Serve static files from the "public" folder
 app.use(express.static("public"));
-
 
 // ====================
 // START THE SERVER
