@@ -824,6 +824,247 @@ app.post("/analyze-combined", async (req, res) => {
 
 
 
+
+
+
+// Endpoint for SMI Factor Analysis (returns all 33 individual factor scores)
+app.post("/analyze-smi-factors", async (req, res) => {
+  try {
+    console.log("Received SMI factors analyze request");
+    const { prompt, image, artTitle, artistName } = req.body;
+
+    if (!prompt) {
+      console.log("Missing prompt in request");
+      return res.status(400).json({ error: { message: "Prompt is required" } });
+    }
+    
+    if (!image) {
+      console.log("Missing image in request");
+      return res.status(400).json({ error: { message: "Image is required" } });
+    }
+
+    if (!OPENAI_API_KEY) {
+      console.log("Missing OpenAI API key");
+      return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
+    }
+
+    // Log info about the request
+    console.log(`Processing SMI factors request for artwork: "${artTitle}" by ${artistName}`);
+    console.log(`Prompt length: ${prompt.length} characters`);
+    
+    // Construct the prompt with artwork information
+    const finalPrompt = `Title: "${artTitle}"
+Artist: "${artistName}"
+
+${prompt}
+
+IMPORTANT: Please provide all 33 individual factor scores in a structured format at the end of your analysis. Format them exactly like this:
+
+=== FACTOR SCORES ===
+Factor 1: [score]
+Factor 2: [score]
+Factor 3: [score]
+...
+Factor 33: [score]
+=== END FACTOR SCORES ===
+
+Each factor score should be a decimal number between 1.00 and 5.00.`;
+
+    console.log("Sending request to OpenAI API for SMI factors analysis");
+    
+    // Send request to OpenAI API
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-4-turbo",
+        messages: [
+          { 
+            role: "system", 
+            content: "You are an expert fine art analyst specializing in evaluating artistic skill mastery across 33 detailed factors. Your task is to analyze the provided artwork and provide both a comprehensive analysis and individual scores for all 33 skill mastery factors. Follow the prompt instructions exactly and provide all 33 individual factor scores in the specified format." 
+          },
+          { 
+            role: "user", 
+            content: [
+              { type: "text", text: finalPrompt },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+            ]
+          }
+        ],
+        max_tokens: 3000
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENAI_API_KEY}`
+        }
+      }
+    );
+
+    console.log("Received response from OpenAI API for SMI factors");
+    
+    if (!response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
+      console.log("Invalid response format from OpenAI:", JSON.stringify(response.data));
+      return res.status(500).json({ error: { message: "Invalid response from OpenAI API" } });
+    }
+
+    let analysisText = response.data.choices[0].message.content;
+    console.log("SMI Factors Analysis text length:", analysisText.length);
+
+    // Extract individual factor scores
+    const factorScores = extractIndividualFactorScores(analysisText);
+    
+    // Check if all 33 factor scores were successfully extracted
+    if (!factorScores || Object.keys(factorScores).length !== 33) {
+      console.log("Failed to extract all 33 factor scores from the analysis");
+      console.log("Extracted factor count:", factorScores ? Object.keys(factorScores).length : 0);
+      return res.status(500).json({ 
+        error: { 
+          message: "Failed to extract all 33 required factor scores. Please try again." 
+        } 
+      });
+    }
+    
+    console.log("Successfully extracted 33 factor scores");
+    
+    // Calculate the total SMI value using the weighted formula (keeping existing logic)
+    // Note: You may want to modify these weights based on your regression analysis results
+    const categoryScores = extractCategoryScores(analysisText);
+    let smiValue = "3.00"; // Default
+    
+    if (categoryScores) {
+      const calculatedSMI = (
+        (categoryScores.composition * 0.20) +
+        (categoryScores.color * 0.20) +
+        (categoryScores.technical * 0.25) +
+        (categoryScores.originality * 0.20) +
+        (categoryScores.emotional * 0.15)
+      );
+      
+      // Don't round up to nearest 0.25 - use exact decimal for regression analysis
+      smiValue = calculatedSMI.toFixed(2);
+    }
+    
+    console.log(`Calculated SMI: ${smiValue}`);
+    
+    const finalResponse = {
+      analysis: analysisText,
+      smi_total: smiValue,
+      individual_factors: factorScores,
+      category_scores: categoryScores // Include for backward compatibility
+    };
+
+    console.log("Sending final SMI factors response to client");
+    res.json(finalResponse);
+
+  } catch (error) {
+    handleApiError(error, res);
+  }
+});
+
+// Helper function to extract all 33 individual factor scores
+function extractIndividualFactorScores(analysisText) {
+  console.log("Extracting individual factor scores from analysis text...");
+  
+  // Look for the structured factor scores section
+  const factorSectionMatch = analysisText.match(/=== FACTOR SCORES ===([\s\S]*?)=== END FACTOR SCORES ===/);
+  
+  if (!factorSectionMatch) {
+    console.log("No structured factor scores section found");
+    // Try alternative parsing methods
+    return extractFactorsAlternativeMethod(analysisText);
+  }
+  
+  const factorSection = factorSectionMatch[1];
+  const factorScores = {};
+  
+  // Extract individual factor scores
+  const factorLines = factorSection.split('\n').filter(line => line.trim());
+  
+  for (const line of factorLines) {
+    const factorMatch = line.match(/Factor\s+(\d+):\s*(\d+\.?\d*)/i);
+    if (factorMatch) {
+      const factorNumber = parseInt(factorMatch[1]);
+      const score = parseFloat(factorMatch[2]);
+      
+      if (factorNumber >= 1 && factorNumber <= 33 && score >= 1.0 && score <= 5.0) {
+        factorScores[`factor_${factorNumber}`] = score;
+        console.log(`Found Factor ${factorNumber}: ${score}`);
+      }
+    }
+  }
+  
+  console.log(`Extracted ${Object.keys(factorScores).length} factor scores from structured section`);
+  
+  // If we don't have all 33, try alternative methods
+  if (Object.keys(factorScores).length < 33) {
+    console.log("Attempting alternative extraction methods...");
+    return extractFactorsAlternativeMethod(analysisText);
+  }
+  
+  return factorScores;
+}
+
+// Alternative method to extract factor scores if structured format fails
+function extractFactorsAlternativeMethod(analysisText) {
+  console.log("Using alternative factor extraction method...");
+  
+  const factorScores = {};
+  
+  // Try to find patterns like "1. [Factor Name]: [Score]" or "[Factor Name] - [Score]"
+  const patterns = [
+    /(\d+)\.\s*([^:]+):\s*(\d+\.?\d*)/g,
+    /([^-]+)-\s*(\d+\.?\d*)/g,
+    /Factor\s+(\d+)[^0-9]*(\d+\.?\d*)/g
+  ];
+  
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(analysisText)) !== null) {
+      let factorNumber, score;
+      
+      if (pattern.source.includes('Factor\\s+')) {
+        // Pattern: "Factor 1 ... 3.5"
+        factorNumber = parseInt(match[1]);
+        score = parseFloat(match[2]);
+      } else if (pattern.source.includes('\\d+')) {
+        // Pattern: "1. Factor Name: 3.5"
+        factorNumber = parseInt(match[1]);
+        score = parseFloat(match[3]);
+      } else {
+        // Pattern: "Factor Name - 3.5"
+        score = parseFloat(match[2]);
+        // For this pattern, we need to count factors sequentially
+        factorNumber = Object.keys(factorScores).length + 1;
+      }
+      
+      if (factorNumber >= 1 && factorNumber <= 33 && score >= 1.0 && score <= 5.0) {
+        factorScores[`factor_${factorNumber}`] = score;
+      }
+    }
+    
+    if (Object.keys(factorScores).length >= 33) {
+      break;
+    }
+  }
+  
+  console.log(`Alternative method extracted ${Object.keys(factorScores).length} factor scores`);
+  
+  // If still not enough factors, return null to indicate failure
+  if (Object.keys(factorScores).length < 25) { // Allow some tolerance
+    console.log("Insufficient factor scores extracted, returning null");
+    return null;
+  }
+  
+  return factorScores;
+}
+
+
+
+
+
+
+
+
 // Error handler function
 function handleApiError(error, res) {
   console.error("Error in API endpoint:", error);
