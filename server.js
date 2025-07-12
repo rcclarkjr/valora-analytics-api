@@ -940,6 +940,35 @@ ${prompt}`;
       console.log("Found questions CSV data");
     }
 
+
+
+
+
+// Add this debugging code right after the CSV extraction:
+console.log("=== DEBUGGING CSV EXTRACTION ===");
+console.log("Full analysis text length:", analysisText.length);
+console.log("Factors CSV match found:", !!factorsCsvMatch);
+if (factorsCsvMatch) {
+  console.log("Factors CSV data:", factorsCsvMatch[1]);
+} else {
+  console.log("No factors CSV found. Looking for CSV patterns...");
+  const csvPatterns = analysisText.match(/```[\s\S]*?```/g);
+  if (csvPatterns) {
+    console.log("Found CSV blocks:", csvPatterns.length);
+    csvPatterns.forEach((block, i) => {
+      console.log(`CSV Block ${i+1}:`, block.substring(0, 200));
+    });
+  } else {
+    console.log("No CSV blocks found at all");
+    console.log("First 1000 chars of analysis:", analysisText.substring(0, 1000));
+  }
+}
+console.log("=== END CSV DEBUG ===");
+
+
+
+
+
     // NEW: Parse the factors CSV to extract individual factor scores
     const individualFactors = parseFactorsCSV(csvData.factorsCSV);
     
