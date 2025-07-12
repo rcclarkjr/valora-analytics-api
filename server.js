@@ -826,11 +826,11 @@ app.post("/analyze-combined", async (req, res) => {
 
 
 
-
-// Endpoint for SMI Factor Analysis (returns all 33 individual factor scores)
+// NEW ENDPOINT: SMI Factor Analysis for Batch Processing
+// This is a copy of the existing /analyze-smi endpoint with additional CSV parsing
 app.post("/analyze-smi-factors", async (req, res) => {
   try {
-    console.log("Received SMI factors analyze request");
+    console.log("Received SMI factors batch analyze request");
     const { prompt, image, artTitle, artistName } = req.body;
 
     if (!prompt) {
@@ -852,27 +852,15 @@ app.post("/analyze-smi-factors", async (req, res) => {
     console.log(`Processing SMI factors request for artwork: "${artTitle}" by ${artistName}`);
     console.log(`Prompt length: ${prompt.length} characters`);
     
-    // Construct the prompt with artwork information
+    // Construct the prompt with artwork information (SAME AS EXISTING)
     const finalPrompt = `Title: "${artTitle}"
 Artist: "${artistName}"
 
-${prompt}
-
-IMPORTANT: Please provide all 33 individual factor scores in a structured format at the end of your analysis. Format them exactly like this:
-
-=== FACTOR SCORES ===
-Factor 1: [score]
-Factor 2: [score]
-Factor 3: [score]
-...
-Factor 33: [score]
-=== END FACTOR SCORES ===
-
-Each factor score should be a decimal number between 1.00 and 5.00.`;
+${prompt}`;
 
     console.log("Sending request to OpenAI API for SMI factors analysis");
     
-    // Send request to OpenAI API
+    // Send request to OpenAI API (SAME AS EXISTING)
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -880,7 +868,7 @@ Each factor score should be a decimal number between 1.00 and 5.00.`;
         messages: [
           { 
             role: "system", 
-            content: "You are an expert fine art analyst specializing in evaluating artistic skill mastery across 33 detailed factors. Your task is to analyze the provided artwork and provide both a comprehensive analysis and individual scores for all 33 skill mastery factors. Follow the prompt instructions exactly and provide all 33 individual factor scores in the specified format." 
+            content: "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Your task is to analyze the provided artwork and calculate an accurate SMI (Skill Mastery Index) value between 1.00 and 5.00 based on the specified calculation framework. Provide detailed analysis following the prompt instructions exactly." 
           },
           { 
             role: "user", 
@@ -890,7 +878,7 @@ Each factor score should be a decimal number between 1.00 and 5.00.`;
             ]
           }
         ],
-        max_tokens: 3000
+        max_tokens: 2000
       },
       {
         headers: {
@@ -908,49 +896,70 @@ Each factor score should be a decimal number between 1.00 and 5.00.`;
     }
 
     let analysisText = response.data.choices[0].message.content;
-    console.log("SMI Factors Analysis text length:", analysisText.length);
+    console.log("SMI Factors Analysis text:", analysisText.length, "characters");
 
-    // Extract individual factor scores
-    const factorScores = extractIndividualFactorScores(analysisText);
+    // Extract category scores (SAME AS EXISTING)
+    const categoryScores = extractCategoryScores(analysisText);
     
-    // Check if all 33 factor scores were successfully extracted
-    if (!factorScores || Object.keys(factorScores).length !== 33) {
-      console.log("Failed to extract all 33 factor scores from the analysis");
-      console.log("Extracted factor count:", factorScores ? Object.keys(factorScores).length : 0);
+    // Check if all category scores were successfully extracted
+    if (!categoryScores) {
+      console.log("Failed to extract all category scores from the analysis");
       return res.status(500).json({ 
         error: { 
-          message: "Failed to extract all 33 required factor scores. Please try again." 
+          message: "Failed to extract all required category scores. Please try again." 
         } 
       });
     }
     
-    console.log("Successfully extracted 33 factor scores");
+    console.log("Extracted category scores:", categoryScores);
     
-    // Calculate the total SMI value using the weighted formula (keeping existing logic)
-    // Note: You may want to modify these weights based on your regression analysis results
-    const categoryScores = extractCategoryScores(analysisText);
-    let smiValue = "3.00"; // Default
+    // Calculate the SMI value using the weighted formula (SAME AS EXISTING)
+    const calculatedSMI = (
+      (categoryScores.composition * 0.20) +
+      (categoryScores.color * 0.20) +
+      (categoryScores.technical * 0.25) +
+      (categoryScores.originality * 0.20) +
+      (categoryScores.emotional * 0.15)
+    );
     
-    if (categoryScores) {
-      const calculatedSMI = (
-        (categoryScores.composition * 0.20) +
-        (categoryScores.color * 0.20) +
-        (categoryScores.technical * 0.25) +
-        (categoryScores.originality * 0.20) +
-        (categoryScores.emotional * 0.15)
-      );
-      
-      // Don't round up to nearest 0.25 - use exact decimal for regression analysis
-      smiValue = calculatedSMI.toFixed(2);
-    }
-    
+    // Don't round to 0.25 for regression analysis - use exact decimal
+    const smiValue = calculatedSMI.toFixed(2);
     console.log(`Calculated SMI: ${smiValue}`);
     
+    // Extract CSV data for individual factors (SAME AS EXISTING)
+    let csvData = {};
+    const factorsCsvMatch = analysisText.match(/```csv\s*(Factor#.*[\s\S]*?)```/);
+    if (factorsCsvMatch && factorsCsvMatch[1]) {
+      csvData.factorsCSV = factorsCsvMatch[1];
+      console.log("Found factors CSV data");
+    }
+    
+    const questionsCsvMatch = analysisText.match(/```csv\s*(Question#.*[\s\S]*?)```/);
+    if (questionsCsvMatch && questionsCsvMatch[1]) {
+      csvData.questionsCSV = questionsCsvMatch[1];
+      console.log("Found questions CSV data");
+    }
+
+    // NEW: Parse the factors CSV to extract individual factor scores
+    const individualFactors = parseFactorsCSV(csvData.factorsCSV);
+    
+    if (!individualFactors || Object.keys(individualFactors).length === 0) {
+      console.log("Failed to parse individual factors from CSV data");
+      return res.status(500).json({ 
+        error: { 
+          message: "Failed to extract individual factor scores from analysis. Please try again." 
+        } 
+      });
+    }
+    
+    console.log(`Extracted ${Object.keys(individualFactors).length} individual factors`);
+
     const finalResponse = {
       analysis: analysisText,
       smi_total: smiValue,
-      individual_factors: factorScores,
-      category_scores: categoryScores // Include for backward compatibility
+      individual_factors: individualFactors,
+      category_scores: categoryScores,
+      csv_data: csvData // Keep original CSV for reference
     };
 
     console.log("Sending final SMI factors response to client");
@@ -961,102 +970,67 @@ Each factor score should be a decimal number between 1.00 and 5.00.`;
   }
 });
 
-// Helper function to extract all 33 individual factor scores
-function extractIndividualFactorScores(analysisText) {
-  console.log("Extracting individual factor scores from analysis text...");
-  
-  // Look for the structured factor scores section
-  const factorSectionMatch = analysisText.match(/=== FACTOR SCORES ===([\s\S]*?)=== END FACTOR SCORES ===/);
-  
-  if (!factorSectionMatch) {
-    console.log("No structured factor scores section found");
-    // Try alternative parsing methods
-    return extractFactorsAlternativeMethod(analysisText);
+// NEW HELPER FUNCTION: Parse the factors CSV data to extract individual scores
+function parseFactorsCSV(csvText) {
+  if (!csvText) {
+    console.log("No factors CSV text provided");
+    return {};
   }
   
-  const factorSection = factorSectionMatch[1];
-  const factorScores = {};
+  console.log("Parsing factors CSV data...");
+  const factors = {};
   
-  // Extract individual factor scores
-  const factorLines = factorSection.split('\n').filter(line => line.trim());
-  
-  for (const line of factorLines) {
-    const factorMatch = line.match(/Factor\s+(\d+):\s*(\d+\.?\d*)/i);
-    if (factorMatch) {
-      const factorNumber = parseInt(factorMatch[1]);
-      const score = parseFloat(factorMatch[2]);
-      
-      if (factorNumber >= 1 && factorNumber <= 33 && score >= 1.0 && score <= 5.0) {
-        factorScores[`factor_${factorNumber}`] = score;
-        console.log(`Found Factor ${factorNumber}: ${score}`);
+  try {
+    // Split into lines and process each line
+    const lines = csvText.split('\n').filter(line => line.trim());
+    
+    for (const line of lines) {
+      // Skip header line
+      if (line.startsWith('Factor#') || line.includes('Factor')) {
+        continue;
       }
-    }
-  }
-  
-  console.log(`Extracted ${Object.keys(factorScores).length} factor scores from structured section`);
-  
-  // If we don't have all 33, try alternative methods
-  if (Object.keys(factorScores).length < 33) {
-    console.log("Attempting alternative extraction methods...");
-    return extractFactorsAlternativeMethod(analysisText);
-  }
-  
-  return factorScores;
-}
-
-// Alternative method to extract factor scores if structured format fails
-function extractFactorsAlternativeMethod(analysisText) {
-  console.log("Using alternative factor extraction method...");
-  
-  const factorScores = {};
-  
-  // Try to find patterns like "1. [Factor Name]: [Score]" or "[Factor Name] - [Score]"
-  const patterns = [
-    /(\d+)\.\s*([^:]+):\s*(\d+\.?\d*)/g,
-    /([^-]+)-\s*(\d+\.?\d*)/g,
-    /Factor\s+(\d+)[^0-9]*(\d+\.?\d*)/g
-  ];
-  
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(analysisText)) !== null) {
-      let factorNumber, score;
       
-      if (pattern.source.includes('Factor\\s+')) {
-        // Pattern: "Factor 1 ... 3.5"
-        factorNumber = parseInt(match[1]);
-        score = parseFloat(match[2]);
-      } else if (pattern.source.includes('\\d+')) {
-        // Pattern: "1. Factor Name: 3.5"
-        factorNumber = parseInt(match[1]);
-        score = parseFloat(match[3]);
+      // Parse CSV line: typically "FactorNumber,FactorName,FactorDescription,Score"
+      const columns = line.split(',');
+      
+      if (columns.length >= 4) {
+        const factorNumber = columns[0] ? columns[0].trim() : '';
+        const factorName = columns[1] ? columns[1].trim().replace(/"/g, '') : '';
+        const scoreText = columns[3] ? columns[3].trim() : '';
+        
+        // Extract numeric score
+        const scoreMatch = scoreText.match(/(\d+\.?\d*)/);
+        if (scoreMatch) {
+          const score = parseFloat(scoreMatch[1]);
+          
+          // Validate score is in expected range
+          if (score >= 1.0 && score <= 5.0) {
+            // Create factor key (factor_1, factor_2, etc.)
+            const factorKey = `factor_${factorNumber}`;
+            factors[factorKey] = score;
+            
+            console.log(`Parsed ${factorKey}: ${factorName} = ${score}`);
+          } else {
+            console.log(`Invalid score for factor ${factorNumber}: ${score}`);
+          }
+        } else {
+          console.log(`Could not extract score from: ${scoreText}`);
+        }
       } else {
-        // Pattern: "Factor Name - 3.5"
-        score = parseFloat(match[2]);
-        // For this pattern, we need to count factors sequentially
-        factorNumber = Object.keys(factorScores).length + 1;
-      }
-      
-      if (factorNumber >= 1 && factorNumber <= 33 && score >= 1.0 && score <= 5.0) {
-        factorScores[`factor_${factorNumber}`] = score;
+        console.log(`Skipping malformed CSV line: ${line}`);
       }
     }
     
-    if (Object.keys(factorScores).length >= 33) {
-      break;
-    }
+  } catch (error) {
+    console.error("Error parsing factors CSV:", error);
+    return {};
   }
   
-  console.log(`Alternative method extracted ${Object.keys(factorScores).length} factor scores`);
-  
-  // If still not enough factors, return null to indicate failure
-  if (Object.keys(factorScores).length < 25) { // Allow some tolerance
-    console.log("Insufficient factor scores extracted, returning null");
-    return null;
-  }
-  
-  return factorScores;
+  console.log(`Successfully parsed ${Object.keys(factors).length} factors from CSV`);
+  return factors;
 }
+
+
 
 
 
