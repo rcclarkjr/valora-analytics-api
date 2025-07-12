@@ -1301,61 +1301,6 @@ function parse33FactorScores(analysisText) {
 
 
 
-// Add this debugging code right after the CSV extraction:
-console.log("=== DEBUGGING CSV EXTRACTION ===");
-console.log("Full analysis text length:", analysisText.length);
-console.log("Factors CSV match found:", !!factorsCsvMatch);
-if (factorsCsvMatch) {
-  console.log("Factors CSV data:", factorsCsvMatch[1]);
-} else {
-  console.log("No factors CSV found. Looking for CSV patterns...");
-  const csvPatterns = analysisText.match(/```[\s\S]*?```/g);
-  if (csvPatterns) {
-    console.log("Found CSV blocks:", csvPatterns.length);
-    csvPatterns.forEach((block, i) => {
-      console.log(`CSV Block ${i+1}:`, block.substring(0, 200));
-    });
-  } else {
-    console.log("No CSV blocks found at all");
-    console.log("First 1000 chars of analysis:", analysisText.substring(0, 1000));
-  }
-}
-console.log("=== END CSV DEBUG ===");
-
-
-
-
-
-    // NEW: Parse the factors CSV to extract individual factor scores
-    const individualFactors = parseFactorsCSV(csvData.factorsCSV);
-    
-    if (!individualFactors || Object.keys(individualFactors).length === 0) {
-      console.log("Failed to parse individual factors from CSV data");
-      return res.status(500).json({ 
-        error: { 
-          message: "Failed to extract individual factor scores from analysis. Please try again." 
-        } 
-      });
-    }
-    
-    console.log(`Extracted ${Object.keys(individualFactors).length} individual factors`);
-
-    const finalResponse = {
-      analysis: analysisText,
-      smi_total: smiValue,
-      individual_factors: individualFactors,
-      category_scores: categoryScores,
-      csv_data: csvData // Keep original CSV for reference
-    };
-
-    console.log("Sending final SMI factors response to client");
-    res.json(finalResponse);
-
-  } catch (error) {
-    handleApiError(error, res);
-  }
-});
-
 // NEW HELPER FUNCTION: Parse the factors CSV data to extract individual scores
 function parseFactorsCSV(csvText) {
   if (!csvText) {
