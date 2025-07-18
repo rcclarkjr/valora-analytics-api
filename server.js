@@ -2711,37 +2711,23 @@ app.post("/api/valuation", async (req, res) => {
     const lssi = Math.log(subject.SSI);
     const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
 
-    // Step 6: Select top 10 comps with enhanced data and calculate adjustments
-const topComps = enriched.slice(0, 10).map(r => {
-  const frameValue = (typeof r.framed === 'string' && r.framed.trim().toUpperCase() === 'Y') ? 1 : 0;
-  const subjectMediumCoef = coefficients.medium[subject.medium] || coefficients.medium['mixed-media'];
-  const compMediumCoef = coefficients.medium[r.medium] || coefficients.medium['mixed-media'];
-  const adjustments = {
-    smi: coefficients["coef-SMI"] * (subject.smi - r.smi),
-    cli: coefficients["coef-CLI"] * (subject.cli - r.cli),
-    medium: predictedPPSI * ((subjectMediumCoef / compMediumCoef) - 1),
-    framed: coefficients["coef-Frame"] * (subject.frame - frameValue) * r.appsi,
-    sizeAdj: subject.sizeAdjFactor * r.appsi
-  };
-  return {
-    recId: r.id,
-    appsi: r.appsi,
-    smi: r.smi,
-    cli: r.cli,
-    ri: r.ri,
-    medium: r.medium,
-    frame: frameValue,
-    lnSsi: Math.log(r.height * r.width),
-    artistName: r.artistName,
-    title: r.title,
-    height: r.height,
-    width: r.width,
-    price: r.price,
-    thumbnailBase64: r.thumbnailBase64,
-    adjustments
-  };
-});
 
+
+    // Step 6: Select top 10 comps with enhanced data and calculate adjustments
+const topComps = enriched.slice(0, 10).map(r => ({
+  id: r.id,
+  appsi: r.appsi,
+  smi: r.smi,
+  cli: r.cli,
+  ri: r.ri,
+  medium: r.medium,
+  artistName: r.artistName,
+  title: r.title,
+  height: r.height,
+  width: r.width,
+  price: r.price,
+  thumbnailBase64: r.thumbnailBase64
+}));
 
 
 
@@ -2756,6 +2742,7 @@ const topComps = enriched.slice(0, 10).map(r => {
     res.json({
       topComps,
       coefficients,
+      medium: db.metadata.medium, 
       aiAnalysis
     });
   } catch (error) {
