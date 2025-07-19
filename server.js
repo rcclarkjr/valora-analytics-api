@@ -2575,7 +2575,13 @@ app.post("/analyze-art", async (req, res) => {
 app.post("/api/valuation", async (req, res) => {
   try {
     console.log("Starting valuation process");
-    const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist, height, width } = req.body;
+
+
+
+const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist, subject, height, width } = req.body;
+
+
+
     console.log("Valuation inputs:", {
       smi, ri, cli, size,
       targetedRI: Array.isArray(targetedRI) ? targetedRI : 'Not an array',
@@ -2615,33 +2621,19 @@ app.post("/api/valuation", async (req, res) => {
             {
               role: "user",
               content: [
-                { type: "text", text: `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}` },
+
+{ type: "text", text: subject ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subject}"` : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}` },
+
                 { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subjectImageBase64}` } }
               ]
             }
           ],
 
 
-const { subject } = req.body; // Extract subject from request
 
-const userText = subject ? 
-  `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subject}"` :
-  `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}`;
 
-const openaiResponse = await axios.post(
-  "https://api.openai.com/v1/chat/completions",
-  {
-    model: "gpt-4-turbo",
-    messages: [
-      { role: "system", content: prompt },
-      {
-        role: "user",
-        content: [
-          { type: "text", text: userText },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subjectImageBase64}` } }
-        ]
-      }
-    ],
+
+
 
 
           max_tokens: 300
