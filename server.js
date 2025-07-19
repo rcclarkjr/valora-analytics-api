@@ -2599,6 +2599,13 @@ app.post("/api/valuation", async (req, res) => {
       if (prompt.length < 50) {
         throw new Error("Prompt for ART_ANALYSIS.txt not found or too short");
       }
+
+
+
+
+
+
+
       const openaiResponse = await axios.post(
         "https://api.openai.com/v1/chat/completions",
         {
@@ -2613,6 +2620,30 @@ app.post("/api/valuation", async (req, res) => {
               ]
             }
           ],
+
+
+const { subject } = req.body; // Extract subject from request
+
+const userText = subject ? 
+  `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subject}"` :
+  `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}`;
+
+const openaiResponse = await axios.post(
+  "https://api.openai.com/v1/chat/completions",
+  {
+    model: "gpt-4-turbo",
+    messages: [
+      { role: "system", content: prompt },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: userText },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subjectImageBase64}` } }
+        ]
+      }
+    ],
+
+
           max_tokens: 300
         },
         {
