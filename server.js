@@ -2578,7 +2578,7 @@ app.post("/api/valuation", async (req, res) => {
 
 
 
-const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist, subject, height, width } = req.body;
+const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist, subjectDescription, height, width } = req.body;
 
 
 
