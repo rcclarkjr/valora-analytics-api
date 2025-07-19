@@ -2586,7 +2586,7 @@ const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist
       smi, ri, cli, size,
       targetedRI: Array.isArray(targetedRI) ? targetedRI : 'Not an array',
       hasSubjectImage: !!subjectImageBase64,
-      media, title, artist, height, width
+      media, title, artist, subjectDescription, height, width
     });
 
     const db = readDatabase();
@@ -2622,7 +2622,9 @@ const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist
               role: "user",
               content: [
 
-{ type: "text", text: subject ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subject}"` : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}` },
+
+{ type: "text", text: subjectDescription ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"` : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}` },
+
 
                 { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subjectImageBase64}` } }
               ]
