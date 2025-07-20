@@ -47,14 +47,24 @@ For each category: Score × Weight = Contribution
 Raw Score = Sum of all contributions
 Raw Score = [contribution 1] + [contribution 2] + [contribution 3] + [contribution 4] + [contribution 5] + [contribution 6] + [contribution 7] = [total]
 
-**Step 3: Apply CLI Formula**
+**Step 3: Apply CLI Formula - CRITICAL MATH STEP**
 CLI = (Raw Score × 4.0) + 1.00
-CLI = ([Raw Score] × 4.0) + 1.00 = [Raw Score × 4.0] + 1.00 = [final result]
+
+**MANDATORY: Show each part of this calculation explicitly:**
+- Raw Score × 4.0 = [Raw Score] × 4.0 = [intermediate result]
+- [intermediate result] + 1.00 = [FINAL CLI VALUE]
+
+**Example:** If Raw Score = 0.36:
+- 0.36 × 4.0 = 1.44
+- 1.44 + 1.00 = 2.44 ← FINAL CLI
+
+**CRITICAL:** The final number after adding 1.00 MUST be different from the intermediate result. If you write something like "1.44 + 1.00 = 1.44" you have made an error and must recalculate.
 
 **Step 4: Verification Check**
 - Raw Score must be between 0.00 and 1.00 ✓
 - CLI must be between 1.00 and 5.00 ✓
-- If either check fails, recalculate from Step 1
+- CLI must be LARGER than Raw Score (because you added at least 1.00) ✓
+- If any check fails, recalculate from Step 1
 
 ---
 
@@ -83,6 +93,8 @@ When details are unclear, reasonable assumptions are allowed:
 - **DO NOT** skip showing multiplication steps
 - **DO NOT** round intermediate calculations (use full precision)
 - **VERIFY** that 0.36 × 4.0 = 1.44 (not 2.44)
+- **VERIFY** that 1.44 + 1.00 = 2.44 (not 1.44)
+- **CRITICAL:** Adding 1.00 to any number makes it LARGER, never the same
 
 ---
 
@@ -118,9 +130,11 @@ When details are unclear, reasonable assumptions are allowed:
 Raw Score = [sum all contributions step by step] = [final raw score]
 
 **Step 3 - Final CLI:**
-CLI = (Raw Score × 4.0) + 1.00 = ([raw score] × 4.0) + 1.00 = [intermediate result] + 1.00 = [final CLI]
+- Raw Score × 4.0 = [raw score] × 4.0 = [intermediate result]  
+- [intermediate result] + 1.00 = [FINAL CLI VALUE]
+CLI = [final CLI value]
 
-**Verification:** Raw Score = [value] (must be 0.00-1.00) ✓, CLI = [value] (must be 1.00-5.00) ✓
+**Verification:** Raw Score = [value] (must be 0.00-1.00) ✓, CLI = [value] (must be 1.00-5.00) ✓, CLI > Raw Score ✓
 
 **Do not include any additional analysis, commentary, or descriptions beyond what is requested.**
 
