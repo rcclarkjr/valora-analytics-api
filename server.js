@@ -451,24 +451,38 @@ ${prompt}`;
     let analysisText = response.data.choices[0].message.content;
     console.log("CLI Analysis text:", analysisText);
 
-    // Extract the CLI value using regex
-    const cliRegex = /Career\s+Level\s+Index\s*\(?CLI\)?\s*=\s*(\d+\.\d+)/i;
+    // Extract the CLI value from the final calculation line (Step 3)
+    // Looks for: CLI = (Raw Score × 4.0) + 1.00 = [intermediate] + 1.00 = [FINAL_VALUE]
+    const cliRegex = /CLI\s*=\s*\([^)]+\)\s*\+\s*1\.00\s*=\s*[\d.]+\s*\+\s*1\.00\s*=\s*(\d+\.\d+)/i;
     const cliMatch = analysisText.match(cliRegex);
-    let cliValue = "3.00"; // Default value if extraction fails
+
+    if (!cliMatch || !cliMatch[1]) {
+      console.log("Failed to extract CLI value from final calculation");
+      console.log("Analysis text for debugging:", analysisText);
+      return res.status(500).json({ 
+        error: { message: "Could not extract CLI value from AI response. AI may have made calculation errors." } 
+      });
+    }
+
+    let cliValue = cliMatch[1];
     
-    if (cliMatch && cliMatch[1]) {
-      cliValue = cliMatch[1];
-      // Ensure it's formatted to 2 decimal places
-      if (cliValue.split('.')[1].length === 1) {
-        cliValue = `${cliValue}0`;
-      }
-      console.log("Extracted CLI value:", cliValue);
-    } else {
-      console.log("Could not extract CLI value from response");
+    // Validate CLI value is in correct range
+    const cliNumber = parseFloat(cliValue);
+    if (cliNumber < 1.00 || cliNumber > 5.00) {
+      console.log(`CLI value ${cliValue} is outside valid range 1.00-5.00`);
+      return res.status(500).json({ 
+        error: { message: `Calculated CLI value ${cliValue} is outside valid range 1.00-5.00` } 
+      });
     }
     
+    // Ensure it's formatted to 2 decimal places
+    if (cliValue.split('.')[1].length === 1) {
+      cliValue = `${cliValue}0`;
+    }
+    console.log("Extracted CLI value:", cliValue);
+    
     // Extract the explanation text (everything after the CLI value statement)
-    const explanationRegex = /Career\s+Level\s+Index\s*\(?CLI\)?\s*=\s*\d+\.\d+\s*(.+?)(?:\n\n|\n$|$)/i;
+    const explanationRegex = /Career\s+Level\s+Index\s*\(?CLI\)?\s*=\s*\d+\.\d+\s*(.+?)(?:\n\n|\*\*Category|$)/i;
     const explanationMatch = analysisText.match(explanationRegex);
     let explanation = "";
     
@@ -477,14 +491,17 @@ ${prompt}`;
       console.log("Extracted explanation:", explanation);
     } else {
       console.log("Could not extract explanation from response");
+      return res.status(500).json({ 
+        error: { message: "Could not extract explanation from AI response" } 
+      });
     }
 
     // Extract category breakdown
     let categoryBreakdown = "";
-    const categoryMatch = analysisText.match(/Category Breakdown[\s\S]*?(?=\n\nRaw Score:|$)/i);
+    const categoryMatch = analysisText.match(/Category Breakdown[\s\S]*?(?=\*\*Mathematical|$)/i);
     if (categoryMatch && categoryMatch[0]) {
       // Process the category breakdown to HTML format
-      const categoryText = categoryMatch[0].replace(/Category Breakdown[:\s]*/i, '').trim();
+      const categoryText = categoryMatch[0].replace(/\*\*Category Breakdown[\s:]*\*\*/i, '').trim();
       
       // Split by numbered categories and convert to HTML
       const categoryItems = categoryText.split(/\d+\.\s+/).filter(item => item.trim() !== '');
@@ -493,8 +510,8 @@ ${prompt}`;
         categoryBreakdown = categoryItems.map(item => {
           const lines = item.split('\n').map(line => line.trim()).filter(line => line !== '');
           if (lines.length > 0) {
-            const categoryName = lines[0].replace(/:$/, '');
-            const details = lines.slice(1).join('<br>');
+            const categoryName = lines[0].replace(/\*\*/g, '').replace(/:$/, '');
+            const details = lines.slice(1).join('<br>').replace(/\*\*/g, '<strong>').replace(/\*\*/g, '</strong>');
             return `<div class="category">
               <span class="category-title">${categoryName}:</span>
               <div class="category-details">${details}</div>
@@ -520,7 +537,6 @@ ${prompt}`;
     handleApiError(error, res);
   }
 });
-
 
 
 // Endpoint for Skill Mastery Index (SMI) analysis
@@ -2568,14 +2584,9 @@ app.post("/analyze-art", async (req, res) => {
 
 
 
-
-
-
-
 app.post("/api/valuation", async (req, res) => {
   try {
     console.log("Starting valuation process");
-
 
 
 const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist, subjectDescription, height, width } = req.body;
@@ -2648,11 +2659,11 @@ const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist
         }
       );
       aiAnalysis = openaiResponse.data.choices[0]?.message?.content || "";
-      console.log("AI analysis completed successfully");
+      console.log("Analysis completed successfully");
     } catch (error) {
-      console.error("AI analysis failed:", error.message);
+      console.error("Analysis failed:", error.message);
       return res.status(500).json({ 
-        error: "AI analysis failed", 
+        error: "Analysis failed", 
         details: error.response?.data?.error?.message || error.message 
       });
     }
@@ -2762,7 +2773,7 @@ const topComps = enriched.slice(0, 10).map(r => ({
     subject.ratio = subject.predictAtSubj / subject.predictAt200;
     subject.sizeAdjFactor = subject.ratio - 1;
 
-    console.log("Sending enhanced valuation response with AI analysis and complete comparable data");
+    console.log("Sending enhanced valuation response with analysis and complete comparable data");
     
     res.json({
       topComps,
