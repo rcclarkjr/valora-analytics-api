@@ -1,4 +1,4 @@
-# Career Level Index (CLI) Calculation Framework - REVISED
+# Career Level Index (CLI) Calculation Framework - JSON OUTPUT VERSION
 
 ## Purpose:
 The Career Level Index (CLI) is a scoring system that evaluates the career achievements of artists. It measures an artist's professional development and standing within the art world using seven key categories, resulting in a normalized score ranging from 1.00 to 5.00. A score of 1.00 indicates no measurable achievements, while a 5.00 reflects the maximum possible accomplishments.
@@ -16,7 +16,7 @@ This prompt handles TWO types of input:
 
 ### 1. Categories and Weights:
 The CLI evaluates achievements across the following seven categories, each weighted by its importance to an artist's career:
-- **Education: 10% (0.10)**
+- **Art Education: 10% (0.10)**
 - **Exhibitions: 25% (0.25)**
 - **Awards & Competitions: 15% (0.15)**
 - **Commissions: 10% (0.10)**
@@ -27,25 +27,17 @@ The CLI evaluates achievements across the following seven categories, each weigh
 ### 2. Scoring System:
 Each category is assigned a score using a three-tiered system:
 - **High-Profile Achievement: 1.0** (e.g., solo exhibitions, national awards, museum collections, features in renowned publications)
-- **Low-Profile Achievement: 0.6** (e.g., group exhibitions, local awards, private collections, features in lesser-known publications)
-- **No Mention: 0.0** (e.g., the category is not addressed in the biography or questionnaire)
+- **Mid-Profile Achievement: 0.6** (e.g., group exhibitions, local awards, private collections, features in local publications)
+- **Low-Profile/None: 0.0** (e.g., no achievements in this category or very minimal activity)
 
 ### 3. Mathematical Calculation Requirements:
 **FOLLOW THESE STEPS EXACTLY - SHOW ALL WORK:**
 
 **Step 1: Calculate Each Weighted Contribution**
 For each category: Score × Weight = Contribution
-- Education: [score] × 0.10 = [result]
-- Exhibitions: [score] × 0.25 = [result]
-- Awards: [score] × 0.15 = [result]
-- Commissions: [score] × 0.10 = [result]
-- Collections: [score] × 0.15 = [result]
-- Publications: [score] × 0.15 = [result]
-- Institutional: [score] × 0.10 = [result]
 
 **Step 2: Calculate Raw Score**
-Raw Score = Sum of all contributions
-Raw Score = [contribution 1] + [contribution 2] + [contribution 3] + [contribution 4] + [contribution 5] + [contribution 6] + [contribution 7] = [total]
+Raw Score = Sum of all contributions (must be between 0.00 and 1.00)
 
 **Step 3: Apply CLI Formula - CRITICAL MATH STEP**
 CLI = (Raw Score × 4.0) + 1.00
@@ -53,12 +45,6 @@ CLI = (Raw Score × 4.0) + 1.00
 **MANDATORY: Show each part of this calculation explicitly:**
 - Raw Score × 4.0 = [Raw Score] × 4.0 = [intermediate result]
 - [intermediate result] + 1.00 = [FINAL CLI VALUE]
-
-**Example:** If Raw Score = 0.36:
-- 0.36 × 4.0 = 1.44
-- 1.44 + 1.00 = 2.44 ← FINAL CLI
-
-**CRITICAL:** The final number after adding 1.00 MUST be different from the intermediate result. If you write something like "1.44 + 1.00 = 1.44" you have made an error and must recalculate.
 
 **Step 4: Verification Check**
 - Raw Score must be between 0.00 and 1.00 ✓
@@ -70,78 +56,98 @@ CLI = (Raw Score × 4.0) + 1.00
 
 ## Rules and Safeguards:
 
-### 1. Structured Breakdown:
+### 1. Structured Category Analysis:
 Each category must be scored with the following structure:
-- **What was provided**: Description of achievements (e.g., "Exhibited in Paris and London")
-- **Why the score was assigned**: Explanation of the assigned score (e.g., "High-profile exhibitions = 1.0")
-- **Final score contribution**: Weighted contribution to the overall CLI (e.g., 1.0 × 0.25 = 0.25)
+- **What was provided**: Description of achievements
+- **Why the score was assigned**: Explanation of the assigned score 
+- **Final score contribution**: Weighted contribution to the overall CLI
 
-### 2. Extrapolation Guidelines:
-When details are unclear, reasonable assumptions are allowed:
-- Sales are treated as private collections unless explicitly stated otherwise
-- Ambiguous mentions like "featured work" are credited as publications
+### 2. Scoring Guidelines:
+- **High-Profile (1.0)**: Major achievements, national/international recognition
+- **Mid-Profile (0.6)**: Regional achievements, local recognition, moderate activity
+- **Low-Profile/None (0.0)**: No meaningful achievements or very minimal activity
 
 ### 3. Arithmetic Validation:
 **CRITICAL: Double-check every calculation**
-- Verify each multiplication: Show [score] × [weight] = [result]
-- Verify addition: List all contributions and show the sum
-- Verify final formula: Show (Raw Score × 4.0) + 1.00 calculation
-- **If you make an arithmetic error, start over from Step 1**
-
-### 4. Common Error Prevention:
-- **DO NOT** confuse Raw Score with CLI score
-- **DO NOT** skip showing multiplication steps
-- **DO NOT** round intermediate calculations (use full precision)
-- **VERIFY** that 0.36 × 4.0 = 1.44 (not 2.44)
-- **VERIFY** that 1.44 + 1.00 = 2.44 (not 1.44)
-- **CRITICAL:** Adding 1.00 to any number makes it LARGER, never the same
+- **VERIFY** that Low-Profile/None = 0.0 points (not 0.6)
+- **VERIFY** that Mid-Profile = 0.6 points 
+- **VERIFY** that High-Profile = 1.0 points
+- **VERIFY** that CLI must be larger than Raw Score
 
 ---
 
-## Output Format:
+## MANDATORY JSON OUTPUT FORMAT:
 
-1. Calculate the Career Level Index (CLI) value based on the artist's information.
-2. Format your response as follows:
+You MUST respond with valid JSON in this exact structure:
 
-**Career Level Index (CLI) = [value]**
+```json
+{
+  "input_data": {
+    "input_type": "bio" or "questionnaire",
+    "timestamp": "current_timestamp"
+  },
+  "cli_result": {
+    "cli_value": [final CLI number],
+    "raw_score": [raw score number],
+    "explanation": "2-3 sentences explaining the artist's career level"
+  },
+  "category_analysis": {
+    "art_education": {
+      "score": [0.0, 0.6, or 1.0],
+      "contribution": [score × 0.10],
+      "reasoning": "explanation of score assignment"
+    },
+    "exhibitions": {
+      "score": [0.0, 0.6, or 1.0],
+      "contribution": [score × 0.25],
+      "reasoning": "explanation of score assignment"
+    },
+    "awards": {
+      "score": [0.0, 0.6, or 1.0],
+      "contribution": [score × 0.15],
+      "reasoning": "explanation of score assignment"
+    },
+    "commissions": {
+      "score": [0.0, 0.6, or 1.0],
+      "contribution": [score × 0.10],
+      "reasoning": "explanation of score assignment"
+    },
+    "collections": {
+      "score": [0.0, 0.6, or 1.0],
+      "contribution": [score × 0.15],
+      "reasoning": "explanation of score assignment"
+    },
+    "publications": {
+      "score": [0.0, 0.6, or 1.0],
+      "contribution": [score × 0.15],
+      "reasoning": "explanation of score assignment"
+    },
+    "institutional": {
+      "score": [0.0, 0.6, or 1.0],
+      "contribution": [score × 0.10],
+      "reasoning": "explanation of score assignment"
+    }
+  },
+  "calculation_steps": {
+    "step1_contributions": "list all contributions",
+    "step2_raw_score": [raw score],
+    "step3_multiplication": "[raw score] × 4.0 = [result]",
+    "step4_final_addition": "[result] + 1.00 = [final CLI]",
+    "validation_passed": true
+  }
+}
+```
 
-[2-3 sentences explaining the artist's career level based on the CLI value]
-
-**Category Breakdown:**
-1. **Education**: [details of what was provided, why the score was assigned, and final contribution]
-2. **Exhibitions**: [details]
-3. **Awards & Competitions**: [details]
-4. **Commissions**: [details]
-5. **Collections**: [details]
-6. **Publications**: [details]
-7. **Institutional Interest**: [details]
-
-**Mathematical Calculation:**
-**Step 1 - Weighted Contributions:**
-- Education: [score] × 0.10 = [result]
-- Exhibitions: [score] × 0.25 = [result]  
-- Awards: [score] × 0.15 = [result]
-- Commissions: [score] × 0.10 = [result]
-- Collections: [score] × 0.15 = [result]
-- Publications: [score] × 0.15 = [result]
-- Institutional: [score] × 0.10 = [result]
-
-**Step 2 - Raw Score:**
-Raw Score = [sum all contributions step by step] = [final raw score]
-
-**Step 3 - Final CLI:**
-- Raw Score × 4.0 = [raw score] × 4.0 = [intermediate result]  
-- [intermediate result] + 1.00 = [FINAL CLI VALUE]
-CLI = [final CLI value]
-
-**Verification:** Raw Score = [value] (must be 0.00-1.00) ✓, CLI = [value] (must be 1.00-5.00) ✓, CLI > Raw Score ✓
-
-**Do not include any additional analysis, commentary, or descriptions beyond what is requested.**
-
----
+## CRITICAL REQUIREMENTS:
+- **Output ONLY valid JSON** - no additional text before or after
+- **Use exact field names** as shown above
+- **Ensure all numbers are numeric values**, not strings
+- **Double-check all calculations** before outputting
+- **Verify CLI is between 1.00 and 5.00**
+- **Verify Low-Profile/None categories get 0.0 points**
 
 ## FINAL REMINDER:
-- Show every mathematical step
-- Double-check all arithmetic  
+- Show every mathematical step in calculation_steps
+- Double-check that Low-Profile/None = 0.0 (not 0.6)
 - Verify your final CLI is between 1.00 and 5.00
-- State your final CLI value clearly and ensure it matches your calculation
+- Output valid JSON only
