@@ -213,15 +213,29 @@ async function callClaudeAPI(messages, maxTokens, systemContent, useJSON) {
 
   const responseText = response.data.content[0].text;
   
-  // Handle JSON responses
-  if (useJSON) {
-    try {
-      return JSON.parse(responseText);
-    } catch (parseError) {
-      throw new Error(`Claude returned invalid JSON: ${responseText}`);
+
+
+
+// Handle JSON responses
+if (useJSON) {
+  try {
+    // Strip markdown code blocks if present
+    let cleanJson = responseText;
+    if (responseText.includes('```json')) {
+      cleanJson = responseText.replace(/```json\s*/, '').replace(/\s*```$/, '');
     }
+    return JSON.parse(cleanJson);
+  } catch (parseError) {
+    console.error("JSON parse error:", parseError);
+    console.error("Raw response:", responseText);
+    throw new Error(`Claude returned invalid JSON: ${responseText}`);
   }
+}
   
+
+
+
+
   return responseText;
 }
 
