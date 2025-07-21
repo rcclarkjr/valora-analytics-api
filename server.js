@@ -190,7 +190,7 @@ async function callClaudeAPI(messages, maxTokens, systemContent, useJSON) {
   });
 
   const requestBody = {
-    model: "claude-3-opus-20240229",
+    model: "claude-opus-4-20250514",
     max_tokens: maxTokens,
     messages: anthropicMessages
   };
