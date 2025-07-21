@@ -380,6 +380,11 @@ ${explanationText}`;
 
 
 
+
+
+
+
+
 // Endpoint for Career Level Index (CLI) analysis
 app.post("/analyze-cli", async (req, res) => {
   try {
@@ -416,22 +421,23 @@ ${prompt}`;
 
     console.log("Sending request to OpenAI API for CLI analysis");
     
-    // Send request to OpenAI API
+    // Send request to OpenAI API with JSON format request
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
         model: "gpt-4-turbo",
+        response_format: { type: "json_object" },
         messages: [
           { 
             role: "system", 
-            content: "You are an expert art career analyst specializing in evaluating artists' professional achievements. Your task is to analyze the provided artist's resume and calculate an accurate CLI (Career Level Index) value between 1.00 and 5.00 based on the specified calculation framework. Provide the CLI value, a brief explanation, and a detailed category breakdown." 
+            content: "You are an expert art career analyst specializing in evaluating artists' professional achievements. Your task is to analyze the provided artist's resume and calculate an accurate CLI (Career Level Index) value between 1.00 and 5.00 based on the specified calculation framework. You must respond with valid JSON only, using the exact structure specified in the prompt." 
           },
           { 
             role: "user", 
             content: finalPrompt
           }
         ],
-        max_tokens: 1000
+        max_tokens: 1500
       },
       {
         headers: {
@@ -448,85 +454,102 @@ ${prompt}`;
       return res.status(500).json({ error: { message: "Invalid response from OpenAI API" } });
     }
 
-    let analysisText = response.data.choices[0].message.content;
-    console.log("CLI Analysis text:", analysisText);
+    let responseContent = response.data.choices[0].message.content;
+    console.log("CLI Analysis JSON:", responseContent);
 
-    // Extract the CLI value from the final calculation line (Step 3)
-    // Looks for: CLI = (Raw Score × 4.0) + 1.00 = [intermediate] + 1.00 = [FINAL_VALUE]
-    const cliRegex = /CLI\s*=\s*\([^)]+\)\s*\+\s*1\.00\s*=\s*[\d.]+\s*\+\s*1\.00\s*=\s*(\d+\.\d+)/i;
-    const cliMatch = analysisText.match(cliRegex);
-
-    if (!cliMatch || !cliMatch[1]) {
-      console.log("Failed to extract CLI value from final calculation");
-      console.log("Analysis text for debugging:", analysisText);
+    // Parse JSON response
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(responseContent);
+    } catch (parseError) {
+      console.log("Failed to parse JSON response:", parseError);
+      console.log("Raw response content:", responseContent);
       return res.status(500).json({ 
-        error: { message: "Could not extract CLI value from AI response. AI may have made calculation errors." } 
+        error: { message: "AI returned invalid JSON response" } 
       });
     }
 
-    let cliValue = cliMatch[1];
+    // Validate required fields in JSON response
+    if (!parsedResponse.cli_result || typeof parsedResponse.cli_result.cli_value !== 'number') {
+      console.log("Invalid JSON structure - missing cli_result.cli_value");
+      return res.status(500).json({ 
+        error: { message: "AI response missing required CLI value" } 
+      });
+    }
+
+    const cliValue = parsedResponse.cli_result.cli_value;
     
     // Validate CLI value is in correct range
-    const cliNumber = parseFloat(cliValue);
-    if (cliNumber < 1.00 || cliNumber > 5.00) {
+    if (cliValue < 1.00 || cliValue > 5.00) {
       console.log(`CLI value ${cliValue} is outside valid range 1.00-5.00`);
       return res.status(500).json({ 
         error: { message: `Calculated CLI value ${cliValue} is outside valid range 1.00-5.00` } 
       });
     }
     
-    // Ensure it's formatted to 2 decimal places
-    if (cliValue.split('.')[1].length === 1) {
-      cliValue = `${cliValue}0`;
-    }
-    console.log("Extracted CLI value:", cliValue);
+    // Format CLI value to 2 decimal places
+    const formattedCLI = cliValue.toFixed(2);
+    console.log("Extracted CLI value:", formattedCLI);
     
-    // Extract the explanation text (everything after the CLI value statement)
-    const explanationRegex = /Career\s+Level\s+Index\s*\(?CLI\)?\s*=\s*\d+\.\d+\s*(.+?)(?:\n\n|\*\*Category|$)/i;
-    const explanationMatch = analysisText.match(explanationRegex);
-    let explanation = "";
-    
-    if (explanationMatch && explanationMatch[1]) {
-      explanation = explanationMatch[1].trim();
-      console.log("Extracted explanation:", explanation);
-    } else {
-      console.log("Could not extract explanation from response");
+    // Extract explanation
+    const explanation = parsedResponse.cli_result.explanation || "";
+    if (!explanation) {
+      console.log("Missing explanation in JSON response");
       return res.status(500).json({ 
-        error: { message: "Could not extract explanation from AI response" } 
+        error: { message: "AI response missing explanation" } 
       });
     }
+    
+    console.log("Extracted explanation:", explanation);
 
-    // Extract category breakdown
+    // Convert category analysis to HTML format for display
     let categoryBreakdown = "";
-    const categoryMatch = analysisText.match(/Category Breakdown[\s\S]*?(?=\*\*Mathematical|$)/i);
-    if (categoryMatch && categoryMatch[0]) {
-      // Process the category breakdown to HTML format
-      const categoryText = categoryMatch[0].replace(/\*\*Category Breakdown[\s:]*\*\*/i, '').trim();
-      
-      // Split by numbered categories and convert to HTML
-      const categoryItems = categoryText.split(/\d+\.\s+/).filter(item => item.trim() !== '');
-      
-      if (categoryItems.length > 0) {
-        categoryBreakdown = categoryItems.map(item => {
-          const lines = item.split('\n').map(line => line.trim()).filter(line => line !== '');
-          if (lines.length > 0) {
-            const categoryName = lines[0].replace(/\*\*/g, '').replace(/:$/, '');
-            const details = lines.slice(1).join('<br>').replace(/\*\*/g, '<strong>').replace(/\*\*/g, '</strong>');
-            return `<div class="category">
-              <span class="category-title">${categoryName}:</span>
-              <div class="category-details">${details}</div>
-            </div>`;
-          }
-          return '';
-        }).join('');
-      }
+    if (parsedResponse.category_analysis) {
+      const categories = [
+        { key: 'art_education', name: 'Art Education' },
+        { key: 'exhibitions', name: 'Exhibitions' },
+        { key: 'awards', name: 'Awards & Competitions' },
+        { key: 'commissions', name: 'Commissions' },
+        { key: 'collections', name: 'Collections' },
+        { key: 'publications', name: 'Publications' },
+        { key: 'institutional', name: 'Institutional Interest' }
+      ];
+
+      categoryBreakdown = categories.map(category => {
+        const categoryData = parsedResponse.category_analysis[category.key];
+        if (categoryData) {
+          return `<div class="category">
+            <span class="category-title">${category.name}:</span>
+            <div class="category-details">
+              Score: ${categoryData.score} | Contribution: ${categoryData.contribution.toFixed(3)}<br>
+              ${categoryData.reasoning}
+            </div>
+          </div>`;
+        }
+        return '';
+      }).join('');
     }
+
+    // Create a simplified analysis text for backward compatibility
+    const analysisText = `Career Level Index (CLI) = ${formattedCLI}
+
+${explanation}
+
+Category Analysis:
+${Object.entries(parsedResponse.category_analysis || {}).map(([key, data]) => {
+  return `${key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}: Score ${data.score} (${data.reasoning})`;
+}).join('\n')}
+
+Mathematical Calculation:
+Raw Score: ${parsedResponse.cli_result.raw_score}
+Final CLI: ${formattedCLI}`;
 
     const finalResponse = {
       analysis: analysisText,
-      cli: cliValue,
+      cli: formattedCLI,
       explanation: explanation,
-      categoryBreakdown: categoryBreakdown
+      categoryBreakdown: categoryBreakdown,
+      jsonData: parsedResponse // Include full JSON for future use
     };
 
     console.log("Sending final CLI response to client");
@@ -537,6 +560,11 @@ ${prompt}`;
     handleApiError(error, res);
   }
 });
+
+
+
+
+
 
 
 // Endpoint for Skill Mastery Index (SMI) analysis
