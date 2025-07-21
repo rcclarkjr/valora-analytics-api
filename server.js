@@ -38,9 +38,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']
 }));
 
+// THE ONE LINE TO SWITCH AIs - Change true/false to switch everything
+const USE_CLAUDE = true; // true = Claude Opus, false = OpenAI GPT-4
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 // ====================
 // UTILITY FUNCTIONS
@@ -135,8 +137,139 @@ function roundSMIUp(value) {
   return Math.round(increments * 100) / 100;
 }
 
+// ====================
+// UNIVERSAL AI CALLER FUNCTIONS
+// ====================
 
+// Main function - automatically routes to Claude or OpenAI based on USE_CLAUDE flag
+async function callAI(messages, maxTokens = 1000, systemContent = "", useJSON = false) {
+  if (USE_CLAUDE) {
+    return await callClaudeAPI(messages, maxTokens, systemContent, useJSON);
+  } else {
+    return await callOpenAIAPI(messages, maxTokens, systemContent, useJSON);
+  }
+}
 
+// Claude Opus implementation
+async function callClaudeAPI(messages, maxTokens, systemContent, useJSON) {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error("Anthropic API key not found");
+  }
+
+  const anthropicMessages = [];
+  let systemPrompt = systemContent;
+  
+  // Convert OpenAI format to Claude format
+  messages.forEach(msg => {
+    if (msg.role === "system") {
+      systemPrompt = msg.content;
+    } else if (msg.role === "user") {
+      if (Array.isArray(msg.content)) {
+        // Handle mixed content (text + images)
+        const content = msg.content.map(item => {
+          if (item.type === "text") {
+            return { type: "text", text: item.text };
+          } else if (item.type === "image_url") {
+            const base64Data = item.image_url.url.replace(/^data:image\/[^;]+;base64,/, '');
+            return {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: "image/jpeg",
+                data: base64Data
+              }
+            };
+          }
+          return item;
+        });
+        anthropicMessages.push({ role: "user", content });
+      } else {
+        anthropicMessages.push({ role: "user", content: [{ type: "text", text: msg.content }] });
+      }
+    }
+  });
+
+  const requestBody = {
+    model: "claude-3-opus-20240229",
+    max_tokens: maxTokens,
+    messages: anthropicMessages
+  };
+
+  if (systemPrompt) {
+    requestBody.system = systemPrompt;
+  }
+
+  const response = await axios.post(
+    "https://api.anthropic.com/v1/messages",
+    requestBody,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01"
+      }
+    }
+  );
+
+  const responseText = response.data.content[0].text;
+  
+  // Handle JSON responses
+  if (useJSON) {
+    try {
+      return JSON.parse(responseText);
+    } catch (parseError) {
+      throw new Error(`Claude returned invalid JSON: ${responseText}`);
+    }
+  }
+  
+  return responseText;
+}
+
+// OpenAI implementation (your existing logic)
+async function callOpenAIAPI(messages, maxTokens, systemContent, useJSON) {
+  if (!OPENAI_API_KEY) {
+    throw new Error("OpenAI API key not found");
+  }
+
+  // Add system message if provided
+  const finalMessages = systemContent 
+    ? [{ role: "system", content: systemContent }, ...messages]
+    : messages;
+
+  const requestBody = {
+    model: "gpt-4-turbo",
+    messages: finalMessages,
+    max_tokens: maxTokens
+  };
+
+  if (useJSON) {
+    requestBody.response_format = { type: "json_object" };
+  }
+
+  const response = await axios.post(
+    "https://api.openai.com/v1/chat/completions",
+    requestBody,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`
+      }
+    }
+  );
+
+  const responseText = response.data.choices[0]?.message?.content || "";
+  
+  // Handle JSON responses
+  if (useJSON) {
+    try {
+      return JSON.parse(responseText);
+    } catch (parseError) {
+      throw new Error(`OpenAI returned invalid JSON: ${responseText}`);
+    }
+  }
+  
+  return responseText;
+}
 
 // ====================
 // API ROUTES
@@ -168,11 +301,6 @@ app.get("/api/records/:id/full-image", (req, res) => {
     res.status(500).json({ error: "Failed to serve image" });
   }
 });
-
-
-
-
-
 
 // Generic endpoint for serving prompts - more maintainable approach
 app.get("/prompts/:calculatorType", (req, res) => {
@@ -234,8 +362,6 @@ app.get("/PromptAnalyzeArt.txt", (req, res) => {
   }
 });
 
-
-
 // =============== ANALYSIS ENDPOINTS ===============
 
 // Endpoint for Representational Index (RI) analysis
@@ -244,37 +370,23 @@ app.post("/analyze-ri", async (req, res) => {
     console.log("Received RI analyze request");
     const { prompt, image, artTitle, artistName } = req.body;
 
-    if (!prompt || !image || !OPENAI_API_KEY) {
+    if (!prompt || !image || (!ANTHROPIC_API_KEY && !OPENAI_API_KEY)) {
       return res.status(400).json({ error: { message: "Missing prompt, image, or API key" } });
     }
 
     const finalPrompt = `Title: "${artTitle}"\nArtist: "${artistName}"\n\n${prompt}`;
 
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
+    const messages = [
       {
-        model: "gpt-4-turbo",
-        messages: [
-          { role: "system", content: prompt },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: finalPrompt },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
-            ]
-          }
-        ],
-        max_tokens: 1000
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${OPENAI_API_KEY}`
-        }
+        role: "user",
+        content: [
+          { type: "text", text: finalPrompt },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+        ]
       }
-    );
+    ];
 
-    const analysisText = response.data.choices[0]?.message?.content || "";
+    const analysisText = await callAI(messages, 1000, prompt);
 
     // Extract the RI value using regex
     const riRegex = /Representational\s+Index\s*\(?RI\)?\s*=\s*(\d+)|\bRI\s*=\s*(\d+)/i;
@@ -377,14 +489,6 @@ ${explanationText}`;
   }
 });
 
-
-
-
-
-
-
-
-
 // Endpoint for Career Level Index (CLI) analysis
 app.post("/analyze-cli", async (req, res) => {
   try {
@@ -401,8 +505,8 @@ app.post("/analyze-cli", async (req, res) => {
       return res.status(400).json({ error: { message: "Artist resume is required" } });
     }
 
-    if (!OPENAI_API_KEY) {
-      console.log("Missing OpenAI API key");
+    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+      console.log("Missing API key");
       return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
     }
 
@@ -419,55 +523,18 @@ ${artistResume}
 
 ${prompt}`;
 
-    console.log("Sending request to OpenAI API for CLI analysis");
-    
-    // Send request to OpenAI API with JSON format request
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: "gpt-4-turbo",
-        response_format: { type: "json_object" },
-        messages: [
-          { 
-            role: "system", 
-            content: "You are an expert art career analyst specializing in evaluating artists' professional achievements. Your task is to analyze the provided artist's resume and calculate an accurate CLI (Career Level Index) value between 1.00 and 5.00 based on the specified calculation framework. You must respond with valid JSON only, using the exact structure specified in the prompt." 
-          },
-          { 
-            role: "user", 
-            content: finalPrompt
-          }
-        ],
-        max_tokens: 1500
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${OPENAI_API_KEY}`
-        }
+    console.log("Sending request to AI for CLI analysis");
+
+    const messages = [
+      { 
+        role: "user", 
+        content: finalPrompt
       }
-    );
+    ];
 
-    console.log("Received response from OpenAI API for CLI");
-    
-    if (!response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
-      console.log("Invalid response format from OpenAI:", JSON.stringify(response.data));
-      return res.status(500).json({ error: { message: "Invalid response from OpenAI API" } });
-    }
+    const systemContent = "You are an expert art career analyst specializing in evaluating artists' professional achievements. Your task is to analyze the provided artist's resume and calculate an accurate CLI (Career Level Index) value between 1.00 and 5.00 based on the specified calculation framework. You must respond with valid JSON only, using the exact structure specified in the prompt.";
 
-    let responseContent = response.data.choices[0].message.content;
-    console.log("CLI Analysis JSON:", responseContent);
-
-    // Parse JSON response
-    let parsedResponse;
-    try {
-      parsedResponse = JSON.parse(responseContent);
-    } catch (parseError) {
-      console.log("Failed to parse JSON response:", parseError);
-      console.log("Raw response content:", responseContent);
-      return res.status(500).json({ 
-        error: { message: "AI returned invalid JSON response" } 
-      });
-    }
+    const parsedResponse = await callAI(messages, 1500, systemContent, true); // true = JSON mode
 
     // Validate required fields in JSON response
     if (!parsedResponse.cli_result || typeof parsedResponse.cli_result.cli_value !== 'number') {
@@ -499,7 +566,7 @@ ${prompt}`;
         error: { message: "AI response missing explanation" } 
       });
     }
-    
+
     console.log("Extracted explanation:", explanation);
 
     // Convert category analysis to HTML format for display
@@ -561,12 +628,6 @@ Final CLI: ${formattedCLI}`;
   }
 });
 
-
-
-
-
-
-
 // Endpoint for Skill Mastery Index (SMI) analysis
 app.post("/analyze-smi", async (req, res) => {
   try {
@@ -583,8 +644,8 @@ app.post("/analyze-smi", async (req, res) => {
       return res.status(400).json({ error: { message: "Image is required" } });
     }
 
-    if (!OPENAI_API_KEY) {
-      console.log("Missing OpenAI API key");
+    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+      console.log("Missing API key");
       return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
     }
 
@@ -598,44 +659,29 @@ Artist: "${artistName}"
 
 ${prompt}`;
 
-    console.log("Sending request to OpenAI API for SMI analysis");
-    
-    // Send request to OpenAI API
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: "gpt-4-turbo",
-        messages: [
-          { 
-            role: "system", 
-            content: "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Your task is to analyze the provided artwork and calculate an accurate SMI (Skill Mastery Index) value between 1.00 and 5.00 based on the specified calculation framework. Provide detailed analysis following the prompt instructions exactly." 
-          },
-          { 
-            role: "user", 
-            content: [
-              { type: "text", text: finalPrompt },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
-            ]
-          }
-        ],
-        max_tokens: 2000
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${OPENAI_API_KEY}`
-        }
-      }
-    );
+    console.log("Sending request to AI for SMI analysis");
 
-    console.log("Received response from OpenAI API for SMI");
-    
-    if (!response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
-      console.log("Invalid response format from OpenAI:", JSON.stringify(response.data));
-      return res.status(500).json({ error: { message: "Invalid response from OpenAI API" } });
+    const messages = [
+      { 
+        role: "user", 
+        content: [
+          { type: "text", text: finalPrompt },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+        ]
+      }
+    ];
+
+    const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Your task is to analyze the provided artwork and calculate an accurate SMI (Skill Mastery Index) value between 1.00 and 5.00 based on the specified calculation framework. Provide detailed analysis following the prompt instructions exactly.";
+
+    let analysisText;
+    try {
+      analysisText = await callAI(messages, 2000, systemContent);
+      console.log("SMI Analysis completed successfully");
+    } catch (error) {
+      console.log("AI request failed:", error.message);
+      return res.status(500).json({ error: { message: "AI analysis failed: " + error.message } });
     }
 
-    let analysisText = response.data.choices[0].message.content;
     console.log("SMI Analysis text:", analysisText);
 
     // Extract category scores
@@ -711,7 +757,6 @@ ${prompt}`;
 });
 
 // Endpoint for combined SMI and RI analysis
-// Replace the entire analyze-combined endpoint with this improved version
 app.post("/analyze-combined", async (req, res) => {
   try {
     console.log("Received combined SMI and RI analyze request");
@@ -722,8 +767,8 @@ app.post("/analyze-combined", async (req, res) => {
       return res.status(400).json({ error: { message: "Image is required" } });
     }
 
-    if (!OPENAI_API_KEY) {
-      console.log("Missing OpenAI API key");
+    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+      console.log("Missing API key");
       return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
     }
 
@@ -731,94 +776,68 @@ app.post("/analyze-combined", async (req, res) => {
     console.log(`Processing combined analysis for artwork: "${artTitle}" by ${artistName}`);
     
     // First, we'll get the RI value using a simplified approach
-    console.log("Sending request to OpenAI API for simplified RI analysis");
+    console.log("Sending request to AI for simplified RI analysis");
     
-    const riResponse = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: "gpt-4-turbo",
-        messages: [
-          { 
-            role: "system", 
-            content: "You are an expert art analyst. Examine this artwork and determine its Representational Index (RI) from 1-5 based on how representational versus abstract it is. 1=Non-Objective (Pure Abstraction), 2=Abstract, 3=Stylized Representation, 4=Representational Realism, 5=Hyper-Realism. Respond with ONLY a number from 1 to 5, no explanation." 
-          },
-          { 
-            role: "user", 
-            content: [
-              { type: "text", text: `What is the RI value (1-5) for this artwork titled "${artTitle}" by ${artistName}?` },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
-            ]
-          }
-        ],
-        max_tokens: 10
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${OPENAI_API_KEY}`
-        }
+    const riMessages = [
+      { 
+        role: "user", 
+        content: [
+          { type: "text", text: `What is the RI value (1-5) for this artwork titled "${artTitle}" by ${artistName}?` },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+        ]
       }
-    );
+    ];
 
-    console.log("Received response from OpenAI API for RI");
-    
-    if (!riResponse.data || !riResponse.data.choices || !riResponse.data.choices[0] || !riResponse.data.choices[0].message) {
-      console.log("Invalid response format from OpenAI for RI");
-      return res.status(500).json({ error: { message: "Invalid response from OpenAI API for RI analysis" } });
+    const riSystemContent = "You are an expert art analyst. Examine this artwork and determine its Representational Index (RI) from 1-5 based on how representational versus abstract it is. 1=Non-Objective (Pure Abstraction), 2=Abstract, 3=Stylized Representation, 4=Representational Realism, 5=Hyper-Realism. Respond with ONLY a number from 1 to 5, no explanation.";
+
+    let riAnalysisText;
+    try {
+      riAnalysisText = await callAI(riMessages, 10, riSystemContent);
+      console.log("Received response from AI for RI");
+    } catch (error) {
+      console.log("Invalid response from AI for RI");
+      return res.status(500).json({ error: { message: "Invalid response from AI for RI analysis" } });
     }
 
-    let riAnalysisText = riResponse.data.choices[0].message.content.trim();
+    riAnalysisText = riAnalysisText.trim();
     console.log("RI response:", riAnalysisText);
     
     // Extract the RI value - should be an integer
-	let riValue = "3"; // Changed from "3.0"
-	const numberMatch = riAnalysisText.match(/\b([1-5])\b/);
+    let riValue = "3"; // Changed from "3.0"
+    const numberMatch = riAnalysisText.match(/\b([1-5])\b/);
 
-	if (numberMatch && numberMatch[1]) {
- 	 riValue = numberMatch[1]; // Removed + ".0"
-  	console.log("Extracted RI value:", riValue);
-	} else {
-  	console.log("Could not extract RI value from simplified response");
-	}
-
-    // Now, for the SMI value, we'll use a simplified approach as well
-    console.log("Sending request to OpenAI API for simplified SMI analysis");
-    
-    const smiResponse = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: "gpt-4-turbo",
-        messages: [
-          { 
-            role: "system", 
-            content: "You are an expert fine art analyst specialized in evaluating artistic skill. Rate this artwork on a Skill Mastery Index (SMI) from 1.00 to 5.00. Consider: Composition (20%), Color & Light (20%), Technical Skill (25%), Originality (20%), and Emotional Depth (15%). Respond with ONLY a decimal number between 1.00 and 5.00, rounded to the nearest 0.25 (e.g. 3.25, 4.50, etc.). No explanation." 
-          },
-          { 
-            role: "user", 
-            content: [
-              { type: "text", text: `What is the SMI value (1.00-5.00) for this artwork titled "${artTitle}" by ${artistName}?` },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
-            ]
-          }
-        ],
-        max_tokens: 10
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${OPENAI_API_KEY}`
-        }
-      }
-    );
-
-    console.log("Received response from OpenAI API for SMI");
-    
-    if (!smiResponse.data || !smiResponse.data.choices || !smiResponse.data.choices[0] || !smiResponse.data.choices[0].message) {
-      console.log("Invalid response format from OpenAI for SMI");
-      return res.status(500).json({ error: { message: "Invalid response from OpenAI API for SMI analysis" } });
+    if (numberMatch && numberMatch[1]) {
+      riValue = numberMatch[1]; // Removed + ".0"
+      console.log("Extracted RI value:", riValue);
+    } else {
+      console.log("Could not extract RI value from simplified response");
     }
 
-    let smiAnalysisText = smiResponse.data.choices[0].message.content.trim();
+    // Now, for the SMI value, we'll use a simplified approach as well
+    console.log("Sending request to AI for simplified SMI analysis");
+    
+    const smiMessages = [
+      { 
+        role: "user", 
+        content: [
+          { type: "text", text: `What is the SMI value (1.00-5.00) for this artwork titled "${artTitle}" by ${artistName}?` },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+        ]
+      }
+    ];
+
+    const smiSystemContent = "You are an expert fine art analyst specialized in evaluating artistic skill. Rate this artwork on a Skill Mastery Index (SMI) from 1.00 to 5.00. Consider: Composition (20%), Color & Light (20%), Technical Skill (25%), Originality (20%), and Emotional Depth (15%). Respond with ONLY a decimal number between 1.00 and 5.00, rounded to the nearest 0.25 (e.g. 3.25, 4.50, etc.). No explanation.";
+
+    let smiAnalysisText;
+    try {
+      smiAnalysisText = await callAI(smiMessages, 10, smiSystemContent);
+      console.log("Received response from AI for SMI");
+    } catch (error) {
+      console.log("Invalid response from AI for SMI");
+      return res.status(500).json({ error: { message: "Invalid response from AI for SMI analysis" } });
+    }
+
+    smiAnalysisText = smiAnalysisText.trim();
     console.log("SMI response:", smiAnalysisText);
     
     // Extract the SMI value - should be a decimal number
@@ -854,7 +873,7 @@ app.post("/analyze-combined", async (req, res) => {
     console.error("Error in combined endpoint:", error);
     
     if (error.response) {
-      console.error("OpenAI API error details:", error.response.data);
+      console.error("AI API error details:", error.response.data);
     }
     
     res.status(500).json({ 
@@ -864,9 +883,6 @@ app.post("/analyze-combined", async (req, res) => {
     });
   }
 });
-
-
-
 
 // NEW ENDPOINT: SMI 33-Factor Analysis with Hardwired Prompt
 app.post("/analyze-smi-33-factors", async (req, res) => {
@@ -879,8 +895,8 @@ app.post("/analyze-smi-33-factors", async (req, res) => {
       return res.status(400).json({ error: { message: "Image is required" } });
     }
 
-    if (!OPENAI_API_KEY) {
-      console.log("Missing OpenAI API key");
+    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+      console.log("Missing API key");
       return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
     }
 
@@ -1211,43 +1227,29 @@ Artist: "${artistName}"
 
 ${smi33FactorsPrompt}`;
 
-    console.log("Sending request to OpenAI API for SMI 33-factors analysis");
+    console.log("Sending request to AI for SMI 33-factors analysis");
     
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: "gpt-4-turbo",
-        messages: [
-          { 
-            role: "system", 
-            content: "You are an expert fine art analyst. Follow the instructions exactly and provide factor scores in the precise format requested." 
-          },
-          { 
-            role: "user", 
-            content: [
-              { type: "text", text: finalPrompt },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
-            ]
-          }
-        ],
-        max_tokens: 2000
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${OPENAI_API_KEY}`
-        }
+    const messages = [
+      { 
+        role: "user", 
+        content: [
+          { type: "text", text: finalPrompt },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+        ]
       }
-    );
+    ];
 
-    console.log("Received response from OpenAI API for SMI 33-factors");
-    
-    if (!response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
-      console.log("Invalid response format from OpenAI:", JSON.stringify(response.data));
-      return res.status(500).json({ error: { message: "Invalid response from OpenAI API" } });
+    const systemContent = "You are an expert fine art analyst. Follow the instructions exactly and provide factor scores in the precise format requested.";
+
+    let analysisText;
+    try {
+      analysisText = await callAI(messages, 2000, systemContent);
+      console.log("SMI 33-factors Analysis completed successfully");
+    } catch (error) {
+      console.log("AI request failed:", error.message);
+      return res.status(500).json({ error: { message: "AI analysis failed: " + error.message } });
     }
 
-    let analysisText = response.data.choices[0].message.content;
     console.log("SMI 33-factors Analysis text length:", analysisText.length);
 
     // Parse the structured factor scores
@@ -1341,10 +1343,6 @@ function parse33FactorScores(analysisText) {
   };
 }
 
-
-
-
-
 // NEW HELPER FUNCTION: Parse the factors CSV data to extract individual scores
 function parseFactorsCSV(csvText) {
   if (!csvText) {
@@ -1404,15 +1402,6 @@ function parseFactorsCSV(csvText) {
   console.log(`Successfully parsed ${Object.keys(factors).length} factors from CSV`);
   return factors;
 }
-
-
-
-
-
-
-
-
-
 
 // Error handler function
 function handleApiError(error, res) {
@@ -1491,10 +1480,6 @@ return data;
   }
 }
 
-
-
-
-
 function writeDatabase(data) {
     try {
         console.log(`Writing to database: ${DB_PATH}, records: ${data.records.length}`);
@@ -1514,9 +1499,6 @@ function writeDatabase(data) {
         throw new Error(`Failed to write database: ${error.message}`);
     }
 }
-
-
-
 
 // ====================================================
 // Calculate APPSI Function
@@ -1540,9 +1522,6 @@ function calculateAPPSI(size, ppsi, coefficients) {
   return predictedPPSIStandard * (1 + residualPercentage);
 }
 
-
-
-
 // ====================================================
 // COMPLETE REPLACEMENT: Update All APPSI Function
 // ====================================================
@@ -1554,7 +1533,6 @@ function updateAllAPPSI(data) {
   });
   return data;
 }
-
 
 // ====================================================
 // Calculate R-Squared Function
@@ -1574,22 +1552,9 @@ function calculateRSquared(points, constant, exponent) {
   return 1 - (sumResidualSquared / sumTotalSquared);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 // ====================================================
 // DATA ACCESS ENDPOINTS
 // ====================================================
-
 
 app.post('/api/admin/create-backup', async (req, res) => {
   try {
@@ -1659,9 +1624,6 @@ app.post('/api/admin/create-backup', async (req, res) => {
   }
 });
 
-
-
-
 // GET all records
 app.get("/api/records", (req, res) => {
   try {
@@ -1678,15 +1640,6 @@ app.get("/api/records", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-
-
-
-
-
-
-
-
 
 // GET statistical information
 app.get("/api/stats", (req, res) => {
@@ -1730,10 +1683,6 @@ app.get("/api/stats", (req, res) => {
   }
 });
 
-
-
-
-
 app.patch("/api/records/:id/image", (req, res) => {
     console.log(`PATCH /api/records/${req.params.id}/image called`);
     try {
@@ -1762,9 +1711,6 @@ app.patch("/api/records/:id/image", (req, res) => {
     }
 });
 
-
-
-
 app.get("/api/records/:id/image", (req, res) => {
   try {
     const recordId = parseInt(req.params.id);
@@ -1791,9 +1737,6 @@ app.get("/api/records/:id/image", (req, res) => {
   }
 });
 
-
-
-
 // GET single record by ID
 app.get("/api/records/:id", (req, res) => {
   try {
@@ -1815,14 +1758,6 @@ app.get("/api/records/:id", (req, res) => {
   }
 });
 
-
-
-
-
-
-
-
-
 // GET all metadata (coefficients + medium multipliers)
 app.get("/api/coefficients", (req, res) => {
   try {
@@ -1842,10 +1777,6 @@ app.get("/api/coefficients", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-
-
-
 
 app.post('/api/admin/replace-database', async (req, res) => {
   try {
@@ -2011,11 +1942,6 @@ app.post('/api/admin/replace-database', async (req, res) => {
   }
 });
 
-
-
-
-// Add BOTH of these routes right after the closing }); of replace-database
-
 // Pagination endpoint
 app.get('/api/records/page/:pageNumber', (req, res) => {
   try {
@@ -2055,9 +1981,6 @@ app.get('/api/records/page/:pageNumber', (req, res) => {
   }
 });
 
-
-
-
 app.post('/api/records/batch-delete', (req, res) => {
   try {
     const { recordIds } = req.body;
@@ -2085,9 +2008,6 @@ app.post('/api/records/batch-delete', (req, res) => {
   }
 });
 
-
-
-
 app.delete("/api/records/:id", (req, res) => {
   try {
     const recordId = parseInt(req.params.id);
@@ -2111,11 +2031,6 @@ app.delete("/api/records/:id", (req, res) => {
     res.status(500).json({ error: "Failed to delete record." });
   }
 });
-
-
-
-
-
 
 app.get("/api/coefficients/calculate", (req, res) => {
   try {
@@ -2194,8 +2109,6 @@ app.get("/api/coefficients/calculate", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-
 
 // Updated API endpoints with full artOnlyPrice and new APPSI calculation support
 
@@ -2530,10 +2443,6 @@ app.post("/api/coefficients", (req, res) => {
     }
 });
 
-
-
-
-
 app.get("/api/sizeyourprice", (req, res) => {
   try {
     const data = readDatabase();
@@ -2555,46 +2464,31 @@ app.get("/api/sizeyourprice", (req, res) => {
   }
 });
 
-
-
-
 // Endpoint for general art analysis with refinement recommendations
 app.post("/analyze-art", async (req, res) => {
   try {
     console.log("Received art analysis request");
     const { prompt, image, artTitle, artistName } = req.body;
 
-    if (!prompt || !image || !OPENAI_API_KEY) {
+    if (!prompt || !image || (!ANTHROPIC_API_KEY && !OPENAI_API_KEY)) {
       return res.status(400).json({ error: { message: "Missing prompt, image, or API key" } });
     }
 
     const finalPrompt = `Title: "${artTitle}"\nArtist: "${artistName}"\n\n${prompt}`;
 
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
+    const messages = [
       {
-        model: "gpt-4-turbo",
-        messages: [
-          { role: "system", content: "You are an expert fine art analyst specializing in providing constructive feedback and refinement recommendations for artworks." },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: finalPrompt },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
-            ]
-          }
-        ],
-        max_tokens: 2000
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${OPENAI_API_KEY}`
-        }
+        role: "user",
+        content: [
+          { type: "text", text: finalPrompt },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+        ]
       }
-    );
+    ];
 
-    const analysisText = response.data.choices[0]?.message?.content || "";
+    const systemContent = "You are an expert fine art analyst specializing in providing constructive feedback and refinement recommendations for artworks.";
+
+    const analysisText = await callAI(messages, 2000, systemContent);
 
     const finalResponse = {
       analysis: analysisText
@@ -2610,16 +2504,11 @@ app.post("/analyze-art", async (req, res) => {
   }
 });
 
-
-
 app.post("/api/valuation", async (req, res) => {
   try {
     console.log("Starting valuation process");
 
-
-const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist, subjectDescription, height, width } = req.body;
-
-
+    const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist, subjectDescription, height, width } = req.body;
 
     console.log("Valuation inputs:", {
       smi, ri, cli, size,
@@ -2645,48 +2534,17 @@ const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist
         throw new Error("Prompt for ART_ANALYSIS.txt not found or too short");
       }
 
-
-
-
-
-
-
-      const openaiResponse = await axios.post(
-        "https://api.openai.com/v1/chat/completions",
+      const messages = [
         {
-          model: "gpt-4-turbo",
-          messages: [
-            { role: "system", content: prompt },
-            {
-              role: "user",
-              content: [
-
-
-{ type: "text", text: subjectDescription ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"` : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}` },
-
-
-                { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subjectImageBase64}` } }
-              ]
-            }
-          ],
-
-
-
-
-
-
-
-
-          max_tokens: 300
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
-          }
+          role: "user",
+          content: [
+            { type: "text", text: subjectDescription ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"` : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}` },
+            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subjectImageBase64}` } }
+          ]
         }
-      );
-      aiAnalysis = openaiResponse.data.choices[0]?.message?.content || "";
+      ];
+
+      aiAnalysis = await callAI(messages, 300, prompt);
       console.log("Analysis completed successfully");
     } catch (error) {
       console.error("Analysis failed:", error.message);
@@ -2775,25 +2633,21 @@ const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist
     const lssi = Math.log(subject.SSI);
     const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
 
-
-
     // Step 6: Select top 10 comps with enhanced data and calculate adjustments
-const topComps = enriched.slice(0, 10).map(r => ({
-  id: r.id,
-  appsi: r.appsi,
-  smi: r.smi,
-  cli: r.cli,
-  ri: r.ri,
-  medium: r.medium,
-  artistName: r.artistName,
-  title: r.title,
-  height: r.height,
-  width: r.width,
-  price: r.price,
-  thumbnailBase64: r.thumbnailBase64
-}));
-
-
+    const topComps = enriched.slice(0, 10).map(r => ({
+      id: r.id,
+      appsi: r.appsi,
+      smi: r.smi,
+      cli: r.cli,
+      ri: r.ri,
+      medium: r.medium,
+      artistName: r.artistName,
+      title: r.title,
+      height: r.height,
+      width: r.width,
+      price: r.price,
+      thumbnailBase64: r.thumbnailBase64
+    }));
 
     // Calculate sizeAdjFactor (from existing code)
     subject.predictAt200 = coefficients.constant * Math.pow(Math.log(200), coefficients.exponent);
@@ -2818,12 +2672,6 @@ const topComps = enriched.slice(0, 10).map(r => ({
   }
 });
 
-
-
-
-
-
-
 app.get('/api/debug-export', (req, res) => {
   try {
     const data = readDatabase();
@@ -2842,9 +2690,6 @@ app.get('/api/debug-export', (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-
-
 
 app.post("/api/compare-subject-comp", async (req, res) => {
   try {
@@ -2867,8 +2712,8 @@ app.post("/api/compare-subject-comp", async (req, res) => {
       return res.status(400).json({ error: { message: "Comp must include imageBase64" } });
     }
 
-    if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: { message: "Missing OpenAI API Key" } });
+    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+      return res.status(500).json({ error: { message: "Missing API Key" } });
     }
 
     console.log(`Comparing Subject to Comp ID ${comp.recordId}`);
@@ -2910,43 +2755,32 @@ Criterion 5: Yes or No
 Criterion 6: Yes or No
 `;
 
-    // Send request to OpenAI
-    console.log("Sending request to OpenAI for comparison");
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
+    // Send request to AI
+    console.log("Sending request to AI for comparison");
+    
+    const messages = [
       {
-        model: "gpt-4-turbo",
-        messages: [
-          { role: "system", content: "You are a strict fine art evaluator following exact instructions." },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: comparisonPrompt },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subject.imageBase64}` } },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${comp.imageBase64}` } }
-            ]
-          }
-        ],
-        max_tokens: 200,
-        temperature: 0.0 // strict and deterministic
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${OPENAI_API_KEY}`
-        }
+        role: "user",
+        content: [
+          { type: "text", text: comparisonPrompt },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subject.imageBase64}` } },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${comp.imageBase64}` } }
+        ]
       }
-    );
+    ];
 
-    const chatReply = response.data.choices[0].message.content;
+    const systemContent = "You are a strict fine art evaluator following exact instructions.";
+
+    const chatReply = await callAI(messages, 200, systemContent);
+
     console.log(`Received comparison reply for Comp ID ${comp.recordId}:`, chatReply.substring(0, 200));
 
     // Parse results
     const yesNoResults = chatReply.match(/Criterion\s*\d+:\s*(Yes|No)/gi);
 
     if (!yesNoResults || yesNoResults.length !== 6) {
-      console.error("Invalid format received from ChatGPT comparison");
-      return res.status(500).json({ error: { message: "Invalid response format from ChatGPT" } });
+      console.error("Invalid format received from AI comparison");
+      return res.status(500).json({ error: { message: "Invalid response format from AI" } });
     }
 
     // Define criterion weights
@@ -2987,8 +2821,6 @@ Criterion 6: Yes or No
   }
 });
 
-
-
 // ✅ NEW ENDPOINT: Generate Narrative Explanation
 app.post("/api/generate-narrative", async (req, res) => {
   try {
@@ -3000,9 +2832,8 @@ app.post("/api/generate-narrative", async (req, res) => {
       });
     }
 
-    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-    if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: "Missing OpenAI API Key" });
+    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+      return res.status(500).json({ error: "Missing API Key" });
     }
 
     // Format input summary for GPT
@@ -3038,27 +2869,15 @@ Write one professional paragraph that:
 - Do NOT include any headings — return just the paragraph text.
 `;
 
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: "gpt-4-turbo",
-        messages: [
-          { role: "system", content: "You are a fine art valuation assistant." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 400
-      },
-      {
-        headers: {
-          "Authorization": `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
+    const messages = [
+      { role: "user", content: prompt }
+    ];
 
-    const paragraph = response.data.choices[0].message.content.trim();
-    res.json({ narrative: paragraph });
+    const systemContent = "You are a fine art valuation assistant.";
+
+    const paragraph = await callAI(messages, 400, systemContent);
+    
+    res.json({ narrative: paragraph.trim() });
 
   } catch (error) {
     console.error("Narrative generation error:", error);
@@ -3067,9 +2886,6 @@ Write one professional paragraph that:
     });
   }
 });
-
-
-
 
 app.get("/api/debug-database", (req, res) => {
   try {
@@ -3097,8 +2913,6 @@ app.get("/api/debug-database", (req, res) => {
     });
   }
 });
-
-
 
 // Add this endpoint to server.js for record debugging
 app.get("/api/debug-record/:id", (req, res) => {
@@ -3138,7 +2952,6 @@ app.get("/api/debug-record/:id", (req, res) => {
   }
 });
 
-
 // ✅ DEBUG: Scan database for legacy image fields
 app.get("/api/debug-scan-images", (req, res) => {
   try {
@@ -3169,7 +2982,6 @@ app.get("/api/debug-scan-images", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 app.post("/api/debug-clean-images", (req, res) => {
   try {
@@ -3210,8 +3022,6 @@ app.post("/api/debug-clean-images", (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-
 
 app.post("/api/records/calculate-lssi", (req, res) => {
     try {
@@ -3254,7 +3064,6 @@ app.post("/api/records/calculate-lssi", (req, res) => {
     }
 });
 
-
 app.get('/download/:filename', (req, res) => {
   const { filename } = req.params;
   const filePath = path.join('/mnt/data', filename);
@@ -3278,8 +3087,6 @@ app.get('/download/:filename', (req, res) => {
     res.status(500).send('Error downloading file.');
   });
 });
-
-
 
 app.get('/api/metadata', async (req, res) => {
   try {
@@ -3314,7 +3121,6 @@ app.get('/api/metadata', async (req, res) => {
     });
   }
 });
-
 
 app.post('/api/metadata/update', async (req, res) => {
   try {
@@ -3357,9 +3163,6 @@ app.post('/api/metadata/update', async (req, res) => {
   }
 });
 
-
-
-
 app.get('/api/health', (req, res) => {
   try {
     const stats = fs.statSync(DB_PATH);
@@ -3381,10 +3184,6 @@ app.get('/api/health', (req, res) => {
   }
 });
 
-
-
-
-
 // Add this to your backend codebase (server.js or new file migrate.js)
 
 // UPDATE THIS PATH to match where your JSON file is mounted
@@ -3392,28 +3191,6 @@ const DATABASE_FILE_PATH = '/mnt/data/art_database.json';  // Common mount path
 // OR it might be something like:
 // const DATABASE_FILE_PATH = '/app/data/art_database.json';
 // const DATABASE_FILE_PATH = process.env.DB_PATH || './art_database.json';
-
-function calculateArtOnlyPrice(price, framed, frameCoefficients) {
-    if (!price || price <= 0) return 0;
-    
-    let framePercent = 0;
-    
-    if (framed === 'Y' && frameCoefficients && 
-        frameCoefficients['frame-constant'] !== undefined && 
-        frameCoefficients['frame-exponent'] !== undefined) {
-        
-        framePercent = frameCoefficients['frame-constant'] * 
-                      Math.pow(price, frameCoefficients['frame-exponent']);
-        
-        // Clamp between 0 and 1 (0% to 100%)
-        framePercent = Math.max(0, Math.min(1, framePercent));
-    }
-    
-    const frameValue = price * framePercent;
-    const artOnlyPrice = price - frameValue;
-    
-    return Math.max(0, artOnlyPrice);
-}
 
 function migrateAddArtOnlyPrice(databaseData) {
     console.log('Starting migration: Adding artOnlyPrice field...');
@@ -3452,7 +3229,7 @@ function migrateAddArtOnlyPrice(databaseData) {
         
         // Log some examples
         if (processed <= 5) {
-            console.log(`Record ${record.id}: price=$${record.price}, framed=${record.framed}, artOnlyPrice=$${record.artOnlyPrice}`);
+            console.log(`Record ${record.id}: price=${record.price}, framed=${record.framed}, artOnlyPrice=${record.artOnlyPrice}`);
         }
     });
     
@@ -3573,10 +3350,6 @@ runMigrationCLI();
 
 module.exports = { migrateAddArtOnlyPrice, calculateArtOnlyPrice };
 
-
-
-
-
 // Serve static files from the "public" folder
 app.use(express.static("public"));
 
@@ -3585,8 +3358,3 @@ app.use(express.static("public"));
 // ====================
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-
-
-  
-
