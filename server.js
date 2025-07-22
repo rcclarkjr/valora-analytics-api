@@ -261,7 +261,43 @@ if (useJSON) {
 }
 
 
+const parsedResponse = await callAI(messages, 1500, systemContent, true);
 
+// ADD THIS DETAILED LOGGING BLOCK:
+console.log("=== DETAILED CLI BREAKDOWN ===");
+console.log("Input Type:", parsedResponse.input_data?.input_type || "unknown");
+console.log("Final CLI Value:", parsedResponse.cli_result?.cli_value);
+console.log("Raw Score:", parsedResponse.cli_result?.raw_score);
+
+// Log each category in detail
+if (parsedResponse.category_analysis) {
+  console.log("\n--- CATEGORY ANALYSIS ---");
+  const categories = ['art_education', 'exhibitions', 'awards', 'commissions', 'collections', 'publications', 'institutional'];
+  
+  categories.forEach(category => {
+    const data = parsedResponse.category_analysis[category];
+    if (data) {
+      console.log(`${category.toUpperCase()}:`);
+      console.log(`  Score: ${data.score}`);
+      console.log(`  Contribution: ${data.contribution}`);
+      console.log(`  Reasoning: ${data.reasoning}`);
+      console.log("---");
+    }
+  });
+}
+
+// Log calculation steps
+if (parsedResponse.calculation_steps) {
+  console.log("\n--- CALCULATION VERIFICATION ---");
+  console.log("Step 1 - Contributions:", parsedResponse.calculation_steps.step1_contributions);
+  console.log("Step 2 - Raw Score:", parsedResponse.calculation_steps.step2_raw_score);
+  console.log("Step 3 - Multiplication:", parsedResponse.calculation_steps.step3_multiplication);
+  console.log("Step 4 - Final Addition:", parsedResponse.calculation_steps.step4_final_addition);
+  console.log("Validation Passed:", parsedResponse.calculation_steps.validation_passed);
+}
+console.log("=== END CLI BREAKDOWN ===\n");
+
+// Validate required fields in JSON response (existing code continues here...)
 
 
 
