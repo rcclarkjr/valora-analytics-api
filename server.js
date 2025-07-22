@@ -216,6 +216,9 @@ async function callClaudeAPI(messages, maxTokens, systemContent, useJSON) {
 
 
 
+
+
+
 // Handle JSON responses
 if (useJSON) {
   try {
@@ -224,14 +227,40 @@ if (useJSON) {
     if (responseText.includes('```json')) {
       cleanJson = responseText.replace(/```json\s*/, '').replace(/\s*```$/, '');
     }
-    return JSON.parse(cleanJson);
+    
+    // Find the JSON object - everything from first { to the matching closing }
+    const startIndex = cleanJson.indexOf('{');
+    if (startIndex === -1) {
+      throw new Error('No JSON object found in response');
+    }
+    
+    let braceCount = 0;
+    let endIndex = startIndex;
+    
+    // Find the matching closing brace
+    for (let i = startIndex; i < cleanJson.length; i++) {
+      if (cleanJson[i] === '{') braceCount++;
+      if (cleanJson[i] === '}') braceCount--;
+      if (braceCount === 0) {
+        endIndex = i;
+        break;
+      }
+    }
+    
+    // Extract just the JSON portion
+    const jsonOnly = cleanJson.substring(startIndex, endIndex + 1);
+    console.log("Extracted JSON:", jsonOnly.substring(0, 100) + "...");
+    
+    return JSON.parse(jsonOnly);
   } catch (parseError) {
     console.error("JSON parse error:", parseError);
-    console.error("Raw response:", responseText);
-    throw new Error(`Claude returned invalid JSON: ${responseText}`);
+    console.error("Raw response length:", responseText.length);
+    console.error("First 500 chars:", responseText.substring(0, 500));
+    throw new Error(`Claude returned invalid JSON: ${parseError.message}`);
   }
 }
-  
+
+
 
 
 
