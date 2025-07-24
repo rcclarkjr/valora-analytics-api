@@ -39,7 +39,7 @@ app.use(cors({
 }));
 
 // THE ONE LINE TO SWITCH AIs - Change true/false to switch everything
-const USE_CLAUDE = true; // true = Claude Opus, false = OpenAI GPT-4
+const USE_CLAUDE = false; // true = Claude Opus, false = OpenAI GPT-4
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -285,19 +285,6 @@ if (parsedResponse.category_analysis) {
     }
   });
 }
-
-// Log calculation steps
-if (parsedResponse.calculation_steps) {
-  console.log("\n--- CALCULATION VERIFICATION ---");
-  console.log("Step 1 - Contributions:", parsedResponse.calculation_steps.step1_contributions);
-  console.log("Step 2 - Raw Score:", parsedResponse.calculation_steps.step2_raw_score);
-  console.log("Step 3 - Multiplication:", parsedResponse.calculation_steps.step3_multiplication);
-  console.log("Step 4 - Final Addition:", parsedResponse.calculation_steps.step4_final_addition);
-  console.log("Validation Passed:", parsedResponse.calculation_steps.validation_passed);
-}
-console.log("=== END CLI BREAKDOWN ===\n");
-
-// Validate required fields in JSON response (existing code continues here...)
 
 
 
