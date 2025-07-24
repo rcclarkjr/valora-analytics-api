@@ -555,144 +555,208 @@ ${explanationText}`;
   }
 });
 
-// Endpoint for Career Level Index (CLI) analysis
+
+
+
+
+// ====================
+// REVISED ENDPOINT: Convert Bio to Questionnaire Only
+// ====================
 app.post("/analyze-cli", async (req, res) => {
   try {
-    console.log("Received CLI analyze request");
-    const { prompt, artistName, artistResume } = req.body;
+    console.log("Received CLI bio-to-questionnaire request");
+    const { artistName, artistResume } = req.body;
 
-    if (!prompt) {
-      console.log("Missing prompt in request");
-      return res.status(400).json({ error: { message: "Prompt is required" } });
-    }
-    
-    if (!artistResume) {
-      console.log("Missing artist resume in request");
-      return res.status(400).json({ error: { message: "Artist resume is required" } });
+    if (!artistName || !artistResume) {
+      return res.status(400).json({ 
+        error: { message: "Artist name and resume are required" } 
+      });
     }
 
     if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
-      console.log("Missing API key");
-      return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
+      return res.status(500).json({ 
+        error: { message: "Server configuration error: Missing API key" } 
+      });
     }
 
-    // Log info about the request
-    console.log(`Processing CLI request for artist: "${artistName}"`);
-    console.log(`Prompt length: ${prompt.length} characters`);
-    console.log(`Resume length: ${artistResume.length} characters`);
+    console.log(`Processing bio-to-questionnaire for artist: "${artistName}"`);
     
-    // Construct the prompt with artist name and resume
-    const finalPrompt = `Artist: "${artistName}"
+    // SIMPLIFIED PROMPT: Only asks AI to answer questionnaire
+    const questionnairePrompt = `
+Analyze the following artist's career information and answer the questionnaire by selecting the appropriate level for each category.
 
-Artist Resume/Bio:
+For each category, respond with EXACTLY one of these three options:
+- "high" for High-Profile accomplishments
+- "mid" for Mid-Profile accomplishments  
+- "none" for Low-Profile/None
+
+Categories and Criteria:
+
+1. Art Education (10%):
+   - High-Profile: MFA, BFA, or formal art school degree
+   - Mid-Profile: Art workshops, continuing education classes, or extensive self-study
+   - Low-Profile/None: No formal art training or very minimal training
+
+2. Exhibitions (25%):
+   - High-Profile: Solo exhibitions, major gallery shows, museum exhibitions
+   - Mid-Profile: Group exhibitions, local art fairs, community art centers
+   - Low-Profile/None: No exhibitions or very small local venues
+
+3. Awards & Competitions (15%):
+   - High-Profile: National or international awards, high ranking in major art competitions
+   - Mid-Profile: Regional or local awards, entry in community art contests
+   - Low-Profile/None: No awards or very small community recognitions
+
+4. Commissions (10%):
+   - High-Profile: Public art, corporate commissions, major private commissions
+   - Mid-Profile: Smaller private commissions, local business commissions
+   - Low-Profile/None: No commissions or very small personal commissions
+
+5. Collections (15%):
+   - High-Profile: Museum collections, well-known collectors, corporate collections
+   - Mid-Profile: Private collectors, small businesses, personal collections
+   - Low-Profile/None: No collections or very informal sales
+
+6. Publications (15%):
+   - High-Profile: Major magazines, newspapers, art journals, podcasts, TV features
+   - Mid-Profile: Local newspapers, community newsletters, blogs
+   - Low-Profile/None: No media coverage or very small mentions
+
+7. Institutional Interest (10%):
+   - High-Profile: Museum representation, major gallery representation, curatorial interest, secondary market sales
+   - Mid-Profile: Small gallery representation, art center affiliations
+   - Low-Profile/None: No institutional interest or very minimal local connections
+
+Artist Career Information:
 ${artistResume}
 
-${prompt}`;
+Respond with ONLY a JSON object in this exact format:
+{
+  "education": "high|mid|none",
+  "exhibitions": "high|mid|none", 
+  "awards": "high|mid|none",
+  "commissions": "high|mid|none",
+  "collections": "high|mid|none",
+  "publications": "high|mid|none",
+  "institutional": "high|mid|none",
+  "summaryInfo": "Brief summary of any additional notable accomplishments"
+}`;
 
-    console.log("Sending request to AI for CLI analysis");
+    console.log("Sending bio to AI for questionnaire conversion");
 
     const messages = [
       { 
         role: "user", 
-        content: finalPrompt
+        content: `Artist: "${artistName}"\n\n${questionnairePrompt}`
       }
     ];
 
-    const systemContent = "You are an expert art career analyst specializing in evaluating artists' professional achievements. Your task is to analyze the provided artist's resume and calculate an accurate CLI (Career Level Index) value between 1.00 and 5.00 based on the specified calculation framework. You must respond with valid JSON only, using the exact structure specified in the prompt.";
+    const systemContent = "You are an expert art career analyst. Analyze the artist's bio and respond with only the requested JSON format.";
 
-    const parsedResponse = await callAI(messages, 1500, systemContent, true); // true = JSON mode
+    // SIMPLIFIED AI CALL - Now expects questionnaire JSON only
+    const aiResponse = await callAI(messages, 500, systemContent, true); // true = JSON mode
 
-    // Validate required fields in JSON response
-    if (!parsedResponse.cli_result || typeof parsedResponse.cli_result.cli_value !== 'number') {
-      console.log("Invalid JSON structure - missing cli_result.cli_value");
+    // SIMPLIFIED VALIDATION - Only check for required questionnaire fields
+    const requiredFields = ['education', 'exhibitions', 'awards', 'commissions', 'collections', 'publications', 'institutional'];
+    const missingFields = requiredFields.filter(field => !aiResponse[field]);
+    
+    if (missingFields.length > 0) {
+      console.log(`AI response missing fields: ${missingFields.join(', ')}`);
       return res.status(500).json({ 
-        error: { message: "AI response missing required CLI value" } 
+        error: { message: `AI analysis incomplete: missing ${missingFields.join(', ')}` } 
       });
     }
 
-    const cliValue = parsedResponse.cli_result.cli_value;
-    
-    // Validate CLI value is in correct range
-    if (cliValue < 1.00 || cliValue > 5.00) {
-      console.log(`CLI value ${cliValue} is outside valid range 1.00-5.00`);
-      return res.status(500).json({ 
-        error: { message: `Calculated CLI value ${cliValue} is outside valid range 1.00-5.00` } 
-      });
-    }
-    
-    // Format CLI value to 2 decimal places
-    const formattedCLI = cliValue.toFixed(2);
-    console.log("Extracted CLI value:", formattedCLI);
-    
-    // Extract explanation
-    const explanation = parsedResponse.cli_result.explanation || "";
-    if (!explanation) {
-      console.log("Missing explanation in JSON response");
-      return res.status(500).json({ 
-        error: { message: "AI response missing explanation" } 
-      });
-    }
-
-    console.log("Extracted explanation:", explanation);
-
-    // Convert category analysis to HTML format for display
-    let categoryBreakdown = "";
-    if (parsedResponse.category_analysis) {
-      const categories = [
-        { key: 'art_education', name: 'Art Education' },
-        { key: 'exhibitions', name: 'Exhibitions' },
-        { key: 'awards', name: 'Awards & Competitions' },
-        { key: 'commissions', name: 'Commissions' },
-        { key: 'collections', name: 'Collections' },
-        { key: 'publications', name: 'Publications' },
-        { key: 'institutional', name: 'Institutional Interest' }
-      ];
-
-      categoryBreakdown = categories.map(category => {
-        const categoryData = parsedResponse.category_analysis[category.key];
-        if (categoryData) {
-          return `<div class="category">
-            <span class="category-title">${category.name}:</span>
-            <div class="category-details">
-              Score: ${categoryData.score} | Contribution: ${categoryData.contribution.toFixed(3)}<br>
-              ${categoryData.reasoning}
-            </div>
-          </div>`;
-        }
-        return '';
-      }).join('');
-    }
-
-    // Create a simplified analysis text for backward compatibility
-    const analysisText = `Career Level Index (CLI) = ${formattedCLI}
-
-${explanation}
-
-Category Analysis:
-${Object.entries(parsedResponse.category_analysis || {}).map(([key, data]) => {
-  return `${key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}: Score ${data.score} (${data.reasoning})`;
-}).join('\n')}
-
-Mathematical Calculation:
-Raw Score: ${parsedResponse.cli_result.raw_score}
-Final CLI: ${formattedCLI}`;
-
-    const finalResponse = {
-      analysis: analysisText,
-      cli: formattedCLI,
-      explanation: explanation,
-      categoryBreakdown: categoryBreakdown,
-      jsonData: parsedResponse // Include full JSON for future use
-    };
-
-    console.log("Sending final CLI response to client");
-    // Send the response
-    res.json(finalResponse);
+    // SIMPLIFIED RESPONSE - Just return questionnaire data
+    console.log("Sending questionnaire response to frontend");
+    res.json({
+      questionnaire: aiResponse,
+      source: "ai_converted"
+    });
 
   } catch (error) {
-    handleApiError(error, res);
+    console.error("Error in bio-to-questionnaire conversion:", error.message);
+    res.status(500).json({ 
+      error: { message: error.message || "Bio analysis failed" } 
+    });
   }
 });
+
+// ====================
+// NEW ENDPOINT: Generate Career Summary from Questionnaire
+// ====================
+app.post("/generate-career-summary", async (req, res) => {
+  try {
+    console.log("Received career summary request");
+    const questionnaire = req.body;
+
+    // Validate questionnaire data
+    const requiredFields = ['education', 'exhibitions', 'awards', 'commissions', 'collections', 'publications', 'institutional'];
+    const missingFields = requiredFields.filter(field => !questionnaire[field]);
+    
+    if (missingFields.length > 0) {
+      return res.status(400).json({ 
+        error: { message: `Missing questionnaire fields: ${missingFields.join(', ')}` } 
+      });
+    }
+
+    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+      return res.status(500).json({ 
+        error: { message: "Server configuration error: Missing API key" } 
+      });
+    }
+
+    // HARDCODED CAREER SUMMARY PROMPT
+    const summaryPrompt = `
+Based on the following artist career questionnaire responses, write a concise 1-2 sentence summary of their career accomplishments level.
+
+The summary should:
+- Be professional and objective
+- Mention their overall career level (minimal, moderate, substantial, or high level of achievements)
+- Briefly highlight their strongest areas
+- Note any significant gaps or limitations
+
+Questionnaire Responses:
+- Art Education: ${questionnaire.education}
+- Exhibitions: ${questionnaire.exhibitions}  
+- Awards & Competitions: ${questionnaire.awards}
+- Commissions: ${questionnaire.commissions}
+- Collections: ${questionnaire.collections}
+- Publications: ${questionnaire.publications}
+- Institutional Interest: ${questionnaire.institutional}
+${questionnaire.summaryInfo ? `- Additional Info: ${questionnaire.summaryInfo}` : ''}
+
+Write exactly 1-2 sentences that summarize this artist's career level and key strengths/limitations.`;
+
+    console.log("Generating career summary");
+
+    const messages = [
+      { 
+        role: "user", 
+        content: summaryPrompt
+      }
+    ];
+
+    const systemContent = "You are an expert art career analyst. Provide a concise, professional summary of the artist's career level based on their accomplishments.";
+
+    const summaryText = await callAI(messages, 200, systemContent);
+
+    console.log("Career summary generated successfully");
+    res.json({
+      summary: summaryText.trim()
+    });
+
+  } catch (error) {
+    console.error("Error generating career summary:", error.message);
+    res.status(500).json({ 
+      error: { message: "Failed to generate career summary: " + error.message } 
+    });
+  }
+});
+
+
+
+
 
 // Endpoint for Skill Mastery Index (SMI) analysis
 app.post("/analyze-smi", async (req, res) => {
