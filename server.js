@@ -692,13 +692,15 @@ Respond with ONLY a JSON object in this exact format:
   }
 });
 
-// ====================
-// REVISED ENDPOINT: Generate Diplomatic Career Summary
-// ====================
+
+
+
+
 app.post("/generate-career-summary", async (req, res) => {
   try {
     console.log("Received career summary request");
     const questionnaire = req.body;
+    const artistName = req.body.artistName;
 
     const requiredFields = ['education', 'exhibitions', 'awards', 'commissions', 'collections', 'publications', 'institutional'];
     const missingFields = requiredFields.filter(field => !questionnaire[field]);
@@ -716,16 +718,19 @@ app.post("/generate-career-summary", async (req, res) => {
     }
 
     const summaryPrompt = `
-Based on the following artist career questionnaire responses, write a diplomatic and encouraging 1-2 sentence summary of their career accomplishments.
+Based on the following artist career questionnaire responses, write a diplomatic and encouraging 1-2 sentence summary about ${artistName}'s career accomplishments.
 
-IMPORTANT: This summary will be read by the artist themselves. Be truthful but gentle and encouraging. Focus on their strengths while diplomatically noting areas for growth as opportunities for career advancement.
+IMPORTANT: This summary will be read by the artist. Be truthful but gentle and encouraging. Write in the 3rd person, referring to the artist by name. Focus on their strengths while diplomatically noting areas for growth as opportunities for career advancement.
 
 Guidelines:
 - Be professional, supportive, and encouraging
+- Write in 3rd person using the artist's name
 - Acknowledge their current accomplishments positively
 - Frame any gaps as "opportunities for continued growth" rather than deficiencies
 - Use encouraging language that motivates further career development
 - Keep the tone optimistic and forward-looking
+
+Artist: ${artistName}
 
 Questionnaire Responses:
 - Art Education: ${questionnaire.education}
@@ -736,9 +741,9 @@ Questionnaire Responses:
 - Publications: ${questionnaire.publications}
 - Institutional Interest: ${questionnaire.institutional}
 
-Write exactly 1-2 encouraging sentences that acknowledge their current career level while inspiring continued artistic growth and career development.`;
+Write exactly 1-2 encouraging sentences about ${artistName}'s current career level while inspiring continued artistic growth and career development.`;
 
-    console.log("Generating diplomatic career summary");
+    console.log("Generating diplomatic career summary in 3rd person");
 
     const messages = [
       { 
@@ -747,7 +752,7 @@ Write exactly 1-2 encouraging sentences that acknowledge their current career le
       }
     ];
 
-    const systemContent = "You are a supportive art career mentor. Provide an encouraging, diplomatic summary that motivates the artist while being truthful about their current career stage.";
+    const systemContent = `You are a supportive art career mentor writing about ${artistName}. Provide an encouraging, diplomatic summary in the 3rd person that motivates the artist while being truthful about their current career stage.`;
 
     const summaryText = await callAI(messages, 200, systemContent);
 
@@ -763,7 +768,6 @@ Write exactly 1-2 encouraging sentences that acknowledge their current career le
     });
   }
 });
-
 
 
 
