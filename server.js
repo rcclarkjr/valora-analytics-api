@@ -717,18 +717,22 @@ app.post("/generate-career-summary", async (req, res) => {
       });
     }
 
-    const summaryPrompt = `
-Based on the following artist career questionnaire responses, write a diplomatic and encouraging 1-2 sentence summary about ${artistName}'s career accomplishments.
 
-IMPORTANT: This summary will be read by the artist. Be truthful but gentle and encouraging. Write in the 3rd person, referring to the artist by name. Focus on their strengths while diplomatically noting areas for growth as opportunities for career advancement.
+
+
+const summaryPrompt = `
+Based on the following artist career questionnaire responses, write a neutral and academic 1-2 sentence summary about ${artistName}'s career accomplishments.
+
+IMPORTANT: Use a conversational tone with neutral emotional valence, suitable for an academic audience. Be truthful and straightforward. Write in the 3rd person, referring to the artist by name. Focus on their accomplishments and frame any gaps as opportunities for development.
 
 Guidelines:
-- Be professional, supportive, and encouraging
+- Use conversational tone with neutral emotional valence
+- Write for an academic audience  
 - Write in 3rd person using the artist's name
-- Acknowledge their current accomplishments positively
-- Frame any gaps as "opportunities for continued growth" rather than deficiencies
-- Use encouraging language that motivates further career development
-- Keep the tone optimistic and forward-looking
+- Be straightforward about current accomplishments
+- Frame gaps as "opportunities" or "potential for development"
+- Avoid flowery or overly enthusiastic language
+- Keep tone professional but accessible
 
 Artist: ${artistName}
 
@@ -741,7 +745,10 @@ Questionnaire Responses:
 - Publications: ${questionnaire.publications}
 - Institutional Interest: ${questionnaire.institutional}
 
-Write exactly 1-2 encouraging sentences about ${artistName}'s current career level while inspiring continued artistic growth and career development.`;
+Write exactly 1-2 sentences about ${artistName}'s current career level using neutral, academic language that acknowledges accomplishments and notes development opportunities.`;
+
+
+
 
     console.log("Generating diplomatic career summary in 3rd person");
 
@@ -752,7 +759,9 @@ Write exactly 1-2 encouraging sentences about ${artistName}'s current career lev
       }
     ];
 
-    const systemContent = `You are a supportive art career mentor writing about ${artistName}. Provide an encouraging, diplomatic summary in the 3rd person that motivates the artist while being truthful about their current career stage.`;
+
+const systemContent = `You are an art career analyst writing about ${artistName}. Use a neutral, academic tone that is conversational but not flowery. Be straightforward and professional.`;
+
 
     const summaryText = await callAI(messages, 200, systemContent);
 
