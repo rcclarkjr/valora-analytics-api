@@ -557,8 +557,6 @@ ${explanationText}`;
 
 
 
-
-
 // ====================
 // REVISED ENDPOINT: Convert Bio to Questionnaire Only
 // ====================
@@ -567,15 +565,33 @@ app.post("/analyze-cli", async (req, res) => {
     console.log("Received CLI bio-to-questionnaire request");
     const { artistName, artistResume } = req.body;
 
-    if (!artistName || !artistResume) {
+    if (!artistName) {
       return res.status(400).json({ 
-        error: { message: "Artist name and resume are required" } 
+        error: { message: "Artist name is required" } 
       });
     }
 
     if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
       return res.status(500).json({ 
         error: { message: "Server configuration error: Missing API key" } 
+      });
+    }
+
+    // Handle empty or minimal bio
+    if (!artistResume || artistResume.trim().length < 10) {
+      console.log("Empty or minimal bio provided, returning default questionnaire");
+      return res.json({
+        questionnaire: {
+          education: "none",
+          exhibitions: "none", 
+          awards: "none",
+          commissions: "none",
+          collections: "none",
+          publications: "none",
+          institutional: "none",
+          summaryInfo: ""
+        },
+        source: "default_answers"
       });
     }
 
@@ -683,7 +699,7 @@ Respond with ONLY a JSON object in this exact format:
 });
 
 // ====================
-// NEW ENDPOINT: Generate Career Summary from Questionnaire
+// ENDPOINT: Generate Career Summary from Questionnaire (UNCHANGED)
 // ====================
 app.post("/generate-career-summary", async (req, res) => {
   try {
@@ -753,7 +769,6 @@ Write exactly 1-2 sentences that summarize this artist's career level and key st
     });
   }
 });
-
 
 
 
