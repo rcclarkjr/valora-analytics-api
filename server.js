@@ -588,8 +588,7 @@ app.post("/analyze-cli", async (req, res) => {
           commissions: "none",
           collections: "none",
           publications: "none",
-          institutional: "none",
-          summaryInfo: ""
+          institutional: "none"
         },
         source: "default_answers"
       });
@@ -597,7 +596,6 @@ app.post("/analyze-cli", async (req, res) => {
 
     console.log(`Processing bio-to-questionnaire for artist: "${artistName}"`);
     
-    // SIMPLIFIED PROMPT: Only asks AI to answer questionnaire
     const questionnairePrompt = `
 Analyze the following artist's career information and answer the questionnaire by selecting the appropriate level for each category.
 
@@ -654,8 +652,7 @@ Respond with ONLY a JSON object in this exact format:
   "commissions": "high|mid|none",
   "collections": "high|mid|none",
   "publications": "high|mid|none",
-  "institutional": "high|mid|none",
-  "summaryInfo": "Brief summary of any additional notable accomplishments"
+  "institutional": "high|mid|none"
 }`;
 
     console.log("Sending bio to AI for questionnaire conversion");
@@ -669,10 +666,8 @@ Respond with ONLY a JSON object in this exact format:
 
     const systemContent = "You are an expert art career analyst. Analyze the artist's bio and respond with only the requested JSON format.";
 
-    // SIMPLIFIED AI CALL - Now expects questionnaire JSON only
-    const aiResponse = await callAI(messages, 500, systemContent, true); // true = JSON mode
+    const aiResponse = await callAI(messages, 500, systemContent, true);
 
-    // SIMPLIFIED VALIDATION - Only check for required questionnaire fields
     const requiredFields = ['education', 'exhibitions', 'awards', 'commissions', 'collections', 'publications', 'institutional'];
     const missingFields = requiredFields.filter(field => !aiResponse[field]);
     
@@ -683,7 +678,6 @@ Respond with ONLY a JSON object in this exact format:
       });
     }
 
-    // SIMPLIFIED RESPONSE - Just return questionnaire data
     console.log("Sending questionnaire response to frontend");
     res.json({
       questionnaire: aiResponse,
@@ -699,14 +693,13 @@ Respond with ONLY a JSON object in this exact format:
 });
 
 // ====================
-// ENDPOINT: Generate Career Summary from Questionnaire (UNCHANGED)
+// REVISED ENDPOINT: Generate Diplomatic Career Summary
 // ====================
 app.post("/generate-career-summary", async (req, res) => {
   try {
     console.log("Received career summary request");
     const questionnaire = req.body;
 
-    // Validate questionnaire data
     const requiredFields = ['education', 'exhibitions', 'awards', 'commissions', 'collections', 'publications', 'institutional'];
     const missingFields = requiredFields.filter(field => !questionnaire[field]);
     
@@ -722,15 +715,17 @@ app.post("/generate-career-summary", async (req, res) => {
       });
     }
 
-    // HARDCODED CAREER SUMMARY PROMPT
     const summaryPrompt = `
-Based on the following artist career questionnaire responses, write a concise 1-2 sentence summary of their career accomplishments level.
+Based on the following artist career questionnaire responses, write a diplomatic and encouraging 1-2 sentence summary of their career accomplishments.
 
-The summary should:
-- Be professional and objective
-- Mention their overall career level (minimal, moderate, substantial, or high level of achievements)
-- Briefly highlight their strongest areas
-- Note any significant gaps or limitations
+IMPORTANT: This summary will be read by the artist themselves. Be truthful but gentle and encouraging. Focus on their strengths while diplomatically noting areas for growth as opportunities for career advancement.
+
+Guidelines:
+- Be professional, supportive, and encouraging
+- Acknowledge their current accomplishments positively
+- Frame any gaps as "opportunities for continued growth" rather than deficiencies
+- Use encouraging language that motivates further career development
+- Keep the tone optimistic and forward-looking
 
 Questionnaire Responses:
 - Art Education: ${questionnaire.education}
@@ -740,11 +735,10 @@ Questionnaire Responses:
 - Collections: ${questionnaire.collections}
 - Publications: ${questionnaire.publications}
 - Institutional Interest: ${questionnaire.institutional}
-${questionnaire.summaryInfo ? `- Additional Info: ${questionnaire.summaryInfo}` : ''}
 
-Write exactly 1-2 sentences that summarize this artist's career level and key strengths/limitations.`;
+Write exactly 1-2 encouraging sentences that acknowledge their current career level while inspiring continued artistic growth and career development.`;
 
-    console.log("Generating career summary");
+    console.log("Generating diplomatic career summary");
 
     const messages = [
       { 
@@ -753,11 +747,11 @@ Write exactly 1-2 sentences that summarize this artist's career level and key st
       }
     ];
 
-    const systemContent = "You are an expert art career analyst. Provide a concise, professional summary of the artist's career level based on their accomplishments.";
+    const systemContent = "You are a supportive art career mentor. Provide an encouraging, diplomatic summary that motivates the artist while being truthful about their current career stage.";
 
     const summaryText = await callAI(messages, 200, systemContent);
 
-    console.log("Career summary generated successfully");
+    console.log("Diplomatic career summary generated successfully");
     res.json({
       summary: summaryText.trim()
     });
