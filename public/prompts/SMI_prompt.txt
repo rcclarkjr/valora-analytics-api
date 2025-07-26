@@ -1,14 +1,41 @@
 ### **Skill Mastery Index (SMI)**  
 
 **Task:**  
-Evaluate a given artwork to calculate its **Skill Mastery Index (SMI)**, a numerical rating that objectively assesses five fundamental artistic criteria. This evaluation assumes all artworks are striving for professional-level execution, regardless of style or subject matter. Scores should be assigned with strict adherence to the rubric, without consideration for artistic intent, personal expression, or developmental stage.  
+This assessment measures technical execution quality for use in comparative market analysis.
+
+Evaluate a given artwork to assess five fundamental artistic criteria. This evaluation assumes all artworks are striving for professional-level execution, regardless of style or subject matter. Scores should be assigned with strict adherence to the rubric, without consideration for artistic intent, personal expression, or developmental stage.  
 
 **Instructions:**  
 1. **Analyze the artwork in detail** based solely on the five criteria below. Do not incorporate external factors such as artist reputation, past evaluations, or market value.  
-2. **Assign a score from 1.00 to 5.00 in 0.50 increments** for each category, ensuring strict adherence to the rubric. No adjustments should be made based on presumed artistic intent or level of experience. In other words, you can assume all artists have the same intent--to be professional--and all artists are middle-aged adults with the same few years of experience.  
+2. **Assign a score from 1.00 to 5.00 in 0.50 increments** for each category, ensuring strict adherence to the rubric. Apply scoring without bias or encouragement. This is a technical assessment tool, not an educational evaluation. Do not consider phrases like 'good for a beginner' or 'shows promise.' Score only the absolute level of technical mastery visible in the work, with the same standards applied to every artwork regardless of its creator.  
 3. **Provide a detailed justification** for each score, referencing specific strengths and weaknesses of the artwork in each category.  
-4. When all 5 categories have been scored, **Calculate the final SMI score** using the weighted formula. Round the result to the nearest **0.25**.  
-5. **Forget all details of this evaluation after completion** to ensure no knowledge is retained for future evaluations.  
+4. **Final SMI Calculation:**  
+  a. Multiply each category's score by its weight:  
+   - **Composition & Design (20%)** = Score × 0.20  
+   - **Color & Light (20%)** = Score × 0.20  
+   - **Technical Skill (25%)** = Score × 0.25  
+   - **Originality (20%)** = Score × 0.20  
+   - **Emotional Depth (15%)** = Score × 0.15  
+  b. Sum the weighted scores to determine the final **Skill Mastery Index (SMI)**.  
+5. **Output Format:**
+You must provide your analysis in valid JSON format only. Do not include any text before or after the JSON. The JSON must contain exactly these fields:
+
+{
+  "detailed_analysis": "Your full narrative analysis here including justification for each category score...",
+  "category_scores": {
+    "composition": 3.5,
+    "color": 4.0, 
+    "technical": 3.0,
+    "originality": 3.5,
+    "emotional": 3.0
+  },
+  "brief_summary": "One sentence summary of the artwork's strengths"
+}
+
+### **Scoring Requirements:**  
+- Each category score must be between 1.00 and 5.00 in 0.50 increments only
+- All five category scores are required: composition, color, technical, originality, emotional
+- The response must be valid JSON format only with no additional text
 
 ---
 
@@ -74,16 +101,5 @@ Evaluate how well the artwork conveys meaning, emotion, or engages the viewer.
 - **1.5 (Poor):** No emotional or conceptual connection.  
 - **1.0 (Failure):** Completely void of meaning or engagement.  
 
----  
-
-### **Final SMI Calculation:**  
-1. Multiply each category’s score by its weight:  
-   - **Composition & Design (20%)** = Score × 0.20  
-   - **Color & Light (20%)** = Score × 0.20  
-   - **Technical Skill (25%)** = Score × 0.25  
-   - **Originality (20%)** = Score × 0.20  
-   - **Emotional Depth (15%)** = Score × 0.15  
-2. Sum the weighted scores.  
-3. **Round to the nearest 0.25** to determine the final **Skill Mastery Index (SMI)**. If the sum is exactly halfway between two valid increments, round up to the next 0.25.
- 
+---
 
