@@ -779,7 +779,6 @@ const systemContent = `You are an art career analyst writing about ${artistName}
 });
 
 
-
 // Endpoint for Skill Mastery Index (SMI) analysis
 app.post("/analyze-smi", async (req, res) => {
   try {
@@ -823,7 +822,7 @@ ${prompt}`;
       }
     ];
 
-    const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Your task is to analyze the provided artwork and calculate an accurate SMI (Skill Mastery Index) value between 1.00 and 5.00 based on the specified calculation framework. Provide detailed analysis following the prompt instructions exactly.";
+    const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Your task is to analyze the provided artwork and provide detailed analysis with category scores in valid JSON format only. Follow the prompt instructions exactly and return only valid JSON.";
 
     let analysisText;
     try {
@@ -834,600 +833,122 @@ ${prompt}`;
       return res.status(500).json({ error: { message: "AI analysis failed: " + error.message } });
     }
 
-    console.log("SMI Analysis text:", analysisText);
+    console.log("Raw AI response:", analysisText);
 
-    // Extract category scores
-    const categoryScores = extractCategoryScores(analysisText);
-    
-    // Check if all category scores were successfully extracted
-    if (!categoryScores) {
-      console.log("Failed to extract all category scores from the analysis");
+    // Parse the JSON response from AI
+    let aiResponse;
+    try {
+      // Clean up the response - remove any markdown code blocks or extra text
+      let cleanResponse = analysisText.trim();
+      
+      // Remove code block markers if present
+      if (cleanResponse.startsWith('```json')) {
+        cleanResponse = cleanResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanResponse.startsWith('```')) {
+        cleanResponse = cleanResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      // Find JSON object if there's extra text
+      const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleanResponse = jsonMatch[0];
+      }
+      
+      aiResponse = JSON.parse(cleanResponse);
+      console.log("Successfully parsed AI JSON response");
+    } catch (parseError) {
+      console.log("Failed to parse AI response as JSON:", parseError.message);
+      console.log("AI response was:", analysisText);
       return res.status(500).json({ 
         error: { 
-          message: "Failed to extract all required category scores. Please try again." 
+          message: "AI did not return valid JSON format. Please try again." 
         } 
       });
     }
+
+    // Validate the JSON structure
+    if (!aiResponse.category_scores) {
+      console.log("Missing category_scores in AI response");
+      return res.status(500).json({ 
+        error: { 
+          message: "Invalid AI response: missing category_scores" 
+        } 
+      });
+    }
+
+    const requiredCategories = ['composition', 'color', 'technical', 'originality', 'emotional'];
+    const categoryScores = aiResponse.category_scores;
     
-    console.log("Extracted category scores:", categoryScores);
+    // Validate all required categories are present and have valid scores
+    for (const category of requiredCategories) {
+      if (categoryScores[category] === undefined || categoryScores[category] === null) {
+        console.log(`Missing category score: ${category}`);
+        return res.status(500).json({ 
+          error: { 
+            message: `Missing score for category: ${category}` 
+          } 
+        });
+      }
+      
+      const score = parseFloat(categoryScores[category]);
+      if (isNaN(score) || score < 1.0 || score > 5.0) {
+        console.log(`Invalid score for ${category}: ${categoryScores[category]}`);
+        return res.status(500).json({ 
+          error: { 
+            message: `Invalid score for ${category}: ${categoryScores[category]}. Must be between 1.0 and 5.0` 
+          } 
+        });
+      }
+      
+      // Ensure the score is in 0.5 increments
+      if ((score * 2) % 1 !== 0) {
+        console.log(`Score for ${category} is not in 0.5 increments: ${score}`);
+        return res.status(500).json({ 
+          error: { 
+            message: `Score for ${category} must be in 0.5 increments. Received: ${score}` 
+          } 
+        });
+      }
+    }
+    
+    console.log("All category scores validated successfully:", categoryScores);
     
     // Calculate the SMI value using the weighted formula
     const calculatedSMI = (
-      (categoryScores.composition * 0.20) +
-      (categoryScores.color * 0.20) +
-      (categoryScores.technical * 0.25) +
-      (categoryScores.originality * 0.20) +
-      (categoryScores.emotional * 0.15)
+      (parseFloat(categoryScores.composition) * 0.20) +
+      (parseFloat(categoryScores.color) * 0.20) +
+      (parseFloat(categoryScores.technical) * 0.25) +
+      (parseFloat(categoryScores.originality) * 0.20) +
+      (parseFloat(categoryScores.emotional) * 0.15)
     );
     
-    // Round up to the nearest 0.25 increment if exactly halfway
-    const roundedSMI = roundSMIUp(calculatedSMI);
-    console.log(`Calculated SMI: ${calculatedSMI}, Rounded SMI: ${roundedSMI}`);
-    
-    // Format to ensure 2 decimal places
-    const smiValue = roundedSMI.toFixed(2);
-    
-    // Extract the explanation text (everything after the SMI value statement)
-    const explanationRegex = /Skill\s+Mastery\s+Index\s*\(?SMI\)?\s*=\s*\d+\.\d+\s*(.+?)(?:\n\n|\n$|$)/i;
-    const explanationMatch = analysisText.match(explanationRegex);
-    let explanation = "";
-    
-    if (explanationMatch && explanationMatch[1]) {
-      explanation = explanationMatch[1].trim();
-      console.log("Extracted explanation:", explanation);
-    } else {
-      console.log("Could not extract explanation from response");
-    }
-
-    // Extract any CSV data that might be present
-    let csvLinks = {};
-    const factorsCsvMatch = analysisText.match(/```csv\s*(Factor#.*[\s\S]*?)```/);
-    if (factorsCsvMatch && factorsCsvMatch[1]) {
-      csvLinks.factorsCSV = factorsCsvMatch[1];
-    }
-    
-    const questionsCsvMatch = analysisText.match(/```csv\s*(Question#.*[\s\S]*?)```/);
-    if (questionsCsvMatch && questionsCsvMatch[1]) {
-      csvLinks.questionsCSV = questionsCsvMatch[1];
-    }
+    // Format to 2 decimal places without any rounding beyond normal floating point precision
+    const smiValue = calculatedSMI.toFixed(2);
+    console.log(`Calculated SMI: ${calculatedSMI}, Final SMI: ${smiValue}`);
 
     const finalResponse = {
-      analysis: analysisText,
+      analysis: aiResponse.detailed_analysis || "",
+      brief_summary: aiResponse.brief_summary || "",
+      category_scores: categoryScores,
       smi: smiValue,
-      explanation: explanation,
-      categoryScores: categoryScores,
-      csvLinks: Object.keys(csvLinks).length > 0 ? csvLinks : undefined
+      ai_response: aiResponse // Include the full AI response for transparency
     };
 
     console.log("Sending final SMI response to client");
-    // Send the response
     res.json(finalResponse);
 
   } catch (error) {
-    handleApiError(error, res);
+    console.error("Unexpected error in SMI analysis:", error);
+    res.status(500).json({ 
+      error: { 
+        message: "Internal server error during analysis" 
+      } 
+    });
   }
 });
 
 
 
-// NEW ENDPOINT: SMI 33-Factor Analysis with Hardwired Prompt
-app.post("/analyze-smi-33-factors", async (req, res) => {
-  try {
-    console.log("Received SMI 33-factors analyze request");
-    const { image, artTitle, artistName } = req.body;
-
-    if (!image) {
-      console.log("Missing image in request");
-      return res.status(400).json({ error: { message: "Image is required" } });
-    }
-
-    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
-      console.log("Missing API key");
-      return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
-    }
-
-    console.log(`Processing SMI 33-factors request for artwork: "${artTitle}" by ${artistName}`);
-    
-    // HARDWIRED 33-FACTOR PROMPT (simplified to just return factor scores)
-    const smi33FactorsPrompt = `
-Analyze this artwork and score it on 33 specific skill mastery factors. 
-
-**INSTRUCTIONS:**
-1. Analyze the artwork based on the 33 factors listed below
-2. For each factor, assign the appropriate score based on the rubric
-3. Calculate SMI = SumExtended ÷ Denom (weighted average)
-4. Output ONLY the factor scores in the exact format specified
-
-**OUTPUT FORMAT:**
-Return your analysis in this exact format:
-
-FACTOR_SCORES_START
-Factor_1,Line,0.037,[score]
-Factor_2,Shape,0.037,[score]
-Factor_3,Form,0.031,[score]
-Factor_4,Space,0.037,[score]
-Factor_5,Color_Hue,0.037,[score]
-Factor_6,Texture,0.031,[score]
-Factor_7,Tone_Value,0.031,[score]
-Factor_8,Saturation,0.031,[score]
-Factor_9,Composition,0.049,[score]
-Factor_10,Volume,0.025,[score]
-Factor_11,Balance,0.043,[score]
-Factor_12,Contrast,0.037,[score]
-Factor_13,Emphasis,0.037,[score]
-Factor_14,Movement,0.031,[score]
-Factor_15,Rhythm,0.031,[score]
-Factor_16,Variety,0.031,[score]
-Factor_17,Proportion,0.031,[score]
-Factor_18,Harmony,0.037,[score]
-Factor_19,Cohesiveness,0.031,[score]
-Factor_20,Pattern,0.018,[score]
-Factor_21,Brushwork,0.037,[score]
-Factor_22,Chiaroscuro,0.031,[score]
-Factor_23,Impasto,0.025,[score]
-Factor_24,Sfumato,0.025,[score]
-Factor_25,Glazing,0.025,[score]
-Factor_26,Scumbling,0.018,[score]
-Factor_27,Pointillism,0.018,[score]
-Factor_28,Wet_on_wet,0.018,[score]
-Factor_29,Uniqueness,0.043,[score]
-Factor_30,Creativity,0.049,[score]
-Factor_31,Mood,0.043,[score]
-Factor_32,Viewer_Engagement,0.037,[score]
-Factor_33,Emotional_Resonance,0.043,[score]
-FACTOR_SCORES_END
-
-SMI_CALCULATED:[calculated SMI value]
-
-**SCORING RUBRIC:**
-
-Factor 1 - Line (0.037):
-- 0: Not applicable/not used
-- 1.35: Lines are uneven, uncontrolled, or lack purpose
-- 2.20: Lines show some control but are inconsistent
-- 3.20: Lines are deliberate, controlled, and exhibit variation
-- 4.20: Lines are consistently confident with expressive rhythm
-- 4.85: Linework is flawless and innovative
-
-Factor 2 - Shape (0.037):
-- 0: Not applicable/not used
-- 1.35: Shapes are flat, unbalanced, or awkward
-- 2.20: Shapes are simple but improving in structure
-- 3.20: Shapes are clear, intentional, and well-integrated
-- 4.20: Shapes are complex, harmonious, and refined
-- 4.85: Shapes are groundbreaking in design and innovation
-
-Factor 3 - Form (0.031):
-- 0: Not applicable/not used
-- 1.35: Forms appear flat, with little or no depth
-- 2.20: Forms show some depth but inconsistent execution
-- 3.20: Forms are well-constructed with believable depth
-- 4.20: Forms are sophisticated, enhancing spatial dynamics
-- 4.85: Forms achieve perfection in depth and innovation
-
-Factor 4 - Space (0.037):
-- 0: Not applicable/not used
-- 1.35: Poor spatial relationships; feels flat or crowded
-- 2.20: Some sense of depth but inconsistent
-- 3.20: Effective use of space to create depth and balance
-- 4.20: Skillful spatial manipulation enhances flow and mood
-- 4.85: Exceptional spatial control creating immersive experience
-
-Factor 5 - Color/Hue (0.037):
-- 0: Not applicable/not used
-- 1.35: Colors are muddy, clashing, or poorly chosen
-- 2.20: Colors show some harmony but inconsistent
-- 3.20: Colors are well-chosen and enhance mood
-- 4.20: Colors are nuanced, harmonious, emotionally impactful
-- 4.85: Colors are innovative and integral to success
-
-Factor 6 - Texture (0.031):
-- 0: Not applicable/not used
-- 1.35: Texture absent or added without purpose
-- 2.20: Some texture attempt but artificial or incomplete
-- 3.20: Texture effectively integrated, adding depth
-- 4.20: Sophisticated texture enhances realism/abstraction
-- 4.85: Texture expertly controlled, conveying meaning
-
-Factor 7 - Tone/Value (0.031):
-- 0: Not applicable/not used
-- 1.35: Poor tonal control; flat or lacking contrast
-- 2.20: Some tonal awareness but limited contrasts
-- 3.20: Strong tone usage defines forms and creates depth
-- 4.20: Subtle intentional tonal transitions elevate mood
-- 4.85: Mastery of tone with exceptional dynamic range
-
-Factor 8 - Saturation (0.031):
-- 0: Not applicable/not used
-- 1.35: Overly saturated or washed-out colors detract
-- 2.20: Some saturation awareness but unbalanced intensity
-- 3.20: Effective saturation control creates emphasis and unity
-- 4.20: Sophisticated saturation heightens mood with seamless transitions
-- 4.85: Saturation expertly controlled with innovative use
-
-Factor 9 - Composition (0.049):
-- 0: Not applicable/not used
-- 1.35: Disorganized composition; elements feel random
-- 2.20: Some organization attempt but inconsistent balance
-- 3.20: Clear effective composition with strong balance
-- 4.20: Dynamic intentional composition enhances storytelling
-- 4.85: Groundbreaking composition with innovative layouts
-
-Factor 10 - Volume (0.025):
-- 0: Not applicable/not used
-- 1.35: Objects lack volume and appear flat
-- 2.20: Some volume indication but inconsistent lighting
-- 3.20: Volume well-represented with strong lighting
-- 4.20: Masterful volume depiction enhances realism
-- 4.85: Volume depicted with exceptional skill and presence
-
-Factor 11 - Balance (0.043):
-- 0: Not applicable/not used
-- 1.35: Composition feels lopsided or overly heavy
-- 2.20: Some balance awareness but uneven distribution
-- 3.20: Balanced arrangement enhances harmony
-- 4.20: Complex intentional balancing guides viewer's eye
-- 4.85: Balance used innovatively for dynamic tension
-
-Factor 12 - Contrast (0.037):
-- 0: Not applicable/not used
-- 1.35: Minimal contrast, lacks visual interest
-- 2.20: Contrast attempts but inconsistent impact
-- 3.20: Strong purposeful contrasts enhance clarity
-- 4.20: Subtle dynamic contrasts enrich composition
-- 4.85: Masterful contrasts elevate work creating mood
-
-Factor 13 - Emphasis (0.037):
-- 0: Not applicable/not used
-- 1.35: No clear focal point; eye wanders
-- 2.20: Some focal elements but they compete
-- 3.20: Clear emphasis guides viewer's attention
-- 4.20: Sophisticated emphasis enhances storytelling
-- 4.85: Flawless emphasis creating commanding focal point
-
-Factor 14 - Movement (0.031):
-- 0: Not applicable/not used
-- 1.35: Visual movement absent or disjointed
-- 2.20: Some movement sense but awkward
-- 3.20: Effective movement leads viewer's eye
-- 4.20: Dynamic intentional movement enhances engagement
-- 4.85: Masterful movement control creates fluidity
-
-Factor 15 - Rhythm (0.031):
-- 0: Not applicable/not used
-- 1.35: Visual rhythm chaotic or nonexistent
-- 2.20: Basic rhythm attempts but inconsistent patterns
-- 3.20: Rhythm effectively established with clear flow
-- 4.20: Dynamic intentional rhythm enhances visual harmony
-- 4.85: Rhythm masterfully controlled creating energy
-
-Factor 16 - Variety (0.031):
-- 0: Not applicable/not used
-- 1.35: Minimal variety resulting in monotony
-- 2.20: Some variety exploration but disjointed
-- 3.20: Thoughtful variation creates interest with unity
-- 4.20: Sophisticated variety creates depth and engagement
-- 4.85: Variety innovatively enhances richness without compromising cohesion
-
-Factor 17 - Proportion (0.031):
-- 0: Not applicable/not used
-- 1.35: Proportions feel awkward or poorly thought out
-- 2.20: Proportion awareness evident but inconsistent
-- 3.20: Proportions accurate and well-suited to style
-- 4.20: Proportions intentionally manipulated for expressiveness
-- 4.85: Proportions expertly controlled with innovative use
-
-Factor 18 - Harmony (0.037):
-- 0: Not applicable/not used
-- 1.35: Elements clash with little unity sense
-- 2.20: Some harmony evident but inconsistent cohesion
-- 3.20: Elements well-integrated creating pleasing unity
-- 4.20: Sophisticated harmony reinforces themes/emotions
-- 4.85: Masterful harmony with seamless element interplay
-
-Factor 19 - Cohesiveness (0.031):
-- 0: Not applicable/not used
-- 1.35: Artwork feels fragmented with no unifying theme
-- 2.20: Some cohesion but elements feel disconnected
-- 3.20: Clear cohesiveness with elements working together
-- 4.20: Skillfully maintained cohesiveness creates unified composition
-- 4.85: Exceptionally cohesive with deeply integrated components
-
-Factor 20 - Pattern (0.018):
-- 0: Not applicable/not used
-- 1.35: Patterns absent or poorly executed
-- 2.20: Basic patterns present but lack refinement
-- 3.20: Patterns effectively integrated enhancing texture/rhythm
-- 4.20: Complex intentional patterns add depth/symbolism
-- 4.85: Patterns innovatively executed elevating composition
-
-Factor 21 - Brushwork (0.037):
-- 0: Not applicable/not used (not a painted medium)
-- 1.35: Inconsistent, sloppy, or unintentional brushwork
-- 2.20: Some control but lacks refinement
-- 3.20: Brushwork intentional and enhances texture
-- 4.20: Highly refined brushwork adds depth/emotion
-- 4.85: Brushwork innovative and masterful
-
-Factor 22 - Chiaroscuro (0.031):
-- 0: Not applicable/not used
-- 1.35: Poor light/dark contrast resulting in flat effects
-- 2.20: Chiaroscuro attempts evident but lack control
-- 3.20: Light and shadow skillfully used for form/depth
-- 4.20: Advanced light/shadow manipulation enhances mood
-- 4.85: Chiaroscuro masterfully executed with dramatic impact
-
-Factor 23 - Impasto (0.025):
-- 0: Not applicable/not used
-- 1.35: Impasto applied haphazardly without intention
-- 2.20: Some impasto use but inconsistent
-- 3.20: Impasto effectively applied adding texture
-- 4.20: Sophisticated impasto emphasizes depth/energy
-- 4.85: Impasto innovatively controlled as expressive feature
-
-Factor 24 - Sfumato (0.025):
-- 0: Not applicable/not used
-- 1.35: Harsh transitions with no blending
-- 2.20: Some blending evident but lacks subtlety
-- 3.20: Smooth deliberate blending creates atmospheric effects
-- 4.20: Masterful sfumato enhances mood and realism
-- 4.85: Sfumato applied with exceptional subtlety and innovation
-
-Factor 25 - Glazing (0.025):
-- 0: Not applicable/not used
-- 1.35: Glazing poorly executed with little layering understanding
-- 2.20: Some glazing use but uneven layers
-- 3.20: Glazing effectively enhances color depth/luminosity
-- 4.20: Advanced glazing creates rich multi-dimensional effects
-- 4.85: Glazing expertly executed transforming surface
-
-Factor 26 - Scumbling (0.018):
-- 0: Not applicable/not used
-- 1.35: Scumbling appears unintentional and poorly controlled
-- 2.20: Some scumbling attempted but lacks refinement
-- 3.20: Scumbling effectively creates texture/atmospheric effects
-- 4.20: Sophisticated scumbling enhances mood/movement
-- 4.85: Scumbling innovatively executed transforming surface
-
-Factor 27 - Pointillism (0.018):
-- 0: Not applicable/not used
-- 1.35: Dots/marks random and lack cohesion
-- 2.20: Some pointillism attempt but inconsistent execution
-- 3.20: Pointillism effectively creates texture/light effects
-- 4.20: Skillful pointillism creates vibrant complex imagery
-- 4.85: Pointillism masterfully executed with unparalleled intricacy
-
-Factor 28 - Wet-on-wet (0.018):
-- 0: Not applicable/not used
-- 1.35: Wet-on-wet results in muddy uncontrolled effects
-- 2.20: Some success but inconsistent transitions
-- 3.20: Wet-on-wet effectively creates smooth atmospheric effects
-- 4.20: Advanced control enhances movement/light/texture
-- 4.85: Wet-on-wet expertly executed with innovative applications
-
-Factor 29 - Uniqueness (0.043):
-- 0: Not applicable/not used
-- 1.35: Minimal innovation, relies on established methods
-- 2.20: Some uniqueness attempts but inconsistent
-- 3.20: Consistently applies unique approaches enhancing originality
-- 4.20: Distinctive vision with sophisticated innovation
-- 4.85: Unparalleled distinctiveness creating groundbreaking work
-
-Factor 30 - Creativity (0.049):
-- 0: Not applicable/not used
-- 1.35: Limited creativity with conventional ideas
-- 2.20: Some creative thinking but underdeveloped concepts
-- 3.20: Imaginative well-developed concepts enhance artwork
-- 4.20: High creativity with innovative ideas elevating impact
-- 4.85: Extraordinary creativity with visionary concepts
-
-Factor 31 - Mood (0.043):
-- 0: Not applicable/not used
-- 1.35: Struggles to evoke specific mood; flat atmosphere
-- 2.20: Some mood creation ability but inconsistent
-- 3.20: Successfully establishes clear intentional mood
-- 4.20: Skillfully crafts strong immersive atmosphere
-- 4.85: Achieves profound evocative mood with lasting impression
-
-Factor 32 - Viewer Engagement (0.037):
-- 0: Not applicable/not used
-- 1.35: Fails to capture viewer's attention
-- 2.20: Some engaging elements but uneven impact
-- 3.20: Successfully captures attention inviting exploration
-- 4.20: Creates compelling immersive experience
-- 4.85: Exceptional engagement drawing profound exploration
-
-Factor 33 - Emotional Resonance (0.043):
-- 0: Not applicable/not used
-- 1.35: Struggles to inspire emotional response
-- 2.20: Some emotion evocation but weak impact
-- 3.20: Successfully elicits clear intentional emotional response
-- 4.20: Creates powerful moving experience with strong emotions
-- 4.85: Extraordinary emotional resonance with profound lasting impact
-
-Replace [score] with the appropriate numerical score for each factor.
-`;
-
-    const finalPrompt = `Title: "${artTitle}"
-Artist: "${artistName}"
-
-${smi33FactorsPrompt}`;
-
-    console.log("Sending request to AI for SMI 33-factors analysis");
-    
-    const messages = [
-      { 
-        role: "user", 
-        content: [
-          { type: "text", text: finalPrompt },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
-        ]
-      }
-    ];
-
-    const systemContent = "You are an expert fine art analyst. Follow the instructions exactly and provide factor scores in the precise format requested.";
-
-    let analysisText;
-    try {
-      analysisText = await callAI(messages, 2000, systemContent);
-      console.log("SMI 33-factors Analysis completed successfully");
-    } catch (error) {
-      console.log("AI request failed:", error.message);
-      return res.status(500).json({ error: { message: "AI analysis failed: " + error.message } });
-    }
-
-    console.log("SMI 33-factors Analysis text length:", analysisText.length);
-
-    // Parse the structured factor scores
-    const factorData = parse33FactorScores(analysisText);
-    
-    if (!factorData || !factorData.factors || Object.keys(factorData.factors).length < 30) {
-      console.log("Failed to extract sufficient factor scores from the analysis");
-      return res.status(500).json({ 
-        error: { 
-          message: "Failed to extract all required 33 factor scores. Please try again." 
-        } 
-      });
-    }
-    
-    console.log(`Successfully extracted ${Object.keys(factorData.factors).length} factor scores`);
-    console.log("Calculated SMI:", factorData.smi);
-
-    const finalResponse = {
-      analysis: analysisText,
-      smi_total: factorData.smi,
-      individual_factors: factorData.factors,
-      factor_count: Object.keys(factorData.factors).length
-    };
-
-    console.log("Sending final SMI 33-factors response to client");
-    res.json(finalResponse);
-
-  } catch (error) {
-    console.error("Error in SMI 33-factors endpoint:", error);
-    handleApiError(error, res);
-  }
-});
-
-// Helper function to parse the 33 factor scores from the structured response
-function parse33FactorScores(analysisText) {
-  console.log("Parsing 33 factor scores from structured response...");
-  
-  const factors = {};
-  let calculatedSMI = null;
-  
-  try {
-    // Extract the factor scores section
-    const factorSectionMatch = analysisText.match(/FACTOR_SCORES_START([\s\S]*?)FACTOR_SCORES_END/);
-    
-    if (!factorSectionMatch) {
-      console.log("No structured factor scores section found");
-      return null;
-    }
-    
-    const factorSection = factorSectionMatch[1];
-    console.log("Found factor scores section");
-    
-    // Parse each factor line: Factor_1,Line,0.037,3.20
-    const lines = factorSection.split('\n').filter(line => line.trim() && line.includes(','));
-    
-    for (const line of lines) {
-      const parts = line.trim().split(',');
-      if (parts.length >= 4) {
-        const factorKey = parts[0].trim();
-        const factorName = parts[1].trim();
-        const weight = parseFloat(parts[2].trim());
-        const score = parseFloat(parts[3].trim());
-        
-        if (factorKey.startsWith('Factor_') && !isNaN(score) && score >= 0 && score <= 5) {
-          factors[factorKey.toLowerCase()] = score;
-          console.log(`Parsed ${factorKey}: ${factorName} = ${score}`);
-        }
-      }
-    }
-    
-    // Extract calculated SMI
-    const smiMatch = analysisText.match(/SMI_CALCULATED:\s*(\d+\.?\d*)/);
-    if (smiMatch) {
-      calculatedSMI = parseFloat(smiMatch[1]);
-      console.log("Found calculated SMI:", calculatedSMI);
-    } else {
-      console.log("No calculated SMI found, will use default");
-      calculatedSMI = 3.00;
-    }
-    
-  } catch (error) {
-    console.error("Error parsing 33 factor scores:", error);
-    return null;
-  }
-  
-  console.log(`Successfully parsed ${Object.keys(factors).length} factors`);
-  
-  return {
-    factors: factors,
-    smi: calculatedSMI ? calculatedSMI.toFixed(2) : "3.00"
-  };
-}
-
-// NEW HELPER FUNCTION: Parse the factors CSV data to extract individual scores
-function parseFactorsCSV(csvText) {
-  if (!csvText) {
-    console.log("No factors CSV text provided");
-    return {};
-  }
-  
-  console.log("Parsing factors CSV data...");
-  const factors = {};
-  
-  try {
-    // Split into lines and process each line
-    const lines = csvText.split('\n').filter(line => line.trim());
-    
-    for (const line of lines) {
-      // Skip header line
-      if (line.startsWith('Factor#') || line.includes('Factor')) {
-        continue;
-      }
-      
-      // Parse CSV line: typically "FactorNumber,FactorName,FactorDescription,Score"
-      const columns = line.split(',');
-      
-      if (columns.length >= 4) {
-        const factorNumber = columns[0] ? columns[0].trim() : '';
-        const factorName = columns[1] ? columns[1].trim().replace(/"/g, '') : '';
-        const scoreText = columns[3] ? columns[3].trim() : '';
-        
-        // Extract numeric score
-        const scoreMatch = scoreText.match(/(\d+\.?\d*)/);
-        if (scoreMatch) {
-          const score = parseFloat(scoreMatch[1]);
-          
-          // Validate score is in expected range
-          if (score >= 1.0 && score <= 5.0) {
-            // Create factor key (factor_1, factor_2, etc.)
-            const factorKey = `factor_${factorNumber}`;
-            factors[factorKey] = score;
-            
-            console.log(`Parsed ${factorKey}: ${factorName} = ${score}`);
-          } else {
-            console.log(`Invalid score for factor ${factorNumber}: ${score}`);
-          }
-        } else {
-          console.log(`Could not extract score from: ${scoreText}`);
-        }
-      } else {
-        console.log(`Skipping malformed CSV line: ${line}`);
-      }
-    }
-    
-  } catch (error) {
-    console.error("Error parsing factors CSV:", error);
-    return {};
-  }
-  
-  console.log(`Successfully parsed ${Object.keys(factors).length} factors from CSV`);
-  return factors;
-}
 
 // Error handler function
 function handleApiError(error, res) {
