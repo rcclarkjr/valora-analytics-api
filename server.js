@@ -908,133 +908,7 @@ ${prompt}`;
   }
 });
 
-// Endpoint for combined SMI and RI analysis
-app.post("/analyze-combined", async (req, res) => {
-  try {
-    console.log("Received combined SMI and RI analyze request");
-    const { image, artTitle, artistName } = req.body;
 
-    if (!image) {
-      console.log("Missing image in request");
-      return res.status(400).json({ error: { message: "Image is required" } });
-    }
-
-    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
-      console.log("Missing API key");
-      return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
-    }
-
-    // Log info about the request
-    console.log(`Processing combined analysis for artwork: "${artTitle}" by ${artistName}`);
-    
-    // First, we'll get the RI value using a simplified approach
-    console.log("Sending request to AI for simplified RI analysis");
-    
-    const riMessages = [
-      { 
-        role: "user", 
-        content: [
-          { type: "text", text: `What is the RI value (1-5) for this artwork titled "${artTitle}" by ${artistName}?` },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
-        ]
-      }
-    ];
-
-    const riSystemContent = "You are an expert art analyst. Examine this artwork and determine its Representational Index (RI) from 1-5 based on how representational versus abstract it is. 1=Non-Objective (Pure Abstraction), 2=Abstract, 3=Stylized Representation, 4=Representational Realism, 5=Hyper-Realism. Respond with ONLY a number from 1 to 5, no explanation.";
-
-    let riAnalysisText;
-    try {
-      riAnalysisText = await callAI(riMessages, 10, riSystemContent);
-      console.log("Received response from AI for RI");
-    } catch (error) {
-      console.log("Invalid response from AI for RI");
-      return res.status(500).json({ error: { message: "Invalid response from AI for RI analysis" } });
-    }
-
-    riAnalysisText = riAnalysisText.trim();
-    console.log("RI response:", riAnalysisText);
-    
-    // Extract the RI value - should be an integer
-    let riValue = "3"; // Changed from "3.0"
-    const numberMatch = riAnalysisText.match(/\b([1-5])\b/);
-
-    if (numberMatch && numberMatch[1]) {
-      riValue = numberMatch[1]; // Removed + ".0"
-      console.log("Extracted RI value:", riValue);
-    } else {
-      console.log("Could not extract RI value from simplified response");
-    }
-
-    // Now, for the SMI value, we'll use a simplified approach as well
-    console.log("Sending request to AI for simplified SMI analysis");
-    
-    const smiMessages = [
-      { 
-        role: "user", 
-        content: [
-          { type: "text", text: `What is the SMI value (1.00-5.00) for this artwork titled "${artTitle}" by ${artistName}?` },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
-        ]
-      }
-    ];
-
-    const smiSystemContent = "You are an expert fine art analyst specialized in evaluating artistic skill. Rate this artwork on a Skill Mastery Index (SMI) from 1.00 to 5.00. Consider: Composition (20%), Color & Light (20%), Technical Skill (25%), Originality (20%), and Emotional Depth (15%). Respond with ONLY a decimal number between 1.00 and 5.00, rounded to the nearest 0.25 (e.g. 3.25, 4.50, etc.). No explanation.";
-
-    let smiAnalysisText;
-    try {
-      smiAnalysisText = await callAI(smiMessages, 10, smiSystemContent);
-      console.log("Received response from AI for SMI");
-    } catch (error) {
-      console.log("Invalid response from AI for SMI");
-      return res.status(500).json({ error: { message: "Invalid response from AI for SMI analysis" } });
-    }
-
-    smiAnalysisText = smiAnalysisText.trim();
-    console.log("SMI response:", smiAnalysisText);
-    
-    // Extract the SMI value - should be a decimal number
-    let smiValue = "3.00"; // Default value if extraction fails
-    const decimalMatch = smiAnalysisText.match(/\b(\d+\.\d+)\b/);
-    
-    if (decimalMatch && decimalMatch[1]) {
-      // Ensure it's formatted with 2 decimal places
-      smiValue = parseFloat(decimalMatch[1]).toFixed(2);
-      console.log("Extracted SMI value:", smiValue);
-    } else {
-      // Try to match just a whole number
-      const wholeNumberMatch = smiAnalysisText.match(/\b(\d+)\b/);
-      if (wholeNumberMatch && wholeNumberMatch[1]) {
-        // Add .00 to the whole number
-        smiValue = parseFloat(wholeNumberMatch[1]).toFixed(2);
-        console.log("Extracted SMI whole number value:", smiValue);
-      } else {
-        console.log("Could not extract SMI value from simplified response");
-      }
-    }
-
-    // Send the final response with just the SMI and RI values
-    const finalResponse = {
-      smi: smiValue,
-      ri: riValue
-    };
-
-    console.log("Sending final combined response to client:", finalResponse);
-    res.json(finalResponse);
-
-  } catch (error) {
-    console.error("Error in combined endpoint:", error);
-    
-    if (error.response) {
-      console.error("AI API error details:", error.response.data);
-    }
-    
-    res.status(500).json({ 
-      error: { 
-        message: error.message || "An unknown error occurred in combined analysis" 
-      } 
-    });
-  }
-});
 
 // NEW ENDPOINT: SMI 33-Factor Analysis with Hardwired Prompt
 app.post("/analyze-smi-33-factors", async (req, res) => {
@@ -2132,6 +2006,7 @@ app.get('/api/records/page/:pageNumber', (req, res) => {
     res.status(500).json({ error: 'Failed to load paginated records' });
   }
 });
+
 
 app.post('/api/records/batch-delete', (req, res) => {
   try {
@@ -3315,6 +3190,11 @@ app.post('/api/metadata/update', async (req, res) => {
   }
 });
 
+
+
+
+
+
 app.get('/api/health', (req, res) => {
   try {
     const stats = fs.statSync(DB_PATH);
@@ -3335,6 +3215,9 @@ app.get('/api/health', (req, res) => {
     });
   }
 });
+
+
+
 
 // Add this to your backend codebase (server.js or new file migrate.js)
 
