@@ -2007,7 +2007,6 @@ app.get('/api/records/page/:pageNumber', (req, res) => {
   }
 });
 
-
 app.post('/api/records/batch-delete', (req, res) => {
   try {
     const { recordIds } = req.body;
@@ -3215,6 +3214,191 @@ app.get('/api/health', (req, res) => {
     });
   }
 });
+
+
+
+
+
+// Add this endpoint to your server.js file
+
+app.post('/api/batch-calculate-smi', async (req, res) => {
+  try {
+    console.log('Starting batch SMI calculation...');
+    
+    const imagesDir = '/mnt/data/images';
+    const promptPath = path.join(__dirname, 'public', 'prompts', 'SMI_prompt.txt');
+    
+    // Check if directories exist
+    if (!fs.existsSync(imagesDir)) {
+      return res.status(400).json({ error: `Images directory not found: ${imagesDir}` });
+    }
+    
+    if (!fs.existsSync(promptPath)) {
+      return res.status(400).json({ error: `SMI prompt file not found: ${promptPath}` });
+    }
+    
+    // Load the SMI prompt
+    const prompt = fs.readFileSync(promptPath, 'utf8').trim();
+    if (prompt.length < 100) {
+      return res.status(400).json({ error: 'SMI prompt file appears to be empty or too short' });
+    }
+    
+    // Get all image files
+    const imageFiles = fs.readdirSync(imagesDir)
+      .filter(file => file.match(/^\d+\.(jpg|jpeg|png)$/i))
+      .sort((a, b) => {
+        const aNum = parseInt(a.split('.')[0]);
+        const bNum = parseInt(b.split('.')[0]);
+        return aNum - bNum;
+      });
+    
+    console.log(`Found ${imageFiles.length} image files to process`);
+    
+    if (imageFiles.length === 0) {
+      return res.status(400).json({ error: 'No valid image files found (expecting format: recordID.jpg)' });
+    }
+    
+    const results = [];
+    const errors = [];
+    let processedCount = 0;
+    
+    // Process each image
+    for (const filename of imageFiles) {
+      try {
+        const recordId = filename.split('.')[0];
+        console.log(`Processing record ${recordId} (${processedCount + 1}/${imageFiles.length})`);
+        
+        // Read and convert image to base64
+        const imagePath = path.join(imagesDir, filename);
+        const imageBuffer = fs.readFileSync(imagePath);
+        const base64Image = imageBuffer.toString('base64');
+        
+        // Prepare the prompt with minimal info since we don't have artist/title
+        const finalPrompt = `Title: "Record ${recordId}"\nArtist: "Unknown"\n\n${prompt}`;
+        
+        // Create messages for AI
+        const messages = [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: finalPrompt },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
+            ]
+          }
+        ];
+        
+        const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Provide your response in the exact JSON format specified.";
+        
+        // Call AI for analysis
+        const aiResponse = await callAI(messages, 2000, systemContent, true);
+        
+        // Validate response
+        if (!aiResponse || !aiResponse.category_scores || !aiResponse.final_smi) {
+          throw new Error('Invalid AI response format');
+        }
+        
+        // Validate category scores
+        const requiredCategories = ['composition', 'color', 'technical', 'originality', 'emotional'];
+        for (const category of requiredCategories) {
+          const score = aiResponse.category_scores[category];
+          if (typeof score !== 'number' || isNaN(score) || score < 1.0 || score > 5.0) {
+            throw new Error(`Invalid ${category} score: ${score}`);
+          }
+          // Check 0.5 increment requirement
+          if ((score * 2) % 1 !== 0) {
+            throw new Error(`${category} score ${score} is not in 0.5 increments`);
+          }
+        }
+        
+        // Recalculate SMI using backend logic for consistency
+        const calculatedSMI = (
+          (aiResponse.category_scores.composition * 0.20) +
+          (aiResponse.category_scores.color * 0.20) +
+          (aiResponse.category_scores.technical * 0.25) +
+          (aiResponse.category_scores.originality * 0.20) +
+          (aiResponse.category_scores.emotional * 0.15)
+        );
+        
+        // Round up to nearest 0.25
+        const roundedSMI = roundSMIUp(calculatedSMI);
+        const finalSMI = roundedSMI.toFixed(2);
+        
+        results.push({
+          recordId: parseInt(recordId),
+          smi: finalSMI,
+          composition: aiResponse.category_scores.composition,
+          color: aiResponse.category_scores.color,
+          technical: aiResponse.category_scores.technical,
+          originality: aiResponse.category_scores.originality,
+          emotional: aiResponse.category_scores.emotional
+        });
+        
+        processedCount++;
+        console.log(`✅ Record ${recordId}: SMI = ${finalSMI}`);
+        
+        // Add small delay to avoid overwhelming the AI API
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+      } catch (error) {
+        const recordId = filename.split('.')[0];
+        console.error(`❌ Error processing record ${recordId}:`, error.message);
+        errors.push({
+          recordId: recordId,
+          error: error.message,
+          filename: filename
+        });
+      }
+    }
+    
+    // Generate CSV content
+    const csvHeader = 'RecordID,SMI,Composition,Color,Technical,Originality,Emotional\n';
+    const csvRows = results.map(r => 
+      `${r.recordId},${r.smi},${r.composition},${r.color},${r.technical},${r.originality},${r.emotional}`
+    ).join('\n');
+    const csvContent = csvHeader + csvRows;
+    
+    // Save CSV file
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const csvFilename = `batch_smi_results_${timestamp}.csv`;
+    const csvPath = path.join('/mnt/data', csvFilename);
+    fs.writeFileSync(csvPath, csvContent);
+    
+    console.log(`✅ Batch processing completed!`);
+    console.log(`📊 Successfully processed: ${results.length}`);
+    console.log(`❌ Errors: ${errors.length}`);
+    console.log(`💾 Results saved to: ${csvFilename}`);
+    
+    res.json({
+      success: true,
+      message: 'Batch SMI calculation completed',
+      summary: {
+        totalFiles: imageFiles.length,
+        successfullyProcessed: results.length,
+        errors: errors.length,
+        csvFile: csvFilename,
+        csvDownloadUrl: `/download/${csvFilename}`
+      },
+      results: results,
+      errors: errors.length > 0 ? errors : undefined
+    });
+    
+  } catch (error) {
+    console.error('❌ Batch processing failed:', error);
+    res.status(500).json({ 
+      error: 'Batch processing failed', 
+      details: error.message 
+    });
+  }
+});
+
+// Helper function to trigger batch processing (optional - for testing)
+app.get('/api/start-batch-smi', (req, res) => {
+  res.json({
+    message: 'Send POST request to /api/batch-calculate-smi to start batch processing',
+    instructions: 'This will process all images in the images directory and generate a CSV file'
+  });
+});
+
 
 
 
