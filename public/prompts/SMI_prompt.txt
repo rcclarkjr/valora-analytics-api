@@ -29,7 +29,7 @@ You must provide your analysis in valid JSON format only. Do not include any tex
     "originality": 3.5,
     "emotional": 3.0
   },
-  "brief_summary": "One sentence summary of the artwork's strengths"
+  "brief_summary": "Three sentences: two highlighting the artwork's main strengths, followed by one diplomatically noting areas for potential development"
 }
 
 ### **Scoring Requirements:**  
@@ -102,4 +102,3 @@ Evaluate how well the artwork conveys meaning, emotion, or engages the viewer.
 - **1.0 (Failure):** Completely void of meaning or engagement.  
 
 ---
-
