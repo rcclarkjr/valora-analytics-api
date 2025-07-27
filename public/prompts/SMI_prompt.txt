@@ -21,7 +21,6 @@ Evaluate a given artwork to assess five fundamental artistic criteria. This eval
 You must provide your analysis in valid JSON format only. Do not include any text before or after the JSON. The JSON must contain exactly these fields:
 
 {
-  "detailed_analysis": "Your full narrative analysis here including justification for each category score...",
   "category_scores": {
     "composition": 3.5,
     "color": 4.0, 
