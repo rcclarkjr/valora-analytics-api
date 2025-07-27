@@ -948,8 +948,6 @@ ${prompt}`;
 });
 
 
-
-
 // Error handler function
 function handleApiError(error, res) {
   console.error("Error in API endpoint:", error);
