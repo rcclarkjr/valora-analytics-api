@@ -428,6 +428,9 @@ app.get("/PromptAnalyzeArt.txt", (req, res) => {
   }
 });
 
+
+
+
 // =============== ANALYSIS ENDPOINTS ===============
 
 // Endpoint for Representational Index (RI) analysis
@@ -454,34 +457,44 @@ app.post("/analyze-ri", async (req, res) => {
 
     const analysisText = await callAI(messages, 1000, prompt);
 
-    // Improved RI value extraction - handles decimals
-    const riRegex = /RI\s*=\s*(\d+(?:\.\d+)?)/i;
+    // Improved RI value extraction - integers only (1, 2, 3, 4, 5)
+    const riRegex = /RI\s*=\s*(\d+)/i;
     const riMatch = analysisText.match(riRegex);
-    let riValue = "0.0"; // Default value
+    let riValue = "0"; // Default value
         
     if (riMatch && riMatch[1]) {
-      riValue = parseFloat(riMatch[1]).toFixed(1); // Ensure one decimal place
-      console.log("Extracted RI value:", riValue);
+      const extractedValue = parseInt(riMatch[1]);
+      // Ensure value is between 1-5
+      if (extractedValue >= 1 && extractedValue <= 5) {
+        riValue = extractedValue.toString();
+        console.log("Extracted RI value:", riValue);
+      } else {
+        console.log("RI value out of range (1-5):", extractedValue);
+        riValue = "3"; // Default to middle value if out of range
+      }
     } else {
       console.log("Could not extract RI value from response");
       console.log("Analysis snippet:", analysisText.substring(0, 200));
+      riValue = "3"; // Default to middle value
     }
 
-    // Updated category mapping with your preferred names
+    // Updated category mapping with your preferred names (integer-based)
     const getCategoryFromRI = (riScore) => {
-      const ri = parseFloat(riScore);
-      if (ri >= 1.0 && ri < 2.0) return "Abstract (Non-Objective)";
-      if (ri >= 2.0 && ri < 3.0) return "Expressive Abstract";
-      if (ri >= 3.0 && ri < 4.0) return "Stylized Representation";
-      if (ri >= 4.0 && ri < 5.0) return "Representational Realism";
-      if (ri >= 5.0) return "Photorealism";
-      return "Uncategorized";
+      const ri = parseInt(riScore);
+      switch(ri) {
+        case 1: return "Abstract (Non-Objective)";
+        case 2: return "Expressive Abstract";
+        case 3: return "Stylized Representation";
+        case 4: return "Representational Realism";
+        case 5: return "Photorealism";
+        default: return "Uncategorized";
+      }
     };
 
     const category = getCategoryFromRI(riValue);
 
     // Extract explanation text after RI line
-    const explanationRegex = /RI\s*=\s*\d+(?:\.\d+)?\s*\n\s*([\s\S]+?)(?=\n\s*#|$)/;
+    const explanationRegex = /RI\s*=\s*\d+\s*\n\s*([\s\S]+?)(?=\n\s*#|$)/;
     const explanationMatch = analysisText.match(explanationRegex);
     const explanationText = explanationMatch ? explanationMatch[1].trim() : "";
 
@@ -494,7 +507,7 @@ app.post("/analyze-ri", async (req, res) => {
     cleanedAnalysis = cleanedAnalysis.replace(/#{1,6}\s*Classification/gi, '## Classification');
     
     // Replace the RI section with standardized format
-    const riSectionRegex = /(## Classification[\s\S]*?)(RI\s*=\s*\d+(?:\.\d+)?)([\s\S]*?)(?=\n\s*##|$)/i;
+    const riSectionRegex = /(## Classification[\s\S]*?)(RI\s*=\s*\d+)([\s\S]*?)(?=\n\s*##|$)/i;
     
     if (riSectionRegex.test(cleanedAnalysis)) {
       const newRISection = `## Classification
@@ -532,6 +545,9 @@ ${explanationText}`;
     res.status(500).json({ error: { message: errMsg } });
   }
 });
+
+
+
 
 
 
