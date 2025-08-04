@@ -457,86 +457,70 @@ app.post("/analyze-ri", async (req, res) => {
 
     const analysisText = await callAI(messages, 1000, prompt);
 
-    // Improved RI value extraction - integers only (1, 2, 3, 4, 5)
-    const riRegex = /RI\s*=\s*(\d+)/i;
-    const riMatch = analysisText.match(riRegex);
-    let riValue = "0"; // Default value
-        
-    if (riMatch && riMatch[1]) {
-      const extractedValue = parseInt(riMatch[1]);
-      // Ensure value is between 1-5
-      if (extractedValue >= 1 && extractedValue <= 5) {
-        riValue = extractedValue.toString();
-        console.log("Extracted RI value:", riValue);
+    // Parse JSON response - no fallback, must be valid JSON
+    let structuredData = null;
+    try {
+      // Look for JSON block in the response
+      const jsonMatch = analysisText.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        structuredData = JSON.parse(jsonMatch[1]);
       } else {
-        console.log("RI value out of range (1-5):", extractedValue);
-        riValue = "3"; // Default to middle value if out of range
+        // Try parsing the entire response as JSON
+        structuredData = JSON.parse(analysisText);
       }
-    } else {
-      console.log("Could not extract RI value from response");
-      console.log("Analysis snippet:", analysisText.substring(0, 200));
-      riValue = "3"; // Default to middle value
+    } catch (jsonError) {
+      console.error("Failed to parse JSON response from AI:", jsonError.message);
+      console.log("Raw AI response:", analysisText.substring(0, 500));
+      return res.status(500).json({ 
+        error: { 
+          message: "AI returned invalid JSON format. Please try again." 
+        } 
+      });
     }
 
-    // Updated category mapping with your preferred names (integer-based)
-    const getCategoryFromRI = (riScore) => {
-      const ri = parseInt(riScore);
-      switch(ri) {
-        case 1: return "Abstract (Non-Objective)";
-        case 2: return "Expressive Abstract";
-        case 3: return "Stylized Representation";
-        case 4: return "Representational Realism";
-        case 5: return "Photorealism";
-        default: return "Uncategorized";
-      }
-    };
-
-    const category = getCategoryFromRI(riValue);
-
-    // Extract explanation text after RI line
-    const explanationRegex = /RI\s*=\s*\d+\s*\n\s*([\s\S]+?)(?=\n\s*#|$)/;
-    const explanationMatch = analysisText.match(explanationRegex);
-    const explanationText = explanationMatch ? explanationMatch[1].trim() : "";
-
-    // Clean and standardize the analysis text
-    let cleanedAnalysis = analysisText;
-    
-    // Ensure consistent heading structure
-    cleanedAnalysis = cleanedAnalysis.replace(/#{1,6}\s*Summary/gi, '## Summary');
-    cleanedAnalysis = cleanedAnalysis.replace(/#{1,6}\s*Analysis/gi, '## Analysis');
-    cleanedAnalysis = cleanedAnalysis.replace(/#{1,6}\s*Classification/gi, '## Classification');
-    
-    // Replace the RI section with standardized format
-    const riSectionRegex = /(## Classification[\s\S]*?)(RI\s*=\s*\d+)([\s\S]*?)(?=\n\s*##|$)/i;
-    
-    if (riSectionRegex.test(cleanedAnalysis)) {
-      const newRISection = `## Classification
-
-#### RI = ${riValue}
-
-#### ${category}
-
-${explanationText}`;
-      
-      cleanedAnalysis = cleanedAnalysis.replace(riSectionRegex, newRISection);
-    } else {
-      // Fallback: append proper classification section
-      cleanedAnalysis += `\n\n## Classification\n\n#### RI = ${riValue}\n\n#### ${category}\n\n${explanationText}`;
+    // Validate JSON structure
+    if (!structuredData.ri_score || !structuredData.category || !structuredData.explanation) {
+      throw new Error("Invalid JSON structure from AI");
     }
 
-    // Extract summary for separate field
-    const summaryMatch = cleanedAnalysis.match(/## Summary\s+([\s\S]*?)(?=\n\s*##|$)/i);
-    const summary = summaryMatch ? summaryMatch[1].trim() : "";
+    // Ensure RI score is valid integer 1-5
+    const riScore = parseInt(structuredData.ri_score);
+    if (riScore < 1 || riScore > 5) {
+      throw new Error(`Invalid RI score: ${riScore}. Must be 1-5.`);
+    }
+
+    // Build clean markdown from JSON data
+    const cleanMarkdown = `## Summary
+
+${structuredData.summary}
+
+## Analysis
+
+| **Criterion** | **Explanation** |
+|---------------|-----------------|
+| Subject Recognizability | ${structuredData.analysis.subject_recognizability} |
+| Fidelity to Physical Reality | ${structuredData.analysis.fidelity_to_reality} |
+| Use of Perspective/Depth | ${structuredData.analysis.perspective_depth} |
+| Detail and Texture | ${structuredData.analysis.detail_texture} |
+| Visual Reference to Real-World Objects | ${structuredData.analysis.real_world_reference} |
+
+## Classification
+
+#### RI = ${riScore}
+
+#### ${structuredData.category}
+
+${structuredData.explanation}`;
 
     const finalResponse = {
-      analysis: cleanedAnalysis,
-      ri: riValue,
-      category: category,
-      explanation: explanationText,
-      summary: summary
+      analysis: cleanMarkdown,
+      ri: riScore.toString(),
+      category: structuredData.category,
+      explanation: structuredData.explanation,
+      summary: structuredData.summary
     };
 
-    console.log(`RI Analysis complete: RI=${riValue}, Category=${category}`);
+    console.log(`RI Analysis complete: RI=${riScore}, Category=${structuredData.category}`);
     res.json(finalResponse);
 
   } catch (error) {
@@ -545,7 +529,6 @@ ${explanationText}`;
     res.status(500).json({ error: { message: errMsg } });
   }
 });
-
 
 
 
