@@ -454,98 +454,76 @@ app.post("/analyze-ri", async (req, res) => {
 
     const analysisText = await callAI(messages, 1000, prompt);
 
-    // Extract the RI value using regex
-    const riRegex = /Representational\s+Index\s*\(?RI\)?\s*=\s*(\d+)|\bRI\s*=\s*(\d+)/i;
+    // Improved RI value extraction - handles decimals
+    const riRegex = /RI\s*=\s*(\d+(?:\.\d+)?)/i;
     const riMatch = analysisText.match(riRegex);
-    let riValue = "NA"; // Default value if extraction fails
+    let riValue = "0.0"; // Default value
         
-    if (riMatch) {
-      // The value could be in group 1 or group 2 depending on which pattern matched
-      const extractedValue = riMatch[1] || riMatch[2];
-      if (extractedValue) {
-        riValue = extractedValue + ".0"; // Add decimal to keep consistent format
-        console.log("Extracted RI value:", riValue);
-      } else {
-        console.log("Match found but no value captured");
-      }
+    if (riMatch && riMatch[1]) {
+      riValue = parseFloat(riMatch[1]).toFixed(1); // Ensure one decimal place
+      console.log("Extracted RI value:", riValue);
     } else {
       console.log("Could not extract RI value from response");
-      // Add additional logging to see what we're getting
-      console.log("First 100 chars of analysis:", analysisText.substring(0, 100));
-    }    
-
-    // Define the category based on the RI value (this is more reliable than trying to extract it)
-    let category = "";
-    switch(riValue) {
-      case 1:
-        category = "Non-Objective (Pure Abstraction)";
-        break;
-      case 2:
-        category = "Abstract";
-        break;
-      case 3:
-        category = "Stylized Representation";
-        break;
-      case 4:
-        category = "Representational Realism";
-        break;
-      case 5:
-        category = "Hyper-Realism";
-        break;
-      default:
-        category = "Uncategorized";
+      console.log("Analysis snippet:", analysisText.substring(0, 200));
     }
 
-    // Get the explanation text - the paragraph that follows the RI value
-    const explanationMatch = analysisText.match(/RI\s*=\s*\d+\s*\n\s*([\s\S]+?)(?=\n\s*##|$)/);
+    // Updated category mapping with your preferred names
+    const getCategoryFromRI = (riScore) => {
+      const ri = parseFloat(riScore);
+      if (ri >= 1.0 && ri < 2.0) return "Abstract (Non-Objective)";
+      if (ri >= 2.0 && ri < 3.0) return "Expressive Abstract";
+      if (ri >= 3.0 && ri < 4.0) return "Stylized Representation";
+      if (ri >= 4.0 && ri < 5.0) return "Representational Realism";
+      if (ri >= 5.0) return "Photorealism";
+      return "Uncategorized";
+    };
+
+    const category = getCategoryFromRI(riValue);
+
+    // Extract explanation text after RI line
+    const explanationRegex = /RI\s*=\s*\d+(?:\.\d+)?\s*\n\s*([\s\S]+?)(?=\n\s*#|$)/;
+    const explanationMatch = analysisText.match(explanationRegex);
     const explanationText = explanationMatch ? explanationMatch[1].trim() : "";
 
-    // Create a completely new analysis text with proper formatting
-    // This guarantees the right structure regardless of what GPT returns
-    let modifiedAnalysis = analysisText;
-
-    // Replace the RI section and everything after it until the next heading or end
-    const riSectionRegex = /## Classification\s*\n\s*###\s*RI\s*=\s*\d+\s*\n\s*[\s\S]+?(?=\n\s*##|$)/;
-    const riSection = analysisText.match(riSectionRegex);
+    // Clean and standardize the analysis text
+    let cleanedAnalysis = analysisText;
     
-    if (riSection && riSection[0]) {
-      // Create a properly formatted replacement
+    // Ensure consistent heading structure
+    cleanedAnalysis = cleanedAnalysis.replace(/#{1,6}\s*Summary/gi, '## Summary');
+    cleanedAnalysis = cleanedAnalysis.replace(/#{1,6}\s*Analysis/gi, '## Analysis');
+    cleanedAnalysis = cleanedAnalysis.replace(/#{1,6}\s*Classification/gi, '## Classification');
+    
+    // Replace the RI section with standardized format
+    const riSectionRegex = /(## Classification[\s\S]*?)(RI\s*=\s*\d+(?:\.\d+)?)([\s\S]*?)(?=\n\s*##|$)/i;
+    
+    if (riSectionRegex.test(cleanedAnalysis)) {
       const newRISection = `## Classification
 
-### RI = ${riValue}
+#### RI = ${riValue}
 
-### ${category}
+#### ${category}
 
 ${explanationText}`;
       
-      // Replace the section
-      modifiedAnalysis = analysisText.replace(riSectionRegex, newRISection);
+      cleanedAnalysis = cleanedAnalysis.replace(riSectionRegex, newRISection);
     } else {
-      // Fallback if we can't find the section to replace
-      console.log("Could not find RI section to replace - using fallback method");
-      
-      // Find just the RI line instead
-      const riLineRegex = /###\s*RI\s*=\s*\d+/;
-      const riLine = analysisText.match(riLineRegex);
-      
-      if (riLine && riLine[0]) {
-        const newRILines = `### RI = ${riValue}\n\n### ${category}`;
-        modifiedAnalysis = analysisText.replace(riLineRegex, newRILines);
-      }
+      // Fallback: append proper classification section
+      cleanedAnalysis += `\n\n## Classification\n\n#### RI = ${riValue}\n\n#### ${category}\n\n${explanationText}`;
     }
 
-    // Extract the summary paragraph
-    const summaryMatch = analysisText.match(/## Summary\s+([\s\S]*?)\n##/i);
-    const summary = summaryMatch ? summaryMatch[1].trim() : null;
+    // Extract summary for separate field
+    const summaryMatch = cleanedAnalysis.match(/## Summary\s+([\s\S]*?)(?=\n\s*##|$)/i);
+    const summary = summaryMatch ? summaryMatch[1].trim() : "";
 
     const finalResponse = {
-      analysis: modifiedAnalysis,
+      analysis: cleanedAnalysis,
       ri: riValue,
       category: category,
-      explanation: summary || ""
+      explanation: explanationText,
+      summary: summary
     };
 
-    console.log("Sending final RI response to client");
+    console.log(`RI Analysis complete: RI=${riValue}, Category=${category}`);
     res.json(finalResponse);
 
   } catch (error) {
