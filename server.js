@@ -337,6 +337,200 @@ async function callOpenAIAPI(messages, maxTokens, systemContent, useJSON) {
   return responseText;
 }
 
+
+
+
+
+// ====================
+// TEMPORARY IMAGE STORAGE ENDPOINTS
+// Add these to your server.js file
+// ====================
+
+const multer = require('multer');
+
+// Configure multer for file uploads (in memory)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  }
+});
+
+// In-memory storage for temporary images (you can use Redis in production)
+const tempImageStore = new Map();
+
+// Cleanup expired images every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [imageId, data] of tempImageStore.entries()) {
+    if (now > data.expiry) {
+      tempImageStore.delete(imageId);
+      console.log(`🗑️ Cleaned up expired temp image: ${imageId}`);
+    }
+  }
+}, 30 * 60 * 1000); // 30 minutes
+
+// Store temporary image endpoint
+app.post('/store-temp-image', upload.single('image'), async (req, res) => {
+  try {
+    console.log('📤 Received temp image storage request');
+    
+    const { userId, filename, expiry } = req.body;
+    const imageFile = req.file;
+    
+    if (!imageFile) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+    
+    if (!userId || !filename) {
+      return res.status(400).json({ error: 'Missing userId or filename' });
+    }
+    
+    // Generate unique image ID
+    const imageId = `${userId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Calculate expiry time (default 2 hours)
+    const expiryTime = Date.now() + (parseInt(expiry) || 7200) * 1000;
+    
+    // Store image data in memory
+    tempImageStore.set(imageId, {
+      buffer: imageFile.buffer,
+      mimeType: imageFile.mimetype,
+      originalName: filename,
+      userId: userId,
+      uploadTime: Date.now(),
+      expiry: expiryTime,
+      size: imageFile.size
+    });
+    
+    console.log(`✅ Stored temp image: ${imageId} (${(imageFile.size / 1024 / 1024).toFixed(2)}MB)`);
+    
+    res.json({
+      success: true,
+      imageId: imageId,
+      tempUrl: `/get-temp-image/${imageId}`,
+      expiresIn: parseInt(expiry) || 7200,
+      fileSize: imageFile.size
+    });
+    
+  } catch (error) {
+    console.error('❌ Error storing temp image:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Retrieve temporary image endpoint
+app.get('/get-temp-image/:imageId', async (req, res) => {
+  try {
+    const { imageId } = req.params;
+    const { userId } = req.query;
+    
+    console.log(`📥 Retrieving temp image: ${imageId} for user: ${userId}`);
+    
+    const imageData = tempImageStore.get(imageId);
+    
+    if (!imageData) {
+      console.log(`❌ Image not found: ${imageId}`);
+      return res.status(404).json({ error: 'Image not found or expired' });
+    }
+    
+    // Verify ownership
+    if (imageData.userId !== userId) {
+      console.log(`❌ Access denied for image: ${imageId}`);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Check if expired
+    if (Date.now() > imageData.expiry) {
+      tempImageStore.delete(imageId);
+      console.log(`❌ Image expired: ${imageId}`);
+      return res.status(410).json({ error: 'Image expired' });
+    }
+    
+    console.log(`✅ Serving temp image: ${imageId} (${(imageData.size / 1024 / 1024).toFixed(2)}MB)`);
+    
+    // Set appropriate headers
+    res.set({
+      'Content-Type': imageData.mimeType,
+      'Content-Length': imageData.buffer.length,
+      'Cache-Control': 'private, max-age=3600',
+      'Content-Disposition': `inline; filename="${imageData.originalName}"`
+    });
+    
+    res.send(imageData.buffer);
+    
+  } catch (error) {
+    console.error('❌ Error retrieving temp image:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get temp image info (without downloading)
+app.get('/temp-image-info/:imageId', async (req, res) => {
+  try {
+    const { imageId } = req.params;
+    const { userId } = req.query;
+    
+    const imageData = tempImageStore.get(imageId);
+    
+    if (!imageData) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    
+    if (imageData.userId !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    if (Date.now() > imageData.expiry) {
+      tempImageStore.delete(imageId);
+      return res.status(410).json({ error: 'Image expired' });
+    }
+    
+    res.json({
+      imageId: imageId,
+      originalName: imageData.originalName,
+      mimeType: imageData.mimeType,
+      size: imageData.size,
+      uploadTime: imageData.uploadTime,
+      expiry: imageData.expiry,
+      remainingTime: Math.max(0, imageData.expiry - Date.now())
+    });
+    
+  } catch (error) {
+    console.error('Error getting temp image info:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug endpoint to see stored images
+app.get('/debug-temp-images', (req, res) => {
+  const images = Array.from(tempImageStore.entries()).map(([id, data]) => ({
+    imageId: id,
+    userId: data.userId,
+    originalName: data.originalName,
+    size: data.size,
+    uploadTime: new Date(data.uploadTime).toISOString(),
+    expiry: new Date(data.expiry).toISOString(),
+    expired: Date.now() > data.expiry
+  }));
+  
+  res.json({
+    totalImages: images.length,
+    images: images
+  });
+});
+
+
+
+
+
 // ====================
 // API ROUTES
 // ====================
