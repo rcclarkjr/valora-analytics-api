@@ -950,6 +950,12 @@ const systemContent = `You are an art career analyst writing about ${artistName}
 });
 
 
+
+
+
+
+
+
 // Endpoint for Skill Mastery Index (SMI) analysis
 app.post("/analyze-smi", async (req, res) => {
   try {
@@ -1145,6 +1151,13 @@ function handleApiError(error, res) {
     } 
   });
 }
+
+
+
+
+
+
+
 
 // =======================================
 // ART VALUATION SYSTEM API ENDPOINTS
@@ -2180,45 +2193,131 @@ app.get("/api/sizeyourprice", (req, res) => {
   }
 });
 
+
+
+
+
+
 // Endpoint for general art analysis with refinement recommendations
 app.post("/analyze-art", async (req, res) => {
   try {
     console.log("Received art analysis request");
-    const { prompt, image, artTitle, artistName } = req.body;
-
+    const { prompt, image, artTitle, artistName, subjectPhrase } = req.body;
     if (!prompt || !image || (!ANTHROPIC_API_KEY && !OPENAI_API_KEY)) {
       return res.status(400).json({ error: { message: "Missing prompt, image, or API key" } });
     }
+    
+    // Modified prompt to request JSON output
+    const jsonPrompt = `Title: "${artTitle}"\nArtist: "${artistName}"\nSubject: "${subjectPhrase}"\n\n${prompt}
 
-    const finalPrompt = `Title: "${artTitle}"\nArtist: "${artistName}"\n\n${prompt}`;
+IMPORTANT: Return your response as a valid JSON object with this exact structure:
+{
+  "overview": "Brief description paragraph",
+  "strengths": [
+    {"title": "Strength Category Name", "description": "Detailed explanation"},
+    {"title": "Another Strength", "description": "Detailed explanation"}
+  ],
+  "opportunities": [
+    {
+      "category": "Category Name (e.g., Composition Enhancement)",
+      "steps": [
+        {"step": "Step 1", "description": "Detailed step description"},
+        {"step": "Step 2", "description": "Detailed step description"},
+        {"step": "Step 3", "description": "Detailed step description"}
+      ]
+    },
+    {
+      "category": "Another Category Name",
+      "steps": [
+        {"step": "Step 1", "description": "Detailed step description"},
+        {"step": "Step 2", "description": "Detailed step description"},
+        {"step": "Step 3", "description": "Detailed step description"}
+      ]
+    }
+  ],
+  "smi": "8.5"
+}
+
+Return ONLY the JSON object, no additional text or markdown formatting.`;
 
     const messages = [
       {
         role: "user",
         content: [
-          { type: "text", text: finalPrompt },
+          { type: "text", text: jsonPrompt },
           { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
         ]
       }
     ];
-
-    const systemContent = "You are an expert fine art analyst specializing in providing constructive feedback and refinement recommendations for artworks.";
-
+    
+    const systemContent = "You are an expert fine art analyst specializing in providing constructive feedback and refinement recommendations for artworks. Always respond with valid JSON only.";
+    
     const analysisText = await callAI(messages, 2000, systemContent);
-
+    
+    // Parse the JSON response
+    let parsedAnalysis;
+    try {
+      // Clean the response in case there's any extra text
+      const cleanedResponse = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      parsedAnalysis = JSON.parse(cleanedResponse);
+    } catch (parseError) {
+      console.error("Failed to parse AI response as JSON:", parseError);
+      console.log("Raw AI response:", analysisText);
+      
+      // Fallback: return the original text-based response
+      return res.json({
+        analysis: analysisText,
+        isLegacyFormat: true
+      });
+    }
+    
+    // Validate the JSON structure
+    if (!parsedAnalysis.overview || !parsedAnalysis.strengths || !parsedAnalysis.opportunities) {
+      console.error("Invalid JSON structure received from AI");
+      return res.json({
+        analysis: analysisText,
+        isLegacyFormat: true
+      });
+    }
+    
     const finalResponse = {
-      analysis: analysisText
+      title: "Analysis: 33 Essential Factors",
+      artTitle: artTitle,
+      artistName: artistName,
+      subjectPhrase: subjectPhrase,
+      overview: parsedAnalysis.overview,
+      strengths: parsedAnalysis.strengths,
+      opportunities: parsedAnalysis.opportunities,
+      smi: parsedAnalysis.smi || null,
+      timestamp: new Date().toISOString()
     };
-
-    console.log("Sending art analysis response to client");
+    
+    console.log("Sending structured art analysis response to client");
     res.json(finalResponse);
-
+    
   } catch (error) {
     console.error("Error in /analyze-art:", error.message);
     const errMsg = error.response?.data?.error?.message || error.message || "Unknown error";
     res.status(500).json({ error: { message: errMsg } });
   }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 app.post("/api/valuation", async (req, res) => {
   try {
@@ -3088,9 +3187,6 @@ app.get('/api/start-batch-smi', (req, res) => {
     instructions: 'This will process all images in the images directory and generate a CSV file'
   });
 });
-
-
-
 
 
 // Add this to your backend codebase (server.js or new file migrate.js)
