@@ -2207,10 +2207,68 @@ app.post("/analyze-art", async (req, res) => {
       return res.status(400).json({ error: { message: "Missing prompt, image, or API key" } });
     }
     
-    // Modified prompt to request JSON output
-    const jsonPrompt = `Title: "${artTitle}"\nArtist: "${artistName}"\nSubject: "${subjectPhrase}"\n\n${prompt}
 
-IMPORTANT: Return your response as a valid JSON object with this exact structure:
+
+
+
+
+
+
+
+
+
+
+// Add the 33 factors definitions
+const factorsDefinitions = `
+THE 33 ESSENTIAL FACTORS FOR ART MASTERY:
+
+Core Elements:
+1. Line - A mark with length and direction which can be continuous, broken, implied, thick, thin, or varied in weight and texture. Lines can guide the viewer's eye, define shapes, create textures, and convey emotions and movement.
+2. Shape - A two-dimensional area defined by boundaries.
+3. Form - A three-dimensional object or the illusion of three dimensions.
+4. Space - The area around or between components of a piece which conveys depth and perspective.
+5. Color/Hue - The aspect of things caused by differing qualities of light reflected or emitted by them.
+6. Texture - The surface quality or feel of an object, its smoothness, roughness, softness, etc.
+7. Tone/Value - The lightness or darkness of a color.
+8. Saturation - The intensity or purity of color, which can be reduced by adding gray, black, or white.
+9. Composition - The arrangement of visual elements within a work of art to guide the viewer's eye and convey the intended message or emotion.
+10. Volume - The perceived three-dimensionality of an object.
+
+Design Principles:
+11. Balance - The distribution of visual weight in a work.
+12. Contrast - The degree of difference in color or value, arranged in a way to make an object distinguishable.
+13. Emphasis - The part of the design that catches the viewer's attention.
+14. Movement - The path the viewer's eye takes through the artwork.
+15. Rhythm - The repetition of visual elements to create a sense of movement.
+16. Variety - The use of different elements to create interest.
+17. Proportion - The relationship between the sizes of different parts of a work.
+18. Harmony - The arrangement of elements in a manner where no single element overwhelms others.
+19. Cohesiveness - The logical and consistent arrangement of parts of the artwork so they support each other in a unified way to convey an overall theme or message.
+20. Pattern - The repeating of an object or symbol throughout the artwork to create a sense of rhythm and unity.
+
+Techniques:
+21. Brushwork - The way an artist applies paint with their brush.
+22. Chiaroscuro - The use of strong contrasts between light and dark.
+23. Impasto - Applying paint thickly so that brush or palette knife marks are visible.
+24. Sfumato - Blending colors and tones so subtly that there is no perceptible transition.
+25. Glazing - Applying a transparent layer of paint over a dry layer.
+26. Scumbling - Brushing or knifing a thin, broken layer of color over another.
+27. Pointillism - Painting with small, distinct dots of pure color in proximity for a vibrant, luminous effect.
+28. Wet-on-Wet - Applying wet paint onto wet paint, creating soft transitions and a fluid effect.
+
+Expression of Artistic Voice:
+29. Uniqueness - The distinct and original qualities that set an artwork apart from others as one-of-a-kind.
+30. Creativity - The ability to generate innovative ideas, concepts, and forms that evoke emotions, provoke thought, and communicate the artist's unique perspective.
+31. Mood - The emotional atmosphere or feeling that a work of art evokes in the viewer.
+32. Viewer Engagement - The ways in which an artwork captures and holds the viewer's attention, provoking thought, curiosity, and emotional response. It is a measure of how effectively an artwork connects with its audience and encourages them to interact on a deeper level.
+33. Emotional Resonance - The extent to which an artwork resonates with the viewer's personal experiences, memories, and emotions.`;
+
+// Modified prompt to request JSON output with recommended study areas
+const jsonPrompt = `Title: "${artTitle}"\nArtist: "${artistName}"\nSubject: "${subjectPhrase}"\n\n${factorsDefinitions}\n\n${prompt}
+
+IMPORTANT: After analyzing the artwork, identify the 3 factors from the 33 Essential Factors above that are MOST NEEDED to execute the "Opportunities for Refinement" you recommend. These should be the factors that would provide the biggest return on effort for attracting collectors and gallerists.
+
+Return your response as a valid JSON object with this exact structure:
 {
   "overview": "Brief description paragraph",
   "strengths": [
@@ -2235,77 +2293,83 @@ IMPORTANT: Return your response as a valid JSON object with this exact structure
       ]
     }
   ],
-  "smi": "8.5"
+  "recommendedStudy": [
+    {"factor": "Factor Name", "definition": "exact definition from the 33 factors above"},
+    {"factor": "Another Factor Name", "definition": "exact definition from the 33 factors above"},
+    {"factor": "Third Factor Name", "definition": "exact definition from the 33 factors above"}
+  ]
 }
+
+CRITICAL: For recommendedStudy, use exactly 3 different factors from the 33 Essential Factors list above. Select the factors most needed to execute your refinement recommendations. Use the exact factor names and definitions provided above.
 
 Return ONLY the JSON object, no additional text or markdown formatting.`;
 
-    const messages = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: jsonPrompt },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
-        ]
-      }
-    ];
-    
-    const systemContent = "You are an expert fine art analyst specializing in providing constructive feedback and refinement recommendations for artworks. Always respond with valid JSON only.";
-    
-    const analysisText = await callAI(messages, 2000, systemContent);
-    
-    // Parse the JSON response
-    let parsedAnalysis;
-    try {
-      // Clean the response in case there's any extra text
-      const cleanedResponse = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      parsedAnalysis = JSON.parse(cleanedResponse);
-    } catch (parseError) {
-      console.error("Failed to parse AI response as JSON:", parseError);
-      console.log("Raw AI response:", analysisText);
-      
-      // Fallback: return the original text-based response
-      return res.json({
-        analysis: analysisText,
-        isLegacyFormat: true
-      });
-    }
-    
-    // Validate the JSON structure
-    if (!parsedAnalysis.overview || !parsedAnalysis.strengths || !parsedAnalysis.opportunities) {
-      console.error("Invalid JSON structure received from AI");
-      return res.json({
-        analysis: analysisText,
-        isLegacyFormat: true
-      });
-    }
-    
-    const finalResponse = {
-      title: "Analysis: 33 Essential Factors",
-      artTitle: artTitle,
-      artistName: artistName,
-      subjectPhrase: subjectPhrase,
-      overview: parsedAnalysis.overview,
-      strengths: parsedAnalysis.strengths,
-      opportunities: parsedAnalysis.opportunities,
-      smi: parsedAnalysis.smi || null,
-      timestamp: new Date().toISOString()
-    };
-    
-    console.log("Sending structured art analysis response to client");
-    res.json(finalResponse);
-    
-  } catch (error) {
-    console.error("Error in /analyze-art:", error.message);
-    const errMsg = error.response?.data?.error?.message || error.message || "Unknown error";
-    res.status(500).json({ error: { message: errMsg } });
+const messages = [
+  {
+    role: "user",
+    content: [
+      { type: "text", text: jsonPrompt },
+      { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+    ]
   }
-});
+];
 
+const systemContent = "You are an expert fine art analyst specializing in providing constructive feedback and refinement recommendations for artworks. Always respond with valid JSON only.";
 
+const analysisText = await callAI(messages, 2000, systemContent);
 
+// Parse the JSON response
+let parsedAnalysis;
+try {
+  // Clean the response in case there's any extra text
+  const cleanedResponse = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  parsedAnalysis = JSON.parse(cleanedResponse);
+} catch (parseError) {
+  console.error("Failed to parse AI response as JSON:", parseError);
+  console.log("Raw AI response:", analysisText);
+  
+  // Fallback: return the original text-based response
+  return res.json({
+    analysis: analysisText,
+    isLegacyFormat: true
+  });
+}
 
+// Validate the JSON structure
+if (!parsedAnalysis.overview || !parsedAnalysis.strengths || !parsedAnalysis.opportunities) {
+  console.error("Invalid JSON structure received from AI");
+  return res.json({
+    analysis: analysisText,
+    isLegacyFormat: true
+  });
+}
 
+// Optional: Add validation for recommendedStudy
+if (!parsedAnalysis.recommendedStudy || !Array.isArray(parsedAnalysis.recommendedStudy) || parsedAnalysis.recommendedStudy.length !== 3) {
+  console.warn("Missing or invalid recommendedStudy array, using empty array");
+  parsedAnalysis.recommendedStudy = [];
+}
+
+const finalResponse = {
+  title: "Analysis: 33 Essential Factors",
+  artTitle: artTitle,
+  artistName: artistName,
+  subjectPhrase: subjectPhrase,
+  overview: parsedAnalysis.overview,
+  strengths: parsedAnalysis.strengths,
+  opportunities: parsedAnalysis.opportunities,
+  recommendedStudy: parsedAnalysis.recommendedStudy || [],
+  timestamp: new Date().toISOString()
+};
+
+console.log("Sending structured art analysis response to client");
+res.json(finalResponse);
+
+} catch (error) {
+  console.error("Error in /analyze-art:", error.message);
+  const errMsg = error.response?.data?.error?.message || error.message || "Unknown error";
+  res.status(500).json({ error: { message: errMsg } });
+}
 
 
 
@@ -3008,6 +3072,11 @@ app.get('/api/health', (req, res) => {
 
 
 
+
+
+
+
+
 // Add this endpoint to your server.js file
 
 app.post('/api/batch-calculate-smi', async (req, res) => {
@@ -3189,13 +3258,9 @@ app.get('/api/start-batch-smi', (req, res) => {
 });
 
 
-// Add this to your backend codebase (server.js or new file migrate.js)
 
-// UPDATE THIS PATH to match where your JSON file is mounted
 const DATABASE_FILE_PATH = '/mnt/data/art_database.json';  // Common mount path
-// OR it might be something like:
-// const DATABASE_FILE_PATH = '/app/data/art_database.json';
-// const DATABASE_FILE_PATH = process.env.DB_PATH || './art_database.json';
+
 
 function migrateAddArtOnlyPrice(databaseData) {
     console.log('Starting migration: Adding artOnlyPrice field...');
