@@ -2292,7 +2292,7 @@ Return your response as a valid JSON object with this exact structure:
 
 CRITICAL: For recommendedStudy, you MUST select exactly 3 different factors from the 33 Essential Factors list above. Use the EXACT factor names as they appear in the numbered list (e.g., "Line", "Shape", "Form", "Space", "Color/Hue", "Texture", "Tone/Value", "Saturation", "Composition", "Volume", "Balance", "Contrast", "Emphasis", "Movement", "Rhythm", "Variety", "Proportion", "Harmony", "Cohesiveness", "Pattern", "Brushwork", "Chiaroscuro", "Impasto", "Sfumato", "Glazing", "Scumbling", "Pointillism", "Wet-on-Wet", "Uniqueness", "Creativity", "Mood", "Viewer Engagement", "Emotional Resonance"). Do NOT create new factor names or use variations. Copy the exact factor names and definitions from the list above.
 
-Return ONLY the JSON object, no additional text or markdown formatting.`;
+Return ONLY the JSON object, no additional text or markdown formatting. Ensure all arrays and objects are properly closed with matching brackets and braces.`;
 
 const messages = [
   {
@@ -2311,9 +2311,20 @@ const analysisText = await callAI(messages, 2000, systemContent);
 // Parse the JSON response
 let parsedAnalysis;
 try {
-  // Clean the response in case there's any extra text
-  const cleanedResponse = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-  parsedAnalysis = JSON.parse(cleanedResponse);
+
+
+
+// Clean the response in case there's any extra text
+let cleanedResponse = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+// Fix common JSON formatting issues
+cleanedResponse = cleanedResponse.replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
+cleanedResponse = cleanedResponse.replace(/\}\s*\]/g, '}]'); // Fix missing closing brackets
+
+parsedAnalysis = JSON.parse(cleanedResponse);
+
+
+
 } catch (parseError) {
   console.error("Failed to parse AI response as JSON:", parseError);
   console.log("Raw AI response:", analysisText);
