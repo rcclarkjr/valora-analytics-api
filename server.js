@@ -2208,16 +2208,6 @@ app.post("/analyze-art", async (req, res) => {
     }
     
 
-
-
-
-
-
-
-
-
-
-
 // Add the 33 factors definitions
 const factorsDefinitions = `
 THE 33 ESSENTIAL FACTORS FOR ART MASTERY:
@@ -2370,7 +2360,7 @@ res.json(finalResponse);
   const errMsg = error.response?.data?.error?.message || error.message || "Unknown error";
   res.status(500).json({ error: { message: errMsg } });
 }
-
+});
 
 
 
