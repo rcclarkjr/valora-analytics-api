@@ -2290,7 +2290,7 @@ Return your response as a valid JSON object with this exact structure:
   ]
 }
 
-CRITICAL: For recommendedStudy, use exactly 3 different factors from the 33 Essential Factors list above. Select the factors most needed to execute your refinement recommendations. Use the exact factor names and definitions provided above.
+CRITICAL: For recommendedStudy, you MUST select exactly 3 different factors from the 33 Essential Factors list above. Use the EXACT factor names as they appear in the numbered list (e.g., "Line", "Shape", "Form", "Space", "Color/Hue", "Texture", "Tone/Value", "Saturation", "Composition", "Volume", "Balance", "Contrast", "Emphasis", "Movement", "Rhythm", "Variety", "Proportion", "Harmony", "Cohesiveness", "Pattern", "Brushwork", "Chiaroscuro", "Impasto", "Sfumato", "Glazing", "Scumbling", "Pointillism", "Wet-on-Wet", "Uniqueness", "Creativity", "Mood", "Viewer Engagement", "Emotional Resonance"). Do NOT create new factor names or use variations. Copy the exact factor names and definitions from the list above.
 
 Return ONLY the JSON object, no additional text or markdown formatting.`;
 
