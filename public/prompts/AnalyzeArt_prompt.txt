@@ -580,13 +580,14 @@ Row 33:
 ## Step 8: Output Instructions
 
 CRITICAL REQUIREMENTS:
-1. Provide EXACTLY 2 opportunities for refinement (not more, not less)
-2. For recommended study factors, select EXACTLY 2 factors from the numbered list above
+1. Provide EXACTLY 3 opportunities for refinement (not more, not less)
+2. For recommended study factors, select EXACTLY 3 factors from the numbered list above
 3. Use ONLY the exact factor names as listed (1-33) - DO NOT create new factor names
 4. Copy the exact definitions provided above - DO NOT modify or create new definitions
 5. If you cannot find an appropriate factor from the 33 listed, choose the closest match
 
 Return your response as a valid JSON object with this exact structure:
+
 {
   "overview": "Brief description paragraph about the artwork's current strengths and character",
   "strengths": [
@@ -598,30 +599,39 @@ Return your response as a valid JSON object with this exact structure:
       "category": "Option 1: [Category Name based on highest BFB factor]",
       "steps": [
         {"step": "•", "description": "First refinement approach"},
-        {"step": "•", "description": "Second refinement approach"},
-        {"step": "•", "description": "Third refinement approach"}
+        {"step": "•", "description": "Second refinement approach"}
       ]
     },
     {
       "category": "Option 2: [Category Name based on second highest BFB factor]", 
       "steps": [
         {"step": "•", "description": "First refinement approach"},
-        {"step": "•", "description": "Second refinement approach"},
-        {"step": "•", "description": "Third refinement approach"}
+        {"step": "•", "description": "Second refinement approach"}
+      ]
+    },
+    {
+      "category": "Option 3: [Category Name based on third highest BFB factor]", 
+      "steps": [
+        {"step": "•", "description": "First refinement approach"},
+        {"step": "•", "description": "Second refinement approach"}
       ]
     }
   ],
   "recommendedStudy": [
     {"factor": "Exact Factor Name From List Above (corresponding to Option 1)", "definition": "exact definition from the 33 factors above"},
-    {"factor": "Exact Factor Name From List Above (corresponding to Option 2)", "definition": "exact definition from the 33 factors above"}
+    {"factor": "Exact Factor Name From List Above (corresponding to Option 2)", "definition": "exact definition from the 33 factors above"},
+    {"factor": "Exact Factor Name From List Above (corresponding to Option 3)", "definition": "exact definition from the 33 factors above"}
   ]
 }
 
+
+
+
 **VALIDATION CHECKLIST:**
-- Have you selected exactly 2 factors for recommendedStudy?
+- Have you selected exactly 3 factors for recommendedStudy?
 - Are both factor names EXACTLY as written in the numbered list (1-33)?
 - Are both definitions EXACTLY as written above (no modifications)?
-- Do you have exactly 2 opportunities with "Option 1:" and "Option 2:" prefixes?
+- Do you have exactly 3 opportunities with "Option 1:" and "Option 2:" and "Option 3:" prefixes?
 - Are all steps marked with "•" bullets?
 - Do the recommended factors correspond to your highest BFB values?
 
