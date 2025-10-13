@@ -589,7 +589,7 @@ CRITICAL REQUIREMENTS:
 Return your response as a valid JSON object with this exact structure:
 
 {
-  "overview": "Brief description paragraph about the artwork's current strengths and character",
+  "overview": "Brief description paragraph about the artwork's current strengths and character. Caution: do not automatically repeat what the user indicated as the subject of the work. If you don't see it, say so in a polite, constructive way.",
   "strengths": [
     {"title": "First Strength Category", "description": "Detailed explanation of what works well"},
     {"title": "Second Strength Category", "description": "Detailed explanation of what works well"}
@@ -636,3 +636,4 @@ Return your response as a valid JSON object with this exact structure:
 - Do the recommended factors correspond to your highest BFB values?
 
 Return ONLY the JSON object, no additional text or markdown formatting. Ensure all arrays and objects are properly closed with matching brackets and braces.
+
