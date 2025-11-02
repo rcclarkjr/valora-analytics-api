@@ -1221,19 +1221,24 @@ ${prompt}`;
       });
     }
 
-    // Convert JSON to markdown format for frontend
-    const markdownReport = `
+
+
+
+// Convert JSON to markdown format for frontend
+const markdownReport = `
 ## Representational Index (RI): ${aiResponse.ri_score}
 
 **Category:** ${aiResponse.category}
 
 ### Summary
-${aiResponse.summary}
+${aiResponse.summary.trim()}
 
-### Analysis
+## Analysis
 
 #### Subject Recognizability
 ${aiResponse.analysis.subject_recognizability}
+
+
 
 #### Fidelity to Reality
 ${aiResponse.analysis.fidelity_to_reality}
