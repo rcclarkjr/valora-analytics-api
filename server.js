@@ -1151,6 +1151,124 @@ function handleApiError(error, res) {
 
 
 
+// Endpoint for Representational Index (RI) analysis
+app.post("/analyze-ri", async (req, res) => {
+  try {
+    console.log("Received RI analyze request");
+    const { prompt, image, artTitle, artistName } = req.body;
+
+    if (!prompt) {
+      console.log("Missing prompt in request");
+      return res.status(400).json({ error: { message: "Prompt is required" } });
+    }
+    
+    if (!image) {
+      console.log("Missing image in request");
+      return res.status(400).json({ error: { message: "Image is required" } });
+    }
+
+    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+      console.log("Missing API key");
+      return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
+    }
+
+    console.log(`Processing RI request for artwork: "${artTitle}" by ${artistName}`);
+    console.log(`Prompt length: ${prompt.length} characters`);
+    
+    // Construct the prompt with artwork information
+    const finalPrompt = `Title: "${artTitle}"
+Artist: "${artistName}"
+
+${prompt}`;
+
+    console.log("Sending request to AI for RI analysis");
+
+    const messages = [
+      { 
+        role: "user", 
+        content: [
+          { type: "text", text: finalPrompt },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+        ]
+      }
+    ];
+
+    const systemContent = "You are an expert fine art analyst specializing in evaluating representational accuracy. Respond with ONLY valid JSON.";
+
+    let aiResponse;
+    try {
+      // Request JSON response from AI
+      aiResponse = await callAI(messages, 1500, systemContent, true);
+      console.log("RI Analysis completed successfully");
+    } catch (error) {
+      console.log("AI request failed:", error.message);
+      return res.status(500).json({ error: { message: "AI analysis failed: " + error.message } });
+    }
+
+    // Validate JSON structure
+    if (!aiResponse.ri_score || !aiResponse.category || !aiResponse.analysis) {
+      console.error("Invalid RI response structure from AI");
+      return res.status(500).json({ 
+        error: { message: "AI returned invalid response structure" } 
+      });
+    }
+
+    // Validate RI score is between 1-5
+    if (aiResponse.ri_score < 1 || aiResponse.ri_score > 5) {
+      console.error(`Invalid RI score: ${aiResponse.ri_score}`);
+      return res.status(500).json({ 
+        error: { message: `Invalid RI score: ${aiResponse.ri_score}. Must be between 1-5` } 
+      });
+    }
+
+    // Convert JSON to markdown format for frontend
+    const markdownReport = `
+## Representational Index (RI): ${aiResponse.ri_score}
+
+**Category:** ${aiResponse.category}
+
+### Summary
+${aiResponse.summary}
+
+### Analysis
+
+#### Subject Recognizability
+${aiResponse.analysis.subject_recognizability}
+
+#### Fidelity to Reality
+${aiResponse.analysis.fidelity_to_reality}
+
+#### Perspective & Depth
+${aiResponse.analysis.perspective_depth}
+
+#### Detail & Texture
+${aiResponse.analysis.detail_texture}
+
+#### Real-World Reference
+${aiResponse.analysis.real_world_reference}
+
+### Explanation
+${aiResponse.explanation}
+`;
+
+    console.log("Sending RI analysis response to client");
+    res.json({ 
+      analysis: markdownReport.trim(),
+      ri_score: aiResponse.ri_score,
+      category: aiResponse.category
+    });
+
+  } catch (error) {
+    console.error("Unexpected error in RI analysis:", error);
+    res.status(500).json({ 
+      error: { 
+        message: "Internal server error during analysis" 
+      } 
+    });
+  }
+});
+
+
 
 
 
