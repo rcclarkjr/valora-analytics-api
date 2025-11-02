@@ -639,106 +639,87 @@ app.get("/PromptAnalyzeArt.txt", (req, res) => {
 
 
 
-
-// =============== ANALYSIS ENDPOINTS ===============
-
-// Endpoint for Representational Index (RI) analysis
-app.post("/analyze-ri", async (req, res) => {
+// ====================
+// REVISED ENDPOINT: Convert Bio to Questionnaire Only
+// ====================
+app.post("/analyze-cli", async (req, res) => {
   try {
-    console.log("Received RI analyze request");
-    const { prompt, image, artTitle, artistName } = req.body;
+    console.log("Received CLI bio-to-questionnaire request");
+    const { prompt, artistName, artistResume } = req.body;
 
-    if (!prompt || !image || (!ANTHROPIC_API_KEY && !OPENAI_API_KEY)) {
-      return res.status(400).json({ error: { message: "Missing prompt, image, or API key" } });
-    }
-
-    const finalPrompt = `Title: "${artTitle}"\nArtist: "${artistName}"\n\n${prompt}`;
-
-    const messages = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: finalPrompt },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
-        ]
-      }
-    ];
-
-    const analysisText = await callAI(messages, 1000, prompt);
-
-    // Parse JSON response - no fallback, must be valid JSON
-    let structuredData = null;
-    try {
-      // Look for JSON block in the response
-      const jsonMatch = analysisText.match(/```json\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        structuredData = JSON.parse(jsonMatch[1]);
-      } else {
-        // Try parsing the entire response as JSON
-        structuredData = JSON.parse(analysisText);
-      }
-    } catch (jsonError) {
-      console.error("Failed to parse JSON response from AI:", jsonError.message);
-      console.log("Raw AI response:", analysisText.substring(0, 500));
-      return res.status(500).json({ 
-        error: { 
-          message: "AI returned invalid JSON format. Please try again." 
-        } 
+    if (!artistName) {
+      return res.status(400).json({ 
+        error: { message: "Artist name is required" } 
       });
     }
 
-    // Validate JSON structure
-    if (!structuredData.ri_score || !structuredData.category || !structuredData.explanation) {
-      throw new Error("Invalid JSON structure from AI");
+    if (!prompt) {
+      return res.status(400).json({ 
+        error: { message: "Prompt is required" } 
+      });
     }
 
-    // Ensure RI score is valid integer 1-5
-    const riScore = parseInt(structuredData.ri_score);
-    if (riScore < 1 || riScore > 5) {
-      throw new Error(`Invalid RI score: ${riScore}. Must be 1-5.`);
+    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+      return res.status(500).json({ 
+        error: { message: "Server configuration error: Missing API key" } 
+      });
     }
 
-    // Build clean markdown from JSON data
-    const cleanMarkdown = `## Summary
+    // Handle empty or minimal bio
+    if (!artistResume || artistResume.trim().length < 10) {
+      console.log("Empty or minimal bio provided, returning default questionnaire");
+      return res.json({
+        questionnaire: {
+          education: "none",
+          exhibitions: "none", 
+          awards: "none",
+          commissions: "none",
+          collections: "none",
+          publications: "none",
+          institutional: "none"
+        },
+        source: "default_answers"
+      });
+    }
 
-${structuredData.summary}
+    console.log(`Processing bio-to-questionnaire for artist: "${artistName}"`);
 
-## Analysis
+    console.log("Sending bio to AI for questionnaire conversion");
 
-| **Criterion** | **Explanation** |
-|---------------|-----------------|
-| Subject Recognizability | ${structuredData.analysis.subject_recognizability} |
-| Fidelity to Physical Reality | ${structuredData.analysis.fidelity_to_reality} |
-| Use of Perspective/Depth | ${structuredData.analysis.perspective_depth} |
-| Detail and Texture | ${structuredData.analysis.detail_texture} |
-| Visual Reference to Real-World Objects | ${structuredData.analysis.real_world_reference} |
+    const messages = [
+      { 
+        role: "user", 
+        content: `Artist: "${artistName}"\n\nArtist Career Information:\n${artistResume}\n\n${prompt}`
+      }
+    ];
 
-## Classification
+    const systemContent = "You are an expert art career analyst. Analyze the artist's bio and respond with only the requested JSON format.";
 
-#### RI = ${riScore}
+    const aiResponse = await callAI(messages, 500, systemContent, true);
 
-#### ${structuredData.category}
+    const requiredFields = ['education', 'exhibitions', 'awards', 'commissions', 'collections', 'publications', 'institutional'];
+    const missingFields = requiredFields.filter(field => !aiResponse[field]);
+    
+    if (missingFields.length > 0) {
+      console.log(`AI response missing fields: ${missingFields.join(', ')}`);
+      return res.status(500).json({ 
+        error: { message: `AI analysis incomplete: missing ${missingFields.join(', ')}` } 
+      });
+    }
 
-${structuredData.explanation}`;
-
-    const finalResponse = {
-      analysis: cleanMarkdown,
-      ri: riScore.toString(),
-      category: structuredData.category,
-      explanation: structuredData.explanation,
-      summary: structuredData.summary
-    };
-
-    console.log(`RI Analysis complete: RI=${riScore}, Category=${structuredData.category}`);
-    res.json(finalResponse);
+    console.log("Sending questionnaire response to frontend");
+    res.json({
+      questionnaire: aiResponse,
+      source: "ai_converted"
+    });
 
   } catch (error) {
-    console.error("Error in /analyze-ri:", error.message);
-    const errMsg = error.response?.data?.error?.message || error.message || "Unknown error";
-    res.status(500).json({ error: { message: errMsg } });
+    console.error("Error in bio-to-questionnaire conversion:", error.message);
+    res.status(500).json({ 
+      error: { message: error.message || "Bio analysis failed" } 
+    });
   }
 });
-
 
 
 
