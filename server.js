@@ -569,7 +569,14 @@ app.get("/api/records/:id/full-image", (req, res) => {
 // Generic endpoint for serving prompts - more maintainable approach
 app.get("/prompts/:calculatorType", (req, res) => {
   const { calculatorType } = req.params;
-  const promptPath = path.join(__dirname, "public", "prompts", `${calculatorType}.txt`);
+  
+  // First try the _prompt.txt pattern (for SMI, CLI, RI, etc.)
+  let promptPath = path.join(__dirname, "public", "prompts", `${calculatorType}_prompt.txt`);
+  
+  // If not found, try without _prompt (for ART_ANALYSIS, etc.)
+  if (!fs.existsSync(promptPath)) {
+    promptPath = path.join(__dirname, "public", "prompts", `${calculatorType}.txt`);
+  }
   
   if (fs.existsSync(promptPath)) {
     res.sendFile(promptPath);
