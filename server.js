@@ -562,10 +562,14 @@ app.get("/api/records/:id/full-image", (req, res) => {
   }
 });
 
+
+
+
+
 // Generic endpoint for serving prompts - more maintainable approach
 app.get("/prompts/:calculatorType", (req, res) => {
   const { calculatorType } = req.params;
-  const promptPath = path.join(__dirname, "public", "prompts", `${calculatorType}_prompt.txt`);
+  const promptPath = path.join(__dirname, "public", "prompts", `${calculatorType}.txt`);
   
   if (fs.existsSync(promptPath)) {
     res.sendFile(promptPath);
@@ -575,6 +579,10 @@ app.get("/prompts/:calculatorType", (req, res) => {
     });
   }
 });
+
+
+
+
 
 // Legacy endpoints for backward compatibility
 app.get("/PromptCalcRI.txt", (req, res) => {
@@ -2267,9 +2275,9 @@ app.post("/analyze-art", async (req, res) => {
 
     // Validate recommendedStudy factors
     if (parsedAnalysis.recommendedStudy && Array.isArray(parsedAnalysis.recommendedStudy)) {
-      // Check for exactly 2 factors
+      // Check for exactly 3 factors
       if (parsedAnalysis.recommendedStudy.length !== 2) {
-        console.warn(`Expected 2 recommended study factors, got ${parsedAnalysis.recommendedStudy.length}`);
+        console.warn(`Expected 3 recommended study factors, got ${parsedAnalysis.recommendedStudy.length}`);
       }
       
       // Validate factor names against the 33 approved list
