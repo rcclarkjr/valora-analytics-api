@@ -1,153 +1,56 @@
-# Career Level Index (CLI) Calculation Framework - JSON OUTPUT VERSION
+Analyze the following artist's career information and answer the questionnaire by selecting the appropriate level for each category.
 
-## Purpose:
-The Career Level Index (CLI) is a scoring system that evaluates the career achievements of artists. It measures an artist's professional development and standing within the art world using seven key categories, resulting in a normalized score ranging from 1.00 to 5.00. A score of 1.00 indicates no measurable achievements, while a 5.00 reflects the maximum possible accomplishments.
+For each category, respond with EXACTLY one of these three options:
+- "high" for High-Profile accomplishments
+- "mid" for Mid-Profile accomplishments  
+- "none" for Low-Profile/None
 
-## Input Types:
-This prompt handles TWO types of input:
-1. **Traditional Artist Bio/Resume**: Biographical text describing career achievements
-2. **Questionnaire Response**: Formatted as "Artist's Response to Questionnaire Regarding Career Accomplishments" with category-by-category answers
+Categories and Criteria:
 
-**CRITICAL: Apply the same scoring standards to both input types.**
+1. Art Education (10%):
+   - High-Profile: MFA, BFA, or formal art school degree
+   - Mid-Profile: Art workshops, continuing education classes, or extensive self-study
+   - Low-Profile/None: No formal art training or very minimal training
 
----
+2. Exhibitions (25%):
+   - High-Profile: Solo exhibitions, major gallery shows, museum exhibitions
+   - Mid-Profile: Group exhibitions, local art fairs, community art centers
+   - Low-Profile/None: No exhibitions or very small local venues
 
-## How CLI is Calculated:
+3. Awards & Competitions (15%):
+   - High-Profile: National or international awards, high ranking in major art competitions
+   - Mid-Profile: Regional or local awards, entry in community art contests
+   - Low-Profile/None: No awards or very small community recognitions
 
-### 1. Categories and Weights:
-The CLI evaluates achievements across the following seven categories, each weighted by its importance to an artist's career:
-- **Art Education: 10% (0.10)**
-- **Exhibitions: 25% (0.25)**
-- **Awards & Competitions: 15% (0.15)**
-- **Commissions: 10% (0.10)**
-- **Collections: 15% (0.15)**
-- **Publications: 15% (0.15)**
-- **Institutional Interest: 10% (0.10)**
+4. Commissions (10%):
+   - High-Profile: Public art, corporate commissions, major private commissions
+   - Mid-Profile: Smaller private commissions, local business commissions
+   - Low-Profile/None: No commissions or very small personal commissions
 
-### 2. Scoring System:
-Each category is assigned a score using a three-tiered system:
-- **High-Profile Achievement: 1.0** (e.g., solo exhibitions, national awards, museum collections, features in renowned publications)
-- **Mid-Profile Achievement: 0.6** (e.g., group exhibitions, local awards, private collections, features in local publications)
-- **Low-Profile/None: 0.0** (e.g., no achievements in this category or very minimal activity)
+5. Collections (15%):
+   - High-Profile: Museum collections, well-known collectors, corporate collections
+   - Mid-Profile: Private collectors, small businesses, personal collections
+   - Low-Profile/None: No collections or very informal sales
 
-### 3. Mathematical Calculation Requirements:
-**FOLLOW THESE STEPS EXACTLY - SHOW ALL WORK:**
+6. Publications (15%):
+   - High-Profile: Major magazines, newspapers, art journals, podcasts, TV features
+   - Mid-Profile: Local newspapers, community newsletters, blogs
+   - Low-Profile/None: No media coverage or very small mentions
 
-**Step 1: Calculate Each Weighted Contribution**
-For each category: Score × Weight = Contribution
+7. Institutional Interest (10%):
+   - High-Profile: Museum representation, major gallery representation, curatorial interest, secondary market sales
+   - Mid-Profile: Small gallery representation, art center affiliations
+   - Low-Profile/None: No institutional interest or very minimal local connections
 
-**Step 2: Calculate Raw Score**
-Raw Score = Sum of all contributions (must be between 0.00 and 1.00)
+IMPORTANT: If the bio text is unclear, incomplete, or does not contain relevant career information, default to "none" for all categories. Be generous in your interpretation - if there's ANY indication of achievement in a category, score it appropriately.
 
-**Step 3: Apply CLI Formula - CRITICAL MATH STEP**
-CLI = (Raw Score × 4.0) + 1.00
-
-**MANDATORY: Show each part of this calculation explicitly:**
-- Raw Score × 4.0 = [Raw Score] × 4.0 = [intermediate result]
-- [intermediate result] + 1.00 = [FINAL CLI VALUE]
-
-**Step 4: Verification Check**
-- Raw Score must be between 0.00 and 1.00 ✓
-- CLI must be between 1.00 and 5.00 ✓
-- CLI must be LARGER than Raw Score (because you added at least 1.00) ✓
-- If any check fails, recalculate from Step 1
-
----
-
-## Rules and Safeguards:
-
-### 1. Structured Category Analysis:
-Each category must be scored with the following structure:
-- **What was provided**: Description of achievements
-- **Why the score was assigned**: Explanation of the assigned score 
-- **Final score contribution**: Weighted contribution to the overall CLI
-
-### 2. Scoring Guidelines:
-- **High-Profile (1.0)**: Major achievements, national/international recognition
-- **Mid-Profile (0.6)**: Regional achievements, local recognition, moderate activity
-- **Low-Profile/None (0.0)**: No meaningful achievements or very minimal activity
-
-### 3. Arithmetic Validation:
-**CRITICAL: Double-check every calculation**
-- **VERIFY** that Low-Profile/None = 0.0 points (not 0.6)
-- **VERIFY** that Mid-Profile = 0.6 points 
-- **VERIFY** that High-Profile = 1.0 points
-- **VERIFY** that CLI must be larger than Raw Score
-
----
-
-## MANDATORY JSON OUTPUT FORMAT:
-
-You MUST respond with valid JSON in this exact structure:
-
-```json
+Respond with ONLY a JSON object in this exact format:
 {
-  "input_data": {
-    "input_type": "bio" or "questionnaire",
-    "timestamp": "current_timestamp"
-  },
-  "cli_result": {
-    "cli_value": [final CLI number],
-    "raw_score": [raw score number],
-    "explanation": "2-3 sentences explaining the artist's career level"
-  },
-  "category_analysis": {
-    "art_education": {
-      "score": [0.0, 0.6, or 1.0],
-      "contribution": [score × 0.10],
-      "reasoning": "explanation of score assignment"
-    },
-    "exhibitions": {
-      "score": [0.0, 0.6, or 1.0],
-      "contribution": [score × 0.25],
-      "reasoning": "explanation of score assignment"
-    },
-    "awards": {
-      "score": [0.0, 0.6, or 1.0],
-      "contribution": [score × 0.15],
-      "reasoning": "explanation of score assignment"
-    },
-    "commissions": {
-      "score": [0.0, 0.6, or 1.0],
-      "contribution": [score × 0.10],
-      "reasoning": "explanation of score assignment"
-    },
-    "collections": {
-      "score": [0.0, 0.6, or 1.0],
-      "contribution": [score × 0.15],
-      "reasoning": "explanation of score assignment"
-    },
-    "publications": {
-      "score": [0.0, 0.6, or 1.0],
-      "contribution": [score × 0.15],
-      "reasoning": "explanation of score assignment"
-    },
-    "institutional": {
-      "score": [0.0, 0.6, or 1.0],
-      "contribution": [score × 0.10],
-      "reasoning": "explanation of score assignment"
-    }
-  },
-  "calculation_steps": {
-    "step1_contributions": "list all contributions",
-    "step2_raw_score": [raw score],
-    "step3_multiplication": "[raw score] × 4.0 = [result]",
-    "step4_final_addition": "[result] + 1.00 = [final CLI]",
-    "validation_passed": true
-  }
+  "education": "high|mid|none",
+  "exhibitions": "high|mid|none", 
+  "awards": "high|mid|none",
+  "commissions": "high|mid|none",
+  "collections": "high|mid|none",
+  "publications": "high|mid|none",
+  "institutional": "high|mid|none"
 }
-```
-
-## CRITICAL REQUIREMENTS:
-- **Output ONLY valid JSON** - no additional text before or after
-- **Use exact field names** as shown above
-- **Ensure all numbers are numeric values**, not strings
-- **Double-check all calculations** before outputting
-- **Verify CLI is between 1.00 and 5.00**
-- **Verify Low-Profile/None categories get 0.0 points**
-
-## FINAL REMINDER:
-- Show every mathematical step in calculation_steps
-- Double-check that Low-Profile/None = 0.0 (not 0.6)
-- Verify your final CLI is between 1.00 and 5.00
-- Output valid JSON only
