@@ -1958,6 +1958,78 @@ app.get("/api/coefficients/calculate", (req, res) => {
   }
 });
 
+
+
+
+function formatAIAnalysisForReport(aiAnalysis) {
+  if (!aiAnalysis) return '';
+  
+  try {
+    // Use the same JSON cleaning logic that's already in callClaudeAPI
+    let cleanJson = aiAnalysis;
+    if (aiAnalysis.includes('```json')) {
+      cleanJson = aiAnalysis.replace(/```json\s*/, '').replace(/\s*```$/, '');
+    }
+    
+    // Find the JSON object
+    const startIndex = cleanJson.indexOf('{');
+    if (startIndex === -1) {
+      throw new Error('No JSON object found');
+    }
+    
+    let braceCount = 0;
+    let endIndex = startIndex;
+    
+    for (let i = startIndex; i < cleanJson.length; i++) {
+      if (cleanJson[i] === '{') braceCount++;
+      if (cleanJson[i] === '}') braceCount--;
+      if (braceCount === 0) {
+        endIndex = i;
+        break;
+      }
+    }
+    
+    const jsonOnly = cleanJson.substring(startIndex, endIndex + 1);
+    const analysis = JSON.parse(jsonOnly);
+    
+    // Format as readable text
+    let formattedText = '';
+    
+    if (analysis.overview) {
+      formattedText += analysis.overview;
+    }
+    
+    if (analysis.strengths && analysis.strengths.length > 0) {
+      formattedText += '\n\nStrengths: ';
+      formattedText += analysis.strengths.map(s => 
+        `${s.title} - ${s.description}`
+      ).join(' ');
+    }
+    
+    if (analysis.opportunities && analysis.opportunities.length > 0) {
+      formattedText += '\n\nAreas for Development: ';
+      formattedText += analysis.opportunities.map(opp => {
+        let text = opp.category || '';
+        if (opp.steps) {
+          text += ' ' + opp.steps.map(step => step.description).filter(d => d).join(' ');
+        }
+        return text;
+      }).join(' ');
+    }
+    
+    return formattedText.trim();
+    
+  } catch (e) {
+    console.error('Error formatting AI analysis:', e);
+    return String(aiAnalysis).replace(/[\{\}"]/g, '').trim();
+  }
+}
+
+
+
+
+
+
 // Updated API endpoints with full artOnlyPrice and new APPSI calculation support
 
 // Helper function - add this near your other helper functions
@@ -2598,12 +2670,15 @@ app.post("/api/valuation", async (req, res) => {
 
     console.log("Sending enhanced valuation response with analysis and complete comparable data");
     
-    res.json({
-      topComps,
-      coefficients,
-      medium: db.metadata.medium, 
-      aiAnalysis
-    });
+
+res.json({
+  topComps,
+  coefficients,
+  medium: db.metadata.medium, 
+  aiAnalysis: formatAIAnalysisForReport(aiAnalysis)
+});
+
+
   } catch (error) {
     console.error("Valuation request failed:", error.message);
     res.status(500).json({ 
