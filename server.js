@@ -2552,7 +2552,7 @@ app.post("/api/valuation", async (req, res) => {
     // Step 1: Generate AI analysis (unchanged)
     let aiAnalysis = "";
     try {
-      const promptPath = path.join(__dirname, 'public', 'prompts', 'ART_ANALYSIS.txt');
+      const promptPath = path.join(__dirname, 'public', 'prompts', 'VALUATION_DESCRIPTION.txt');
       const prompt = fs.readFileSync(promptPath, 'utf8').trim();
       if (prompt.length < 50) {
         throw new Error("Prompt for ART_ANALYSIS.txt not found or too short");
