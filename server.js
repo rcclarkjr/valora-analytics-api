@@ -2017,17 +2017,28 @@ function formatAIAnalysisForReport(aiAnalysis) {
       }).join(' ');
     }
     
-    return formattedText.trim();
+    return convertToSentenceCase(formattedText.trim());
     
   } catch (e) {
     console.error('Error formatting AI analysis:', e);
-    return String(aiAnalysis).replace(/[\{\}"]/g, '').trim();
+    return convertToSentenceCase(String(aiAnalysis).replace(/[\{\}"]/g, '').trim());
   }
 }
 
 
 
-
+function convertToSentenceCase(text) {
+  if (!text) return '';
+  
+  const uppercaseCount = (text.match(/[A-Z]/g) || []).length;
+  const letterCount = (text.match(/[A-Za-z]/g) || []).length;
+  
+  if (uppercaseCount / letterCount > 0.7) {
+    return text.toLowerCase().replace(/(^\w|\.\s+\w)/g, letter => letter.toUpperCase());
+  }
+  
+  return text;
+}
 
 
 // Updated API endpoints with full artOnlyPrice and new APPSI calculation support
