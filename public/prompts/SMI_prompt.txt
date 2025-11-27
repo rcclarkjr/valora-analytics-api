@@ -1,104 +1,604 @@
-### **Skill Mastery Index (SMI)**  
+Title: "{{TITLE}}"
+Artist: "{{ARTIST}}"
+Subject: "{{SUBJECT}}"
 
-**Task:**  
-This assessment measures technical execution quality for use in comparative market analysis.
+# Main Purpose: Calculate the Skill Mastery Index (SMI) for use in comparative market analysis and artwork valuation.
 
-Evaluate a given artwork to assess five fundamental artistic criteria. This evaluation assumes all artworks are striving for professional-level execution, regardless of style or subject matter. Scores should be assigned with strict adherence to the rubric, without consideration for artistic intent, personal expression, or developmental stage. **For example, if an artwork looks like it was created by a child because it has no technique or compositional qualities, etc., grade it unfiltered by who the artist is, grade it honestly without reservation, as though you are telling an adult that their work is bad. You can be diplomatic in the narrative describing the weaknesses, but do not be diplomatic in the scoring.**
+## Critical Instructions:
+1. **Forget all prior context or in-session learning** before analyzing each artwork.
+2. **Do not print anything** to the user until you complete the calculation and reach the Output section.
+3. **This is a technical skill assessment tool** - evaluate based solely on observable technical execution, not artistic intent, developmental stage, or personal expression.
+4. **Initialize variables to zero:**
+   - `SumExtended = 0`
+   - `Denom = 0`
+   - Set every cell (row) in **Column 6** ("Extended") to **0**.
+   - Set every cell (row) in **Column 7** ("WtExt") to **0**.
 
-**Instructions:**  
-1. **Analyze the artwork in detail** based solely on the five criteria below. Do not incorporate external factors such as artist reputation, past evaluations, or market value.  
-2. **Assign a score from 1.00 to 5.00 in 0.50 increments** for each category, ensuring strict adherence to the rubric. Apply scoring without bias or encouragement. This is a technical assessment tool, not an educational evaluation. **CRITICAL: Do not consider the artist's apparent age, experience level, or developmental stage. Do not use phrases like 'good for a beginner,' 'shows promise,' 'appropriate for a child,' or 'expected for their level.' Evaluate only the absolute technical mastery visible in the work using identical professional standards for every artwork.** **Scoring Methodology: Choose the highest score level where the artwork demonstrates the majority of the described characteristics.**
-3. **Scoring Methodology: Choose the highest score level where the artwork demonstrates the majority of the described characteristics.**
-4. **Final SMI Calculation:**  
-  a. Multiply each category's score by its weight:  
-   - **Composition & Design (20%)** = Score × 0.20  
-   - **Color & Light (20%)** = Score × 0.20  
-   - **Technical Skill (25%)** = Score × 0.25  
-   - **Originality (20%)** = Score × 0.20  
-   - **Emotional Depth (15%)** = Score × 0.15  
-  b. Sum the weighted scores to determine the final **Skill Mastery Index (SMI)**.  
-5. **Output Format:**
-You must provide your analysis in valid JSON format only. Do not include any text before or after the JSON. The JSON must contain exactly these fields:
+## Workflow:
+1. **Analyze the artwork** based on the **Scoring Rules** for each of the **33 factors** below.
+2. **Calculate the weighted SMI score** using the formulas provided.
+3. **Group factors into 4 categories** and provide brief summaries for each.
+4. **Provide a factual description** of the artwork (2-3 sentences about subject, composition, palette, mood).
+5. **Output in the required JSON format** (see Output Instructions section).
+
+---
+
+## THE 33 ESSENTIAL FACTORS FOR ART MASTERY:
+
+**Core Elements (Factors 1-10):**
+1. **Line** - A mark with length and direction which can be continuous, broken, implied, thick, thin, or varied in weight and texture. Lines can guide the viewer's eye, define shapes, create textures, and convey emotions and movement.
+2. **Shape** - A two-dimensional area defined by boundaries.
+3. **Form** - A three-dimensional object or the illusion of three dimensions.
+4. **Space** - The area around or between components of a piece which conveys depth and perspective.
+5. **Color/Hue** - The aspect of things caused by differing qualities of light they reflect or emit.
+6. **Texture** - The surface quality or feel of an object, its smoothness, roughness, softness, etc.
+7. **Tone/Value** - The lightness or darkness of a color.
+8. **Saturation** - The intensity or purity of color, which is reduced by adding gray, black, or white.
+9. **Composition** - The arrangement of visual elements within a work of art to guide the viewer's eye and convey the intended message or emotion.
+10. **Volume** - The perceived three-dimensionality of an object.
+
+**Design Principles (Factors 11-20):**
+11. **Balance** - The distribution of visual weight in a work.
+12. **Contrast** - The degree of difference in color or value, arranged in a way to make an object distinguishable.
+13. **Emphasis** - The part of the design that catches the viewer's attention.
+14. **Movement** - The path the viewer's eye takes through the artwork.
+15. **Rhythm** - The repetition of visual elements to create a sense of movement.
+16. **Variety** - The use of different elements to create interest.
+17. **Proportion** - The relationship between the sizes of different parts of a work.
+18. **Harmony** - The arrangement of elements in a manner where no single element overwhelms.
+19. **Cohesiveness** - The logical and consistent arrangement of parts of the artwork so they support each other in a unified way to convey an overall theme or message.
+20. **Pattern** - The repeating of an object or symbol throughout the artwork to create a sense of rhythm and unity.
+
+**Techniques (Factors 21-28):**
+21. **Brushwork** - The way an artist applies paint with their brush.
+22. **Chiaroscuro** - The use of strong contrasts between light and dark.
+23. **Impasto** - Applying paint thickly so that brush or palette knife marks are visible.
+24. **Sfumato** - Blending colors and tones so subtly that there is no perceptible transition.
+25. **Glazing** - Applying a transparent layer of paint over a dry layer.
+26. **Scumbling** - Brushing or knifing a thin, broken layer of color over another.
+27. **Pointillism** - Painting with small, distinct dots of pure color in proximity for a vibrant, luminous effect.
+28. **Wet-on-Wet** - Applying wet paint onto wet paint, creating soft transitions and a fluid effect.
+
+**Expressions of Artistic Voice (Factors 29-33):**
+29. **Uniqueness** - The distinct and original qualities that set an artwork apart from others as one-of-a-kind.
+30. **Creativity** - The ability to generate innovative ideas, concepts, and forms that evoke emotions, provoke thought, and communicate the artist's unique perspective.
+31. **Mood** - The emotional atmosphere or feeling that a work of art evokes in the viewer.
+32. **Viewer Engagement** - The ways in which an artwork captures and holds the viewer's attention, provoking thought, curiosity, and emotional response.
+33. **Emotional Resonance** - The extent to which an artwork resonates with the viewer's personal experiences, memories, and emotions.
+
+---
+
+## Scoring Rules:
+
+### Table Structure:
+The evaluation uses a 7-column, 33-row table with the following column headings:
+1. Factor#
+2. Factor
+3. Weight
+4. Statements
+5. Score
+6. Extended (Score × Weight)
+7. WtExt (Weight if Score > 0, otherwise 0)
+
+### Scoring Process:
+1. Process the Table of Rubrics one row at a time:
+   a. In Column 4, identify the Statement that best describes the artwork's presence and deployment of that Factor and copy the related Score to Column 5.
+   b. On the same row:
+      i. Calculate Extended = Score × Weight.
+      ii. If Score = NA then set WtExt = 0; otherwise, set WtExt = Weight.
+
+2. When all 33 rows have been processed:
+   a. Set SumExtended equal to the sum of Column 6 (all Extended values).
+   b. Set Denom equal to the sum of Column 7 (all WtExt values).
+   c. Calculate SMI = SumExtended ÷ Denom (weighted average of scores).
+   d. Round SMI to two decimal places.
+
+### IMPORTANT SCORING INSTRUCTIONS:
+- Use the full 1-5 range based on observable criteria below
+- Avoid central tendency bias - score 3 represents genuinely competent execution, not uncertain/default scoring
+- For Technique Factors (21-28): Score 1-5 if present, or NA if absent/not applicable to the medium
+- For all other factors (1-20, 29-33): Must score 1-5, no NA allowed
+- Score based on what is visible in the artwork, not what the artist may have intended
+- Do not consider the artist's apparent age, experience level, or developmental stage
+- Apply identical professional standards to every artwork
+
+---
+
+## Table of Rubrics
+
+Each row contains: Factor#, Factor, Weight, Statements, Score, Extended, WtExt.
+
+### Row 1:
+Factor#: 1
+Factor: Line
+Weight: 0.037
+Statements:
+  - Score 1: Lines vary randomly in weight, change direction without purpose, broken where intended to be continuous
+  - Score 2: Lines show basic consistent weight, generally follow intended direction with minor deviations
+  - Score 3: Lines demonstrate controlled weight variation, clear directional purpose, effectively define forms or guide eye movement
+  - Score 4: Lines show deliberate weight and textural variation, strong directional control that enhances overall composition
+  - Score 5: Lines exhibit masterful control with innovative variation, creating rhythm and movement integral to artistic success
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 2:
+Factor#: 2
+Factor: Shape
+Weight: 0.037
+Statements:
+  - Score 1: Shapes have unclear boundaries, awkward proportions that detract from intended forms
+  - Score 2: Basic geometric or organic shapes with clear boundaries and acceptable proportions
+  - Score 3: Well-defined shapes with good proportions that integrate effectively into composition
+  - Score 4: Complex shapes with refined proportions that create strong visual relationships
+  - Score 5: Innovative or masterfully proportioned shapes that define the composition's success
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 3:
+Factor#: 3
+Factor: Form
+Weight: 0.031
+Statements:
+  - Score 1: Minimal indication of three-dimensionality, objects appear mostly flat despite apparent intent for volume
+  - Score 2: Basic three-dimensional representation with simple volume suggested through shading or perspective
+  - Score 3: Clear three-dimensional forms with consistent lighting and believable volume throughout
+  - Score 4: Complex three-dimensional representation with sophisticated lighting and strong spatial presence
+  - Score 5: Exceptional mastery of form with innovative dimensional representation
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 4:
+Factor#: 4
+Factor: Space
+Weight: 0.037
+Statements:
+  - Score 1: Minimal depth, weak spatial relationships between elements
+  - Score 2: Basic spatial arrangement with simple foreground/background separation
+  - Score 3: Effective depth through multiple overlapping planes and atmospheric perspective
+  - Score 4: Sophisticated spatial composition with complex depth relationships
+  - Score 5: Exceptional mastery of space creating immersive dimensional experience
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 5:
+Factor#: 5
+Factor: Color/Hue
+Weight: 0.037
+Statements:
+  - Score 1: Limited or poorly chosen color palette that weakens the work
+  - Score 2: Basic color selection with simple relationships
+  - Score 3: Effective color choices creating harmonious relationships
+  - Score 4: Sophisticated color palette with complex, intentional relationships
+  - Score 5: Exceptional color mastery with innovative or emotionally powerful palette
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 6:
+Factor#: 6
+Factor: Texture
+Weight: 0.031
+Statements:
+  - Score 1: Minimal textural variation or unsuccessful texture attempts
+  - Score 2: Basic texture with simple surface quality
+  - Score 3: Effective textural variety enhancing visual interest
+  - Score 4: Sophisticated textural control creating rich surface qualities
+  - Score 5: Exceptional texture mastery integral to artwork's impact
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 7:
+Factor#: 7
+Factor: Tone/Value
+Weight: 0.031
+Statements:
+  - Score 1: Poor value structure, muddy or flat appearance
+  - Score 2: Basic value range with simple light/dark relationships
+  - Score 3: Effective value structure creating clear form and depth
+  - Score 4: Sophisticated value control with rich tonal range
+  - Score 5: Exceptional value mastery creating dramatic impact
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 8:
+Factor#: 8
+Factor: Saturation
+Weight: 0.031
+Statements:
+  - Score 1: Poor saturation control, colors appear either too dull or garish
+  - Score 2: Basic saturation with simple intensity relationships
+  - Score 3: Effective saturation control supporting composition and mood
+  - Score 4: Sophisticated saturation variation creating visual interest
+  - Score 5: Exceptional saturation mastery enhancing emotional impact
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 9:
+Factor#: 9
+Factor: Composition
+Weight: 0.049
+Statements:
+  - Score 1: Weak compositional structure, elements feel randomly placed
+  - Score 2: Basic composition with simple arrangement of elements
+  - Score 3: Effective composition with clear focal point and visual flow
+  - Score 4: Sophisticated composition with dynamic relationships between elements
+  - Score 5: Exceptional compositional mastery creating powerful visual impact
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 10:
+Factor#: 10
+Factor: Volume
+Weight: 0.025
+Statements:
+  - Score 1: Minimal volumetric quality, objects appear flat
+  - Score 2: Basic volume with simple dimensional suggestion
+  - Score 3: Effective volume creating believable three-dimensional objects
+  - Score 4: Sophisticated volumetric rendering with complex forms
+  - Score 5: Exceptional volume mastery with powerful dimensional presence
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 11:
+Factor#: 11
+Factor: Balance
+Weight: 0.043
+Statements:
+  - Score 1: Poor balance, composition feels unstable or awkward
+  - Score 2: Basic balance with simple symmetrical or asymmetrical arrangement
+  - Score 3: Effective balance creating stable, pleasing composition
+  - Score 4: Sophisticated balance with dynamic tension and resolution
+  - Score 5: Exceptional balance mastery creating powerful compositional harmony
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 12:
+Factor#: 12
+Factor: Contrast
+Weight: 0.037
+Statements:
+  - Score 1: Poor contrast, image appears flat or muddy
+  - Score 2: Basic contrast with simple value or color differences
+  - Score 3: Effective contrast creating clear visual hierarchy
+  - Score 4: Sophisticated contrast enhancing drama and focal points
+  - Score 5: Exceptional contrast mastery creating powerful visual impact
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 13:
+Factor#: 13
+Factor: Emphasis
+Weight: 0.037
+Statements:
+  - Score 1: No clear focal point, viewer's attention wanders
+  - Score 2: Basic focal point with simple emphasis
+  - Score 3: Effective emphasis directing viewer to key areas
+  - Score 4: Sophisticated emphasis with multiple engaging focal points
+  - Score 5: Exceptional emphasis mastery commanding viewer attention
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 14:
+Factor#: 14
+Factor: Movement
+Weight: 0.031
+Statements:
+  - Score 1: Static composition with no visual flow
+  - Score 2: Basic movement with simple directional cues
+  - Score 3: Effective movement guiding viewer's eye through composition
+  - Score 4: Sophisticated movement creating dynamic visual journey
+  - Score 5: Exceptional movement mastery creating compelling visual rhythm
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 15:
+Factor#: 15
+Factor: Rhythm
+Weight: 0.031
+Statements:
+  - Score 1: No rhythmic quality, elements feel disjointed
+  - Score 2: Basic rhythm with simple repetition
+  - Score 3: Effective rhythm creating visual continuity
+  - Score 4: Sophisticated rhythm with varied, engaging patterns
+  - Score 5: Exceptional rhythmic mastery creating musical quality
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 16:
+Factor#: 16
+Factor: Variety
+Weight: 0.031
+Statements:
+  - Score 1: Monotonous with little variation, or chaotic with too much
+  - Score 2: Basic variety with simple element variation
+  - Score 3: Effective variety maintaining interest throughout
+  - Score 4: Sophisticated variety creating rich visual experience
+  - Score 5: Exceptional variety mastery balancing unity and diversity
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 17:
+Factor#: 17
+Factor: Proportion
+Weight: 0.031
+Statements:
+  - Score 1: Awkward proportions that undermine the work
+  - Score 2: Basic proportions with acceptable size relationships
+  - Score 3: Effective proportions supporting overall composition
+  - Score 4: Sophisticated proportions creating pleasing relationships
+  - Score 5: Exceptional proportional mastery enhancing visual harmony
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 18:
+Factor#: 18
+Factor: Harmony
+Weight: 0.037
+Statements:
+  - Score 1: Disharmonious elements that conflict rather than cohere
+  - Score 2: Basic harmony with simple element agreement
+  - Score 3: Effective harmony creating unified whole
+  - Score 4: Sophisticated harmony with complex element integration
+  - Score 5: Exceptional harmonic mastery creating seamless unity
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 19:
+Factor#: 19
+Factor: Cohesiveness
+Weight: 0.031
+Statements:
+  - Score 1: Disconnected elements failing to support unified theme
+  - Score 2: Basic cohesion with simple thematic consistency
+  - Score 3: Effective cohesiveness with clear thematic unity
+  - Score 4: Sophisticated cohesion integrating all elements purposefully
+  - Score 5: Exceptional cohesive mastery creating powerful unified statement
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 20:
+Factor#: 20
+Factor: Pattern
+Weight: 0.018
+Statements:
+  - Score 1: Pattern absent where it would strengthen work, or poorly executed
+  - Score 2: Basic pattern with simple repetition
+  - Score 3: Effective pattern creating rhythm and unity
+  - Score 4: Sophisticated pattern with varied, engaging repetition
+  - Score 5: Exceptional pattern mastery integral to composition
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 21:
+Factor#: 21
+Factor: Brushwork
+Weight: 0.037
+Statements:
+  - Score NA: Not applicable to medium
+  - Score 1: Uncontrolled or hesitant brushwork detracting from work
+  - Score 2: Basic brushwork with simple, consistent application
+  - Score 3: Effective brushwork demonstrating control and purpose
+  - Score 4: Sophisticated brushwork with varied, expressive marks
+  - Score 5: Exceptional brushwork mastery enhancing overall impact
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 22:
+Factor#: 22
+Factor: Chiaroscuro
+Weight: 0.031
+Statements:
+  - Score NA: Not used or not applicable to medium
+  - Score 1: Poor light/dark contrast failing to create drama
+  - Score 2: Basic chiaroscuro with simple contrast effects
+  - Score 3: Effective chiaroscuro creating dramatic lighting
+  - Score 4: Sophisticated chiaroscuro with rich tonal modeling
+  - Score 5: Exceptional chiaroscuro mastery creating powerful atmosphere
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 23:
+Factor#: 23
+Factor: Impasto
+Weight: 0.025
+Statements:
+  - Score NA: Not used or not applicable to medium
+  - Score 1: Awkward thick application detracting from work
+  - Score 2: Basic impasto with simple textural effects
+  - Score 3: Effective impasto creating engaging surface quality
+  - Score 4: Sophisticated impasto with expressive dimensional marks
+  - Score 5: Exceptional impasto mastery integral to artwork's power
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 24:
+Factor#: 24
+Factor: Sfumato
+Weight: 0.025
+Statements:
+  - Score NA: Not used or not applicable to medium
+  - Score 1: Poor blending creating muddy or unclear transitions
+  - Score 2: Basic sfumato with simple soft edges
+  - Score 3: Effective sfumato creating smooth, atmospheric transitions
+  - Score 4: Sophisticated sfumato with subtle, refined blending
+  - Score 5: Exceptional sfumato mastery creating ethereal quality
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 25:
+Factor#: 25
+Factor: Glazing
+Weight: 0.025
+Statements:
+  - Score NA: Not used or not applicable to medium
+  - Score 1: Poor glazing creating muddy or streaky results
+  - Score 2: Basic glazing with simple transparent layers
+  - Score 3: Effective glazing creating depth and luminosity
+  - Score 4: Sophisticated glazing with complex layered effects
+  - Score 5: Exceptional glazing mastery creating rich, glowing quality
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 26:
+Factor#: 26
+Factor: Scumbling
+Weight: 0.018
+Statements:
+  - Score NA: Not used or not applicable to medium
+  - Score 1: Clumsy scumbling detracting from surface quality
+  - Score 2: Basic scumbling with simple broken color effects
+  - Score 3: Effective scumbling creating interesting surface texture
+  - Score 4: Sophisticated scumbling with refined layered effects
+  - Score 5: Exceptional scumbling mastery enriching surface complexity
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 27:
+Factor#: 27
+Factor: Pointillism
+Weight: 0.018
+Statements:
+  - Score NA: Not used or not applicable to medium
+  - Score 1: Uncontrolled dots failing to create intended effect
+  - Score 2: Basic dot application with simple color effects
+  - Score 3: Effective pointillism creating optical color mixing
+  - Score 4: Sophisticated pointillism with complex color relationships
+  - Score 5: Exceptional pointillism mastery with vibrant optical effects
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 28:
+Factor#: 28
+Factor: Wet-on-wet
+Weight: 0.018
+Statements:
+  - Score NA: Not used or not applicable to medium
+  - Score 1: Muddy results from poorly controlled wet blending
+  - Score 2: Basic wet blending with simple transitions
+  - Score 3: Effective wet-on-wet creating smooth gradations
+  - Score 4: Sophisticated wet blending enhancing atmospheric effects
+  - Score 5: Exceptional wet-on-wet mastery with fluid, expressive results
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 29:
+Factor#: 29
+Factor: Uniqueness
+Weight: 0.043
+Statements:
+  - Score 1: Minimal personal expression, heavily derivative of known styles
+  - Score 2: Some original elements mixed with conventional approaches
+  - Score 3: Clear personal style emerging with distinctive characteristics
+  - Score 4: Strong individual voice with innovative personal approach
+  - Score 5: Groundbreaking originality establishing new artistic territory
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 30:
+Factor#: 30
+Factor: Creativity
+Weight: 0.049
+Statements:
+  - Score 1: Conventional solutions showing minimal creative problem-solving
+  - Score 2: Some creative approaches to composition or technique
+  - Score 3: Clear creative thinking evident in concept and execution
+  - Score 4: Innovative creative solutions that enhance artwork's impact
+  - Score 5: Exceptional creativity transforming conventional approaches
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 31:
+Factor#: 31
+Factor: Mood
+Weight: 0.043
+Statements:
+  - Score 1: Weak or unclear emotional atmosphere that fails to engage
+  - Score 2: Basic mood established through simple means
+  - Score 3: Clear emotional atmosphere that enhances viewer experience
+  - Score 4: Strong mood creating immersive emotional experience
+  - Score 5: Exceptional mood creation leaving lasting emotional impact
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 32:
+Factor#: 32
+Factor: Viewer Engagement
+Weight: 0.037
+Statements:
+  - Score 1: Minimal visual interest holding attention only briefly
+  - Score 2: Basic visual interest that functions adequately
+  - Score 3: Good visual engagement that invites exploration
+  - Score 4: Strong engagement drawing viewer into extended viewing
+  - Score 5: Exceptional engagement creating memorable, transformative experience
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+### Row 33:
+Factor#: 33
+Factor: Emotional Resonance
+Weight: 0.043
+Statements:
+  - Score 1: Weak emotional connection that is quickly forgotten
+  - Score 2: Basic emotional response in some viewers
+  - Score 3: Clear emotional impact connecting with viewer experience
+  - Score 4: Strong emotional resonance creating lasting connection
+  - Score 5: Exceptional emotional power transforming viewer's perspective
+Score: [to be determined]
+Extended: [to be calculated]
+WtExt: [to be calculated]
+
+---
+
+## Output Instructions
+
+After completing all calculations, return your response as a valid JSON object with this exact structure:
 
 {
-  "category_scores": {
-    "composition": 3.5,
-    "color": 4.0, 
-    "technical": 3.0,
-    "originality": 3.5,
-    "emotional": 3.0
+  "smi": 2.47,
+  "category_summaries": {
+    "core_elements": "One sentence summarizing the average performance across factors 1-10 (Line, Shape, Form, Space, Color/Hue, Texture, Tone/Value, Saturation, Composition, Volume)",
+    "design_principles": "One sentence summarizing the average performance across factors 11-20 (Balance, Contrast, Emphasis, Movement, Rhythm, Variety, Proportion, Harmony, Cohesiveness, Pattern)",
+    "techniques": "One sentence summarizing the performance across factors 21-28, noting which techniques were used effectively or not used",
+    "artistic_voice": "One sentence summarizing the average performance across factors 29-33 (Uniqueness, Creativity, Mood, Viewer Engagement, Emotional Resonance)"
   },
-  "brief_summary": "Three sentences: two highlighting the artwork's main strengths, followed by one diplomatically noting areas for potential development"
+  "brief_description": "Two to three factual sentences describing what is visible in the artwork: the subject matter, compositional structure, color palette, and overall mood or atmosphere. Do not repeat what the user stated as the subject; describe what you actually observe."
 }
 
-### **Scoring Requirements:**  
-- Each category score must be between 1.00 and 5.00 in 0.50 increments only
-- All five category scores are required: composition, color, technical, originality, emotional
-- **Scoring Methodology: Choose the highest score level where the artwork demonstrates the majority of the described characteristics**
-- The response must be valid JSON format only with no additional text
-
----
-
-### **Evaluation Criteria & Scoring Rubric**  
-
-#### **1. Composition & Design (20%)**  
-Assess the arrangement of elements, balance, focal points, and visual flow.  
-- **5.0 (Masterful):** Flawless structure, seamless visual flow, highly intentional arrangement.  
-- **4.5 (Excellent):** Well-balanced with strong focal points, only minor weaknesses.  
-- **4.0 (Strong):** Effective composition with some minor issues (e.g., slight imbalance, awkward negative space).  
-- **3.5 (Good):** Functional but noticeable weaknesses (e.g., weak focal points, lack of depth).  
-- **3.0 (Mediocre):** Structurally weak composition (e.g., unintentional imbalance, cluttered or empty areas).  
-- **2.5 (Weak):** Poor design choices, lack of focal clarity, little consideration for balance.  
-- **2.0 (Flawed):** Ineffective layout, elements feel randomly placed.  
-- **1.5 (Poor):** Composition is chaotic or lacking intention; no clear structure.  
-- **1.0 (Failure):** Completely ineffective composition, elements feel accidental or disconnected.  
-
-#### **2. Color Harmony & Use of Light (20%)**  
-Evaluate color relationships, contrast, and lighting effectiveness.  
-- **5.0 (Masterful):** Perfect color harmony, precise contrast, lighting enhances depth and realism.  
-- **4.5 (Excellent):** Highly effective color usage, excellent contrast, only minor areas of inconsistency.  
-- **4.0 (Strong):** Good color balance, mostly effective lighting, some minor inconsistencies.  
-- **3.5 (Good):** Decent color choices but occasional muddy or flat areas.  
-- **3.0 (Mediocre):** Unrefined color relationships, weak lighting effects.  
-- **2.5 (Weak):** Poor color harmony, weak contrast, lighting lacks realism.  
-- **2.0 (Flawed):** Disorganized or unpleasant color scheme, unnatural lighting.  
-- **1.5 (Poor):** Color and light feel random or haphazard.  
-- **1.0 (Failure):** No apparent understanding of color relationships or light.  
-
-#### **3. Technical Skill & Craftsmanship (25%)**  
-Judge the level of mastery in execution, precision, and control of materials.  
-- **5.0 (Masterful):** Flawless execution, extreme attention to detail, mastery of the medium.  
-- **4.5 (Excellent):** Highly refined, minor imperfections, impressive control.  
-- **4.0 (Strong):** Technically sound but some visible inconsistencies.  
-- **3.5 (Good):** Generally well-executed but contains noticeable flaws.  
-- **3.0 (Mediocre):** Functional but unpolished, lacks control in some areas.  
-- **2.5 (Weak):** Struggles with basic execution, noticeable inconsistencies.  
-- **2.0 (Flawed):** Lack of control over the medium, awkward or clumsy handling.  
-- **1.5 (Poor):** Sloppy execution, fundamental errors.  
-- **1.0 (Failure):** Extremely poor craftsmanship, no evidence of skill mastery.  
-
-#### **4. Originality & Innovation (20%)**  
-Assess how unique, creative, and fresh the concept and execution are.  
-- **5.0 (Masterful):** Groundbreaking, visionary, completely original.  
-- **4.5 (Excellent):** Highly original, strong creative vision, fresh approach.  
-- **4.0 (Strong):** Some fresh elements but not entirely groundbreaking.  
-- **3.5 (Good):** Some originality, but leans on familiar ideas or styles.  
-- **3.0 (Mediocre):** Competent but derivative, lacks innovation.  
-- **2.5 (Weak):** Generic, little creative risk-taking.  
-- **2.0 (Flawed):** Cliché, predictable, uninspired.  
-- **1.5 (Poor):** Feels copied or generic with no personal touch.  
-- **1.0 (Failure):** Completely unoriginal, no evidence of creative effort.  
-
-#### **5. Emotional & Conceptual Depth (15%)**  
-Evaluate how well the artwork conveys meaning, emotion, or engages the viewer.  
-- **5.0 (Masterful):** Deeply moving, intellectually or emotionally profound.  
-- **4.5 (Excellent):** Strong emotional or conceptual resonance.  
-- **4.0 (Strong):** Clear message or emotion, could be more refined.  
-- **3.5 (Good):** Engages the viewer but lacks full depth or nuance.  
-- **3.0 (Mediocre):** Some engagement, but limited impact.  
-- **2.5 (Weak):** Feels hollow, lacks emotional or intellectual depth.  
-- **2.0 (Flawed):** Concept is unclear or superficial.  
-- **1.5 (Poor):** No emotional or conceptual connection.  
-- **1.0 (Failure):** Completely void of meaning or engagement.  
-
----
+**CRITICAL REQUIREMENTS:**
+- The SMI must be rounded to exactly 2 decimal places
+- Each category summary must be exactly ONE sentence
+- The brief_description must be 2-3 sentences maximum
+- All summaries should be factual and observational, not evaluative or prescriptive
+- Do not suggest improvements or areas for development
+- Return ONLY the JSON object, no additional text or markdown formatting
