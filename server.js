@@ -983,7 +983,7 @@ Artist: "${artistName}"
 
 ${prompt}`;
 
-    console.log("Sending request to AI for SMI analysis");
+    console.log("Sending request to AI for SMI analysis (33 factors)");
 
     const messages = [
       { 
@@ -995,11 +995,11 @@ ${prompt}`;
       }
     ];
 
-    const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Your task is to analyze the provided artwork and provide detailed analysis with category scores in valid JSON format only. Follow the prompt instructions exactly and return only valid JSON.";
+    const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery across 33 essential factors. Your task is to analyze the provided artwork and calculate the Skill Mastery Index (SMI) using the weighted 33-factor system. Return your analysis in valid JSON format only, following the prompt instructions exactly.";
 
     let analysisText;
     try {
-      analysisText = await callAI(messages, 2000, systemContent);
+      analysisText = await callAI(messages, 3000, systemContent); // Increased token limit for 33 factors
       console.log("SMI Analysis completed successfully");
     } catch (error) {
       console.log("AI request failed:", error.message);
@@ -1039,71 +1039,61 @@ ${prompt}`;
       });
     }
 
-    // Validate the JSON structure
-    if (!aiResponse.category_scores) {
-      console.log("Missing category_scores in AI response");
+    // Validate the NEW JSON structure (33-factor system)
+    if (!aiResponse.category_summaries) {
+      console.log("Missing category_summaries in AI response");
       return res.status(500).json({ 
         error: { 
-          message: "Invalid AI response: missing category_scores" 
+          message: "Invalid AI response: missing category_summaries" 
         } 
       });
     }
 
-    const requiredCategories = ['composition', 'color', 'technical', 'originality', 'emotional'];
-    const categoryScores = aiResponse.category_scores;
+    if (!aiResponse.smi) {
+      console.log("Missing SMI value in AI response");
+      return res.status(500).json({ 
+        error: { 
+          message: "Invalid AI response: missing smi value" 
+        } 
+      });
+    }
+
+    // Validate category_summaries structure
+    const requiredSummaries = ['core_elements', 'design_principles', 'techniques', 'artistic_voice'];
+    const categorySummaries = aiResponse.category_summaries;
     
-    // Validate all required categories are present and have valid scores
-    for (const category of requiredCategories) {
-      if (categoryScores[category] === undefined || categoryScores[category] === null) {
-        console.log(`Missing category score: ${category}`);
+    for (const category of requiredSummaries) {
+      if (!categorySummaries[category] || typeof categorySummaries[category] !== 'string') {
+        console.log(`Missing or invalid summary for: ${category}`);
         return res.status(500).json({ 
           error: { 
-            message: `Missing score for category: ${category}` 
-          } 
-        });
-      }
-      
-      const score = parseFloat(categoryScores[category]);
-      if (isNaN(score) || score < 1.0 || score > 5.0) {
-        console.log(`Invalid score for ${category}: ${categoryScores[category]}`);
-        return res.status(500).json({ 
-          error: { 
-            message: `Invalid score for ${category}: ${categoryScores[category]}. Must be between 1.0 and 5.0` 
-          } 
-        });
-      }
-      
-      // Ensure the score is in 0.5 increments
-      if ((score * 2) % 1 !== 0) {
-        console.log(`Score for ${category} is not in 0.5 increments: ${score}`);
-        return res.status(500).json({ 
-          error: { 
-            message: `Score for ${category} must be in 0.5 increments. Received: ${score}` 
+            message: `Missing or invalid summary for category: ${category}` 
           } 
         });
       }
     }
-    
-    console.log("All category scores validated successfully:", categoryScores);
-    
-    // Calculate the SMI value using the weighted formula
-    const calculatedSMI = (
-      (parseFloat(categoryScores.composition) * 0.20) +
-      (parseFloat(categoryScores.color) * 0.20) +
-      (parseFloat(categoryScores.technical) * 0.25) +
-      (parseFloat(categoryScores.originality) * 0.20) +
-      (parseFloat(categoryScores.emotional) * 0.15)
-    );
-    
-    // Format to 2 decimal places without any rounding beyond normal floating point precision
-    const smiValue = calculatedSMI.toFixed(2);
-    console.log(`Calculated SMI: ${calculatedSMI}, Final SMI: ${smiValue}`);
 
+    // Validate SMI value
+    const smiValue = parseFloat(aiResponse.smi);
+    if (isNaN(smiValue) || smiValue < 1.0 || smiValue > 5.0) {
+      console.log(`Invalid SMI value: ${aiResponse.smi}`);
+      return res.status(500).json({ 
+        error: { 
+          message: `Invalid SMI value: ${aiResponse.smi}. Must be between 1.0 and 5.0` 
+        } 
+      });
+    }
+
+    // Ensure SMI is formatted to 2 decimal places
+    const formattedSMI = smiValue.toFixed(2);
+    console.log(`SMI Value: ${formattedSMI}`);
+    console.log("All category summaries validated successfully");
+
+    // Prepare final response
     const finalResponse = {
-      analysis: aiResponse.detailed_analysis || "",
-      brief_summary: aiResponse.brief_summary || "",
-      category_scores: categoryScores,
-      smi: smiValue,
+      smi: formattedSMI,
+      category_summaries: categorySummaries,
+      brief_description: aiResponse.brief_description || "",
       ai_response: aiResponse // Include the full AI response for transparency
     };
 
@@ -1119,6 +1109,11 @@ ${prompt}`;
     });
   }
 });
+
+
+
+
+
 
 
 // Error handler function
@@ -2847,6 +2842,11 @@ Criterion 6: Yes or No
     res.status(500).json({ error: { message: errorDetails } });
   }
 });
+
+
+
+
+
 
 // ✅ NEW ENDPOINT: Generate Narrative Explanation
 app.post("/api/generate-narrative", async (req, res) => {
