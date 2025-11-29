@@ -2621,22 +2621,34 @@ app.post("/api/valuation", async (req, res) => {
       cli: z(cli, stats.cli.mean, stats.cli.std)
     };
 
-    const weights = { smi: 0.47, ri: 0.33, cli: 0.20 };
+const weights = { smi: 0.40, ri: 0.10, cli: 0.50 };
+const MAX_DISTANCE_THRESHOLD = 0.40; // Reject comps with distance > 0.40 (top 12%)
 
-    // Step 4: Calculate scalar distances and select top 10
-    const enriched = comps.map(r => {
-      const zd = {
-        smi: z(r.smi, stats.smi.mean, stats.smi.std),
-        ri: z(r.ri, stats.ri.mean, stats.ri.std),
-        cli: z(r.cli, stats.cli.mean, stats.cli.std)
-      };
-      const dist = Math.sqrt(
-        weights.smi * Math.pow(zd.smi - zSubject.smi, 2) +
-        weights.ri * Math.pow(zd.ri - zSubject.ri, 2) +
-        weights.cli * Math.pow(zd.cli - zSubject.cli, 2)
-      );
-      return { ...r, scalarDistance: dist };
-    }).sort((a, b) => a.scalarDistance - b.scalarDistance);
+// Step 4: Calculate scalar distances and filter by threshold
+const enriched = comps.map(r => {
+  const zd = {
+    smi: z(r.smi, stats.smi.mean, stats.smi.std),
+    ri: z(r.ri, stats.ri.mean, stats.ri.std),
+    cli: z(r.cli, stats.cli.mean, stats.cli.std)
+  };
+  const dist = Math.sqrt(
+    weights.smi * Math.pow(zd.smi - zSubject.smi, 2) +
+    weights.ri * Math.pow(zd.ri - zSubject.ri, 2) +
+    weights.cli * Math.pow(zd.cli - zSubject.cli, 2)
+  );
+  return { ...r, scalarDistance: dist };
+})
+.filter(r => r.scalarDistance <= MAX_DISTANCE_THRESHOLD) // Filter out distant comps
+.sort((a, b) => a.scalarDistance - b.scalarDistance);
+
+// Log filtering results
+console.log(`After distance filtering (≤${MAX_DISTANCE_THRESHOLD}): ${enriched.length} comps remain`);
+
+// Check if we have enough comps after filtering
+if (enriched.length < 5) {
+  console.warn(`⚠️ Only ${enriched.length} comps within distance threshold. Consider expanding RI range or threshold.`);
+  // Continue anyway - use whatever we have
+}
 
     // Step 5: Calculate predictedPPSI for subject
     const subject = {
@@ -2693,6 +2705,13 @@ res.json({
     });
   }
 });
+
+
+
+
+
+
+
 
 app.get('/api/debug-export', (req, res) => {
   try {
