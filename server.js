@@ -18,31 +18,36 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 const allowedOrigins = [
-  'https://robert-clark-4dee.mykajabi.com',
-  'https://valora-analytics-api.onrender.com',
-  'https://advisory.valoraanalytics.com',
-  'https://stunning-arithmetic-16de6b.netlify.app'
+  "https://robert-clark-4dee.mykajabi.com",
+  "https://valora-analytics-api.onrender.com",
+  "https://advisory.valoraanalytics.com",
+  "https://stunning-arithmetic-16de6b.netlify.app"
 ];
 
 // Global CORS middleware for all routes
-app.use(cors({
-  origin: [
-    'https://robert-clark-4dee.mykajabi.com',
-    'https://valora-analytics-api.onrender.com',
-    'https://advisory.valoraanalytics.com',
-    'https://stunning-arithmetic-16de6b.netlify.app',
-    /\.netlify\.app$/
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma']
-}));
+app.use(
+  cors({
+    origin: [
+      "https://robert-clark-4dee.mykajabi.com",
+      "https://valora-analytics-api.onrender.com",
+      "https://advisory.valoraanalytics.com",
+      "https://stunning-arithmetic-16de6b.netlify.app",
+      /\.netlify\.app$/
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization", "Cache-Control", "Pragma"]
+  })
+);
 
 // THE ONE LINE TO SWITCH AIs - Change true/false to switch everything
-const USE_CLAUDE = false; // true = Claude Opus, false = OpenAI GPT-4
+const USE_CLAUDE = false; // true = Claude Opus, false = OpenAI GPT-4.1
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+
+// Global default temperature (you can change this number)
+const DEFAULT_TEMPERATURE = 0.0;
 
 // ====================
 // UTILITY FUNCTIONS
@@ -51,7 +56,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 // Helper function to extract category scores from analysis text with improved regex patterns
 function extractCategoryScores(analysisText) {
   console.log("Extracting category scores from analysis text...");
-  
+
   // More robust regex patterns that look for category names followed by scores
   const categoryScoreRegex = {
     composition: /(?:1\.\s*)?(?:Composition\s*&\s*Design|Composition[\s:]+)[\s:]*(\d+\.?\d*)/i,
@@ -60,24 +65,26 @@ function extractCategoryScores(analysisText) {
     originality: /(?:4\.\s*)?(?:Originality\s*&\s*Innovation|Originality[\s:]+)[\s:]*(\d+\.?\d*)/i,
     emotional: /(?:5\.\s*)?(?:Emotional\s*&\s*Conceptual\s+Depth|Emotional[\s:]+)[\s:]*(\d+\.?\d*)/i
   };
-  
+
   // Try to find a section that might contain all scores
   let scoreSection = analysisText;
-  
+
   // Look for sections that might contain all the category scores
-  const categorySection = analysisText.match(/(?:Category|Criteria)\s+Scores[\s\S]*?(?=\n\n|$)/i);
+  const categorySection = analysisText.match(
+    /(?:Category|Criteria)\s+Scores[\s\S]*?(?=\n\n|$)/i
+  );
   if (categorySection) {
     scoreSection = categorySection[0];
     console.log("Found dedicated category scores section");
   }
-  
+
   const scores = {};
-  
+
   // Extract each category score and log detailed info for debugging
   for (const [category, regex] of Object.entries(categoryScoreRegex)) {
     const match = scoreSection.match(regex);
     console.log(`Looking for ${category} score with regex: ${regex}`);
-    
+
     if (match && match[1]) {
       const scoreValue = parseFloat(match[1]);
       scores[category] = scoreValue;
@@ -95,36 +102,59 @@ function extractCategoryScores(analysisText) {
       }
     }
   }
-  
+
   // Also try to find scores in a different format
   // Look for all numbers in the format "Score: X.X" or "X.X/5.0"
-  const allScores = scoreSection.match(/(?:Score|Rating):\s*(\d+\.?\d*)|(\d+\.?\d*)\/5\.0/g);
+  const allScores = scoreSection.match(
+    /(?:Score|Rating):\s*(\d+\.?\d*)|(\d+\.?\d*)\/5\.0/g
+  );
   if (allScores && allScores.length >= 5) {
     console.log("Found alternative score format:", allScores);
     // If we have enough scores in this format, use them instead
-    const categories = ['composition', 'color', 'technical', 'originality', 'emotional'];
+    const categories = [
+      "composition",
+      "color",
+      "technical",
+      "originality",
+      "emotional"
+    ];
     allScores.slice(0, 5).forEach((scoreText, index) => {
       const scoreMatch = scoreText.match(/(\d+\.?\d*)/);
       if (scoreMatch && scoreMatch[1] && categories[index]) {
         scores[categories[index]] = parseFloat(scoreMatch[1]);
-        console.log(`Set ${categories[index]} score to ${scores[categories[index]]} from alternative format`);
+        console.log(
+          `Set ${categories[index]} score to ${scores[categories[index]]} from alternative format`
+        );
       }
     });
   }
-  
+
   // Check if we have all required scores
   const missingCategories = [];
-  for (const category of ['composition', 'color', 'technical', 'originality', 'emotional']) {
-    if (!scores[category] || isNaN(scores[category]) || scores[category] < 1.0 || scores[category] > 5.0) {
+  for (const category of [
+    "composition",
+    "color",
+    "technical",
+    "originality",
+    "emotional"
+  ]) {
+    if (
+      !scores[category] ||
+      isNaN(scores[category]) ||
+      scores[category] < 1.0 ||
+      scores[category] > 5.0
+    ) {
       missingCategories.push(category);
     }
   }
-  
+
   if (missingCategories.length > 0) {
-    console.log(`Missing or invalid scores for categories: ${missingCategories.join(', ')}`);
+    console.log(
+      `Missing or invalid scores for categories: ${missingCategories.join(", ")}`
+    );
     return null; // Return null to indicate missing scores
   }
-  
+
   console.log("Final extracted category scores:", scores);
   return scores;
 }
@@ -142,23 +172,47 @@ function roundSMIUp(value) {
 // ====================
 
 // Main function - automatically routes to Claude or OpenAI based on USE_CLAUDE flag
-async function callAI(messages, maxTokens = 1000, systemContent = "", useJSON = false) {
+async function callAI(
+  messages,
+  maxTokens = 1000,
+  systemContent = "",
+  useJSON = false,
+  temperature = DEFAULT_TEMPERATURE
+) {
   if (USE_CLAUDE) {
-    return await callClaudeAPI(messages, maxTokens, systemContent, useJSON);
+    return await callClaudeAPI(
+      messages,
+      maxTokens,
+      systemContent,
+      useJSON,
+      temperature
+    );
   } else {
-    return await callOpenAIAPI(messages, maxTokens, systemContent, useJSON);
+    return await callOpenAIAPI(
+      messages,
+      maxTokens,
+      systemContent,
+      useJSON,
+      temperature
+    );
   }
 }
 
 // Claude Opus implementation
-async function callClaudeAPI(messages, maxTokens, systemContent, useJSON) {
+async function callClaudeAPI(
+  messages,
+  maxTokens,
+  systemContent,
+  useJSON,
+  temperature = DEFAULT_TEMPERATURE
+) {
   if (!ANTHROPIC_API_KEY) {
     throw new Error("Anthropic API key not found");
   }
 
   const anthropicMessages = [];
   let systemPrompt = systemContent;
-  
+
   // Convert OpenAI format to Claude format
   messages.forEach(msg => {
     if (msg.role === "system") {
@@ -170,7 +224,10 @@ async function callClaudeAPI(messages, maxTokens, systemContent, useJSON) {
           if (item.type === "text") {
             return { type: "text", text: item.text };
           } else if (item.type === "image_url") {
-            const base64Data = item.image_url.url.replace(/^data:image\/[^;]+;base64,/, '');
+            const base64Data = item.image_url.url.replace(
+              /^data:image\/[^;]+;base64,/,
+              ""
+            );
             return {
               type: "image",
               source: {
@@ -184,14 +241,18 @@ async function callClaudeAPI(messages, maxTokens, systemContent, useJSON) {
         });
         anthropicMessages.push({ role: "user", content });
       } else {
-        anthropicMessages.push({ role: "user", content: [{ type: "text", text: msg.content }] });
+        anthropicMessages.push({
+          role: "user",
+          content: [{ type: "text", text: msg.content }]
+        });
       }
     }
   });
 
   const requestBody = {
-    model: "claude-opus-4-20250514",
+    model: "claude-3-opus-latest",
     max_tokens: maxTokens,
+    temperature,
     messages: anthropicMessages
   };
 
@@ -212,100 +273,108 @@ async function callClaudeAPI(messages, maxTokens, systemContent, useJSON) {
   );
 
   const responseText = response.data.content[0].text;
-  
 
-
-
-
-
-
-// Handle JSON responses
-if (useJSON) {
-  try {
-    // Strip markdown code blocks if present
-    let cleanJson = responseText;
-    if (responseText.includes('```json')) {
-      cleanJson = responseText.replace(/```json\s*/, '').replace(/\s*```$/, '');
-    }
-    
-    // Find the JSON object - everything from first { to the matching closing }
-    const startIndex = cleanJson.indexOf('{');
-    if (startIndex === -1) {
-      throw new Error('No JSON object found in response');
-    }
-    
-    let braceCount = 0;
-    let endIndex = startIndex;
-    
-    // Find the matching closing brace
-    for (let i = startIndex; i < cleanJson.length; i++) {
-      if (cleanJson[i] === '{') braceCount++;
-      if (cleanJson[i] === '}') braceCount--;
-      if (braceCount === 0) {
-        endIndex = i;
-        break;
+  // Handle JSON responses
+  if (useJSON) {
+    try {
+      // Strip markdown code blocks if present
+      let cleanJson = responseText;
+      if (responseText.includes("```json")) {
+        cleanJson = responseText
+          .replace(/```json\s*/, "")
+          .replace(/\s*```$/, "");
       }
+
+      // Find the JSON object - everything from first { to the matching closing }
+      const startIndex = cleanJson.indexOf("{");
+      if (startIndex === -1) {
+        throw new Error("No JSON object found in response");
+      }
+
+      let braceCount = 0;
+      let endIndex = startIndex;
+
+      // Find the matching closing brace
+      for (let i = startIndex; i < cleanJson.length; i++) {
+        if (cleanJson[i] === "{") braceCount++;
+        if (cleanJson[i] === "}") braceCount--;
+        if (braceCount === 0) {
+          endIndex = i;
+          break;
+        }
+      }
+
+      // Extract just the JSON portion
+      const jsonOnly = cleanJson.substring(startIndex, endIndex + 1);
+      console.log("Extracted JSON:", jsonOnly.substring(0, 100) + "...");
+
+      return JSON.parse(jsonOnly);
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError);
+      console.error("Raw response length:", responseText.length);
+      console.error("First 500 chars:", responseText.substring(0, 500));
+      throw new Error(`Claude returned invalid JSON: ${parseError.message}`);
     }
-    
-    // Extract just the JSON portion
-    const jsonOnly = cleanJson.substring(startIndex, endIndex + 1);
-    console.log("Extracted JSON:", jsonOnly.substring(0, 100) + "...");
-    
-    return JSON.parse(jsonOnly);
-  } catch (parseError) {
-    console.error("JSON parse error:", parseError);
-    console.error("Raw response length:", responseText.length);
-    console.error("First 500 chars:", responseText.substring(0, 500));
-    throw new Error(`Claude returned invalid JSON: ${parseError.message}`);
   }
-}
 
+  const parsedResponse = await callAI(messages, 1500, systemContent, true);
 
-const parsedResponse = await callAI(messages, 1500, systemContent, true);
+  // ADD THIS DETAILED CLI BREAKDOWN BLOCK:
+  console.log("=== DETAILED CLI BREAKDOWN ===");
+  console.log("Input Type:", parsedResponse.input_data?.input_type || "unknown");
+  console.log("Final CLI Value:", parsedResponse.cli_result?.cli_value);
+  console.log("Raw Score:", parsedResponse.cli_result?.raw_score);
 
-// ADD THIS DETAILED LOGGING BLOCK:
-console.log("=== DETAILED CLI BREAKDOWN ===");
-console.log("Input Type:", parsedResponse.input_data?.input_type || "unknown");
-console.log("Final CLI Value:", parsedResponse.cli_result?.cli_value);
-console.log("Raw Score:", parsedResponse.cli_result?.raw_score);
+  // Log each category in detail
+  if (parsedResponse.category_analysis) {
+    console.log("\n--- CATEGORY ANALYSIS ---");
+    const categories = [
+      "art_education",
+      "exhibitions",
+      "awards",
+      "commissions",
+      "collections",
+      "publications",
+      "institutional"
+    ];
 
-// Log each category in detail
-if (parsedResponse.category_analysis) {
-  console.log("\n--- CATEGORY ANALYSIS ---");
-  const categories = ['art_education', 'exhibitions', 'awards', 'commissions', 'collections', 'publications', 'institutional'];
-  
-  categories.forEach(category => {
-    const data = parsedResponse.category_analysis[category];
-    if (data) {
-      console.log(`${category.toUpperCase()}:`);
-      console.log(`  Score: ${data.score}`);
-      console.log(`  Contribution: ${data.contribution}`);
-      console.log(`  Reasoning: ${data.reasoning}`);
-      console.log("---");
-    }
-  });
-}
-
-
+    categories.forEach(category => {
+      const data = parsedResponse.category_analysis[category];
+      if (data) {
+        console.log(`${category.toUpperCase()}:`);
+        console.log(`  Score: ${data.score}`);
+        console.log(`  Contribution: ${data.contribution}`);
+        console.log(`  Reasoning: ${data.reasoning}`);
+        console.log("---");
+      }
+    });
+  }
 
   return responseText;
 }
 
 // OpenAI implementation (your existing logic)
-async function callOpenAIAPI(messages, maxTokens, systemContent, useJSON) {
+async function callOpenAIAPI(
+  messages,
+  maxTokens,
+  systemContent,
+  useJSON,
+  temperature = DEFAULT_TEMPERATURE
+) {
   if (!OPENAI_API_KEY) {
     throw new Error("OpenAI API key not found");
   }
 
   // Add system message if provided
-  const finalMessages = systemContent 
+  const finalMessages = systemContent
     ? [{ role: "system", content: systemContent }, ...messages]
     : messages;
 
   const requestBody = {
-    model: "gpt-4-turbo",
+    model: "gpt-4.1",
     messages: finalMessages,
-    max_tokens: maxTokens
+    max_tokens: maxTokens,
+    temperature
   };
 
   if (useJSON) {
@@ -318,13 +387,13 @@ async function callOpenAIAPI(messages, maxTokens, systemContent, useJSON) {
     {
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENAI_API_KEY}`
+        Authorization: `Bearer ${OPENAI_API_KEY}`
       }
     }
   );
 
   const responseText = response.data.choices[0]?.message?.content || "";
-  
+
   // Handle JSON responses
   if (useJSON) {
     try {
@@ -333,11 +402,9 @@ async function callOpenAIAPI(messages, maxTokens, systemContent, useJSON) {
       throw new Error(`OpenAI returned invalid JSON: ${responseText}`);
     }
   }
-  
+
   return responseText;
 }
-
-
 
 
 
@@ -528,9 +595,6 @@ app.get('/debug-temp-images', (req, res) => {
 });
 
 
-
-
-
 // ====================
 // API ROUTES
 // ====================
@@ -542,59 +606,55 @@ app.get("/api/records/:id/full-image", (req, res) => {
     if (isNaN(recordId)) {
       return res.status(400).json({ error: "Invalid record ID" });
     }
-    
+
     const imagePath = path.join("/mnt/data/images", `record_${recordId}.jpg`);
-    
+
     if (!fs.existsSync(imagePath)) {
       return res.status(404).json({ error: "Full image not found" });
     }
-    
+
     // Set appropriate headers
     res.setHeader("Content-Type", "image/jpeg");
     res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 24 hours
-    
+
     // Send the file
     res.sendFile(imagePath);
-    
   } catch (error) {
     console.error("Error serving full image:", error);
     res.status(500).json({ error: "Failed to serve image" });
   }
 });
 
-
-
-
-
 // Generic endpoint for serving prompts - more maintainable approach
 app.get("/prompts/:calculatorType", (req, res) => {
   const { calculatorType } = req.params;
-  
+
   // First try the _prompt.txt pattern (for SMI, CLI, RI, etc.)
-  let promptPath = path.join(__dirname, "public", "prompts", `${calculatorType}_prompt.txt`);
-  
+  let promptPath = path.join(
+    __dirname,
+    "public",
+    "prompts",
+    `${calculatorType}_prompt.txt`
+  );
+
   // If not found, try without _prompt (for ART_ANALYSIS, etc.)
   if (!fs.existsSync(promptPath)) {
     promptPath = path.join(__dirname, "public", "prompts", `${calculatorType}.txt`);
   }
-  
+
   if (fs.existsSync(promptPath)) {
     res.sendFile(promptPath);
   } else {
-    res.status(404).json({ 
-      error: { message: `Prompt for ${calculatorType} not found` } 
+    res.status(404).json({
+      error: { message: `Prompt for ${calculatorType} not found` }
     });
   }
 });
 
-
-
-
-
 // Legacy endpoints for backward compatibility
 app.get("/PromptCalcRI.txt", (req, res) => {
   const promptPath = path.join(__dirname, "public", "prompts", "RI_prompt.txt");
-  
+
   if (fs.existsSync(promptPath)) {
     res.sendFile(promptPath);
   } else {
@@ -605,7 +665,7 @@ app.get("/PromptCalcRI.txt", (req, res) => {
 
 app.get("/PromptCalcCLI.txt", (req, res) => {
   const promptPath = path.join(__dirname, "public", "prompts", "CLI_prompt.txt");
-  
+
   if (fs.existsSync(promptPath)) {
     res.sendFile(promptPath);
   } else {
@@ -616,7 +676,7 @@ app.get("/PromptCalcCLI.txt", (req, res) => {
 
 app.get("/PromptCalcSMI.txt", (req, res) => {
   const promptPath = path.join(__dirname, "public", "prompts", "SMI_prompt.txt");
-  
+
   if (fs.existsSync(promptPath)) {
     res.sendFile(promptPath);
   } else {
@@ -626,52 +686,60 @@ app.get("/PromptCalcSMI.txt", (req, res) => {
 });
 
 app.get("/PromptAnalyzeArt.txt", (req, res) => {
-  const promptPath = path.join(__dirname, "public", "prompts", "PromptAnalyzeArt.txt");
-  
+  const promptPath = path.join(
+    __dirname,
+    "public",
+    "prompts",
+    "PromptAnalyzeArt.txt"
+  );
+
   if (fs.existsSync(promptPath)) {
     res.sendFile(promptPath);
   } else {
-    res.status(404).json({ 
-      error: { message: "Analyze Art prompt not found" } 
+    res.status(404).json({
+      error: { message: "Analyze Art prompt not found" }
     });
   }
 });
 
-
-
 // ====================
-// REVISED ENDPOINT: Convert Bio to Questionnaire Only
+// REVISED ENDPOINT: Convert Bio to Questionnaire Only (older version)
 // ====================
 app.post("/analyze-cli", async (req, res) => {
   try {
     console.log("Received CLI bio-to-questionnaire request");
-    const { prompt, artistName, artistResume } = req.body;
+    const { prompt, artistName, artistResume, temperature: requestedTemp } = req.body;
+
+    const temperature =
+      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
 
     if (!artistName) {
-      return res.status(400).json({ 
-        error: { message: "Artist name is required" } 
+      return res.status(400).json({
+        error: { message: "Artist name is required" }
       });
     }
 
     if (!prompt) {
-      return res.status(400).json({ 
-        error: { message: "Prompt is required" } 
+      return res.status(400).json({
+        error: { message: "Prompt is required" }
       });
     }
 
     if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
-      return res.status(500).json({ 
-        error: { message: "Server configuration error: Missing API key" } 
+      return res.status(500).json({
+        error: { message: "Server configuration error: Missing API key" }
       });
     }
 
     // Handle empty or minimal bio
     if (!artistResume || artistResume.trim().length < 10) {
-      console.log("Empty or minimal bio provided, returning default questionnaire");
+      console.log(
+        "Empty or minimal bio provided, returning default questionnaire"
+      );
       return res.json({
         questionnaire: {
           education: "none",
-          exhibitions: "none", 
+          exhibitions: "none",
           awards: "none",
           commissions: "none",
           collections: "none",
@@ -682,28 +750,47 @@ app.post("/analyze-cli", async (req, res) => {
       });
     }
 
-    console.log(`Processing bio-to-questionnaire for artist: "${artistName}"`);
+    console.log(
+      `Processing bio-to-questionnaire for artist: "${artistName}"`
+    );
 
     console.log("Sending bio to AI for questionnaire conversion");
 
     const messages = [
-      { 
-        role: "user", 
+      {
+        role: "user",
         content: `Artist: "${artistName}"\n\nArtist Career Information:\n${artistResume}\n\n${prompt}`
       }
     ];
 
-    const systemContent = "You are an expert art career analyst. Analyze the artist's bio and respond with only the requested JSON format.";
+    const systemContent =
+      "You are an expert art career analyst. Analyze the artist's bio and respond with only the requested JSON format.";
 
-    const aiResponse = await callAI(messages, 500, systemContent, true);
+    const aiResponse = await callAI(
+      messages,
+      500,
+      systemContent,
+      true,
+      temperature
+    );
 
-    const requiredFields = ['education', 'exhibitions', 'awards', 'commissions', 'collections', 'publications', 'institutional'];
+    const requiredFields = [
+      "education",
+      "exhibitions",
+      "awards",
+      "commissions",
+      "collections",
+      "publications",
+      "institutional"
+    ];
     const missingFields = requiredFields.filter(field => !aiResponse[field]);
-    
+
     if (missingFields.length > 0) {
-      console.log(`AI response missing fields: ${missingFields.join(', ')}`);
-      return res.status(500).json({ 
-        error: { message: `AI analysis incomplete: missing ${missingFields.join(', ')}` } 
+      console.log(`AI response missing fields: ${missingFields.join(", ")}`);
+      return res.status(500).json({
+        error: {
+          message: `AI analysis incomplete: missing ${missingFields.join(", ")}`
+        }
       });
     }
 
@@ -712,45 +799,46 @@ app.post("/analyze-cli", async (req, res) => {
       questionnaire: aiResponse,
       source: "ai_converted"
     });
-
   } catch (error) {
     console.error("Error in bio-to-questionnaire conversion:", error.message);
-    res.status(500).json({ 
-      error: { message: error.message || "Bio analysis failed" } 
+    res.status(500).json({
+      error: { message: error.message || "Bio analysis failed" }
     });
   }
 });
 
-
-
-
 // ====================
-// REVISED ENDPOINT: Convert Bio to Questionnaire Only
+// REVISED ENDPOINT: Convert Bio to Questionnaire Only (newer version)
 // ====================
 app.post("/analyze-cli", async (req, res) => {
   try {
     console.log("Received CLI bio-to-questionnaire request");
-    const { artistName, artistResume } = req.body;
+    const { artistName, artistResume, temperature: requestedTemp } = req.body;
+
+    const temperature =
+      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
 
     if (!artistName) {
-      return res.status(400).json({ 
-        error: { message: "Artist name is required" } 
+      return res.status(400).json({
+        error: { message: "Artist name is required" }
       });
     }
 
     if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
-      return res.status(500).json({ 
-        error: { message: "Server configuration error: Missing API key" } 
+      return res.status(500).json({
+        error: { message: "Server configuration error: Missing API key" }
       });
     }
 
     // Handle empty or minimal bio
     if (!artistResume || artistResume.trim().length < 10) {
-      console.log("Empty or minimal bio provided, returning default questionnaire");
+      console.log(
+        "Empty or minimal bio provided, returning default questionnaire"
+      );
       return res.json({
         questionnaire: {
           education: "none",
-          exhibitions: "none", 
+          exhibitions: "none",
           awards: "none",
           commissions: "none",
           collections: "none",
@@ -761,8 +849,10 @@ app.post("/analyze-cli", async (req, res) => {
       });
     }
 
-    console.log(`Processing bio-to-questionnaire for artist: "${artistName}"`);
-    
+    console.log(
+      `Processing bio-to-questionnaire for artist: "${artistName}"`
+    );
+
     const questionnairePrompt = `
 Analyze the following artist's career information and answer the questionnaire by selecting the appropriate level for each category.
 
@@ -825,23 +915,40 @@ Respond with ONLY a JSON object in this exact format:
     console.log("Sending bio to AI for questionnaire conversion");
 
     const messages = [
-      { 
-        role: "user", 
+      {
+        role: "user",
         content: `Artist: "${artistName}"\n\n${questionnairePrompt}`
       }
     ];
 
-    const systemContent = "You are an expert art career analyst. Analyze the artist's bio and respond with only the requested JSON format.";
+    const systemContent =
+      "You are an expert art career analyst. Analyze the artist's bio and respond with only the requested JSON format.";
 
-    const aiResponse = await callAI(messages, 500, systemContent, true);
+    const aiResponse = await callAI(
+      messages,
+      500,
+      systemContent,
+      true,
+      temperature
+    );
 
-    const requiredFields = ['education', 'exhibitions', 'awards', 'commissions', 'collections', 'publications', 'institutional'];
+    const requiredFields = [
+      "education",
+      "exhibitions",
+      "awards",
+      "commissions",
+      "collections",
+      "publications",
+      "institutional"
+    ];
     const missingFields = requiredFields.filter(field => !aiResponse[field]);
-    
+
     if (missingFields.length > 0) {
-      console.log(`AI response missing fields: ${missingFields.join(', ')}`);
-      return res.status(500).json({ 
-        error: { message: `AI analysis incomplete: missing ${missingFields.join(', ')}` } 
+      console.log(`AI response missing fields: ${missingFields.join(", ")}`);
+      return res.status(500).json({
+        error: {
+          message: `AI analysis incomplete: missing ${missingFields.join(", ")}`
+        }
       });
     }
 
@@ -850,44 +957,49 @@ Respond with ONLY a JSON object in this exact format:
       questionnaire: aiResponse,
       source: "ai_converted"
     });
-
   } catch (error) {
     console.error("Error in bio-to-questionnaire conversion:", error.message);
-    res.status(500).json({ 
-      error: { message: error.message || "Bio analysis failed" } 
+    res.status(500).json({
+      error: { message: error.message || "Bio analysis failed" }
     });
   }
 });
-
-
-
-
 
 app.post("/generate-career-summary", async (req, res) => {
   try {
     console.log("Received career summary request");
     const questionnaire = req.body;
-    const artistName = req.body.artistName;
+    const { artistName, temperature: requestedTemp } = req.body;
 
-    const requiredFields = ['education', 'exhibitions', 'awards', 'commissions', 'collections', 'publications', 'institutional'];
+    const temperature =
+      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
+
+    const requiredFields = [
+      "education",
+      "exhibitions",
+      "awards",
+      "commissions",
+      "collections",
+      "publications",
+      "institutional"
+    ];
     const missingFields = requiredFields.filter(field => !questionnaire[field]);
-    
+
     if (missingFields.length > 0) {
-      return res.status(400).json({ 
-        error: { message: `Missing questionnaire fields: ${missingFields.join(', ')}` } 
+      return res.status(400).json({
+        error: {
+          message: `Missing questionnaire fields: ${missingFields.join(", ")}`
+        }
       });
     }
 
     if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
-      return res.status(500).json({ 
-        error: { message: "Server configuration error: Missing API key" } 
+      return res.status(500).json({
+        error: { message: "Server configuration error: Missing API key" }
       });
     }
 
-
-
-
-const summaryPrompt = `
+    const summaryPrompt = `
 Based on the following artist career questionnaire responses, write a neutral and academic 1-2 sentence summary about ${artistName}'s career accomplishments.
 
 IMPORTANT: Use a conversational tone with neutral emotional valence, suitable for an academic audience. Be truthful and straightforward. Write in the 3rd person, referring to the artist by name. Focus on their accomplishments and frame any gaps as opportunities for development.
@@ -914,69 +1026,82 @@ Questionnaire Responses:
 
 Write exactly 1-2 sentences about ${artistName}'s current career level using neutral, academic language that acknowledges accomplishments and notes development opportunities.`;
 
-
-
-
     console.log("Generating diplomatic career summary in 3rd person");
 
     const messages = [
-      { 
-        role: "user", 
+      {
+        role: "user",
         content: summaryPrompt
       }
     ];
 
+    const systemContent = `You are an art career analyst writing about ${artistName}. Use a neutral, academic tone that is conversational but not flowery. Be straightforward and professional.`;
 
-const systemContent = `You are an art career analyst writing about ${artistName}. Use a neutral, academic tone that is conversational but not flowery. Be straightforward and professional.`;
-
-
-    const summaryText = await callAI(messages, 200, systemContent);
+    const summaryText = await callAI(
+      messages,
+      200,
+      systemContent,
+      false,
+      temperature
+    );
 
     console.log("Diplomatic career summary generated successfully");
     res.json({
       summary: summaryText.trim()
     });
-
   } catch (error) {
     console.error("Error generating career summary:", error.message);
-    res.status(500).json({ 
-      error: { message: "Failed to generate career summary: " + error.message } 
+    res.status(500).json({
+      error: { message: "Failed to generate career summary: " + error.message }
     });
   }
 });
-
-
-
-
-
-
 
 
 // Endpoint for Skill Mastery Index (SMI) analysis
 app.post("/analyze-smi", async (req, res) => {
   try {
     console.log("Received SMI analyze request");
-    const { prompt, image, artTitle, artistName } = req.body;
+    const {
+      prompt,
+      image,
+      artTitle,
+      artistName,
+      temperature: requestedTemp
+    } = req.body;
+
+    const temperature =
+      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
 
     if (!prompt) {
       console.log("Missing prompt in request");
-      return res.status(400).json({ error: { message: "Prompt is required" } });
+      return res
+        .status(400)
+        .json({ error: { message: "Prompt is required" } });
     }
-    
+
     if (!image) {
       console.log("Missing image in request");
-      return res.status(400).json({ error: { message: "Image is required" } });
+      return res
+        .status(400)
+        .json({ error: { message: "Image is required" } });
     }
 
     if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
       console.log("Missing API key");
-      return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
+      return res.status(500).json({
+        error: {
+          message: "Server configuration error: Missing API key"
+        }
+      });
     }
 
     // Log info about the request
-    console.log(`Processing SMI request for artwork: "${artTitle}" by ${artistName}`);
+    console.log(
+      `Processing SMI request for artwork: "${artTitle}" by ${artistName}`
+    );
     console.log(`Prompt length: ${prompt.length} characters`);
-    
+
     // Construct the prompt with artwork information
     const finalPrompt = `Title: "${artTitle}"
 Artist: "${artistName}"
@@ -986,24 +1111,37 @@ ${prompt}`;
     console.log("Sending request to AI for SMI analysis (33 factors)");
 
     const messages = [
-      { 
-        role: "user", 
+      {
+        role: "user",
         content: [
           { type: "text", text: finalPrompt },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+          {
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${image}` }
+          }
         ]
       }
     ];
 
-    const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery across 33 essential factors. Your task is to analyze the provided artwork and calculate the Skill Mastery Index (SMI) using the weighted 33-factor system. Return your analysis in valid JSON format only, following the prompt instructions exactly.";
+    const systemContent =
+      "You are an expert fine art analyst specializing in evaluating artistic skill mastery across 33 essential factors. Your task is to analyze the provided artwork and calculate the Skill Mastery Index (SMI) using the weighted 33-factor system. Return your analysis in valid JSON format only, following the prompt instructions exactly.";
 
     let analysisText;
     try {
-      analysisText = await callAI(messages, 3000, systemContent); // Increased token limit for 33 factors
+      // useJSON = false here because we manually clean/parse JSON from the text
+      analysisText = await callAI(
+        messages,
+        3000,
+        systemContent,
+        false,
+        temperature
+      ); // Increased token limit for 33 factors
       console.log("SMI Analysis completed successfully");
     } catch (error) {
       console.log("AI request failed:", error.message);
-      return res.status(500).json({ error: { message: "AI analysis failed: " + error.message } });
+      return res.status(500).json({
+        error: { message: "AI analysis failed: " + error.message }
+      });
     }
 
     console.log("Raw AI response:", analysisText);
@@ -1013,62 +1151,74 @@ ${prompt}`;
     try {
       // Clean up the response - remove any markdown code blocks or extra text
       let cleanResponse = analysisText.trim();
-      
+
       // Remove code block markers if present
-      if (cleanResponse.startsWith('```json')) {
-        cleanResponse = cleanResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-      } else if (cleanResponse.startsWith('```')) {
-        cleanResponse = cleanResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      if (cleanResponse.startsWith("```json")) {
+        cleanResponse = cleanResponse
+          .replace(/^```json\s*/, "")
+          .replace(/\s*```$/, "");
+      } else if (cleanResponse.startsWith("```")) {
+        cleanResponse = cleanResponse
+          .replace(/^```\s*/, "")
+          .replace(/\s*```$/, "");
       }
-      
+
       // Find JSON object if there's extra text
       const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         cleanResponse = jsonMatch[0];
       }
-      
+
       aiResponse = JSON.parse(cleanResponse);
       console.log("Successfully parsed AI JSON response");
     } catch (parseError) {
       console.log("Failed to parse AI response as JSON:", parseError.message);
       console.log("AI response was:", analysisText);
-      return res.status(500).json({ 
-        error: { 
-          message: "AI did not return valid JSON format. Please try again." 
-        } 
+      return res.status(500).json({
+        error: {
+          message: "AI did not return valid JSON format. Please try again."
+        }
       });
     }
 
     // Validate the NEW JSON structure (33-factor system)
     if (!aiResponse.category_summaries) {
       console.log("Missing category_summaries in AI response");
-      return res.status(500).json({ 
-        error: { 
-          message: "Invalid AI response: missing category_summaries" 
-        } 
+      return res.status(500).json({
+        error: {
+          message: "Invalid AI response: missing category_summaries"
+        }
       });
     }
 
     if (!aiResponse.smi) {
       console.log("Missing SMI value in AI response");
-      return res.status(500).json({ 
-        error: { 
-          message: "Invalid AI response: missing smi value" 
-        } 
+      return res.status(500).json({
+        error: {
+          message: "Invalid AI response: missing smi value"
+        }
       });
     }
 
     // Validate category_summaries structure
-    const requiredSummaries = ['core_elements', 'design_principles', 'techniques', 'artistic_voice'];
+    const requiredSummaries = [
+      "core_elements",
+      "design_principles",
+      "techniques",
+      "artistic_voice"
+    ];
     const categorySummaries = aiResponse.category_summaries;
-    
+
     for (const category of requiredSummaries) {
-      if (!categorySummaries[category] || typeof categorySummaries[category] !== 'string') {
+      if (
+        !categorySummaries[category] ||
+        typeof categorySummaries[category] !== "string"
+      ) {
         console.log(`Missing or invalid summary for: ${category}`);
-        return res.status(500).json({ 
-          error: { 
-            message: `Missing or invalid summary for category: ${category}` 
-          } 
+        return res.status(500).json({
+          error: {
+            message: `Missing or invalid summary for category: ${category}`
+          }
         });
       }
     }
@@ -1077,10 +1227,10 @@ ${prompt}`;
     const smiValue = parseFloat(aiResponse.smi);
     if (isNaN(smiValue) || smiValue < 1.0 || smiValue > 5.0) {
       console.log(`Invalid SMI value: ${aiResponse.smi}`);
-      return res.status(500).json({ 
-        error: { 
-          message: `Invalid SMI value: ${aiResponse.smi}. Must be between 1.0 and 5.0` 
-        } 
+      return res.status(500).json({
+        error: {
+          message: `Invalid SMI value: ${aiResponse.smi}. Must be between 1.0 and 5.0`
+        }
       });
     }
 
@@ -1099,27 +1249,20 @@ ${prompt}`;
 
     console.log("Sending final SMI response to client");
     res.json(finalResponse);
-
   } catch (error) {
     console.error("Unexpected error in SMI analysis:", error);
-    res.status(500).json({ 
-      error: { 
-        message: "Internal server error during analysis" 
-      } 
+    res.status(500).json({
+      error: {
+        message: "Internal server error during analysis"
+      }
     });
   }
 });
 
-
-
-
-
-
-
 // Error handler function
 function handleApiError(error, res) {
   console.error("Error in API endpoint:", error);
-  
+
   // Detailed error logging
   if (error.response) {
     console.error("Response status:", error.response.status);
@@ -1130,46 +1273,63 @@ function handleApiError(error, res) {
   } else {
     console.error("Error setting up request:", error.message);
   }
-  
-  const errorMessage = error.response?.data?.error?.message || 
-                       error.message || 
-                       "An unknown error occurred";
-                       
-  res.status(500).json({ 
-    error: { 
+
+  const errorMessage =
+    error.response?.data?.error?.message ||
+    error.message ||
+    "An unknown error occurred";
+
+  res.status(500).json({
+    error: {
       message: errorMessage,
       details: error.toString()
-    } 
+    }
   });
 }
-
-
-
 
 // Endpoint for Representational Index (RI) analysis
 app.post("/analyze-ri", async (req, res) => {
   try {
     console.log("Received RI analyze request");
-    const { prompt, image, artTitle, artistName } = req.body;
+    const {
+      prompt,
+      image,
+      artTitle,
+      artistName,
+      temperature: requestedTemp
+    } = req.body;
+
+    const temperature =
+      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
 
     if (!prompt) {
       console.log("Missing prompt in request");
-      return res.status(400).json({ error: { message: "Prompt is required" } });
+      return res
+        .status(400)
+        .json({ error: { message: "Prompt is required" } });
     }
-    
+
     if (!image) {
       console.log("Missing image in request");
-      return res.status(400).json({ error: { message: "Image is required" } });
+      return res
+        .status(400)
+        .json({ error: { message: "Image is required" } });
     }
 
     if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
       console.log("Missing API key");
-      return res.status(500).json({ error: { message: "Server configuration error: Missing API key" } });
+      return res.status(500).json({
+        error: {
+          message: "Server configuration error: Missing API key"
+        }
+      });
     }
 
-    console.log(`Processing RI request for artwork: "${artTitle}" by ${artistName}`);
+    console.log(
+      `Processing RI request for artwork: "${artTitle}" by ${artistName}`
+    );
     console.log(`Prompt length: ${prompt.length} characters`);
-    
+
     // Construct the prompt with artwork information
     const finalPrompt = `Title: "${artTitle}"
 Artist: "${artistName}"
@@ -1179,48 +1339,59 @@ ${prompt}`;
     console.log("Sending request to AI for RI analysis");
 
     const messages = [
-      { 
-        role: "user", 
+      {
+        role: "user",
         content: [
           { type: "text", text: finalPrompt },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+          {
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${image}` }
+          }
         ]
       }
     ];
 
-    const systemContent = "You are an expert fine art analyst specializing in evaluating representational accuracy. Respond with ONLY valid JSON.";
+    const systemContent =
+      "You are an expert fine art analyst specializing in evaluating representational accuracy. Respond with ONLY valid JSON.";
 
     let aiResponse;
     try {
-      // Request JSON response from AI
-      aiResponse = await callAI(messages, 1500, systemContent, true);
+      // Request JSON response from AI (useJSON = true)
+      aiResponse = await callAI(
+        messages,
+        1500,
+        systemContent,
+        true,
+        temperature
+      );
       console.log("RI Analysis completed successfully");
     } catch (error) {
       console.log("AI request failed:", error.message);
-      return res.status(500).json({ error: { message: "AI analysis failed: " + error.message } });
+      return res.status(500).json({
+        error: { message: "AI analysis failed: " + error.message }
+      });
     }
 
     // Validate JSON structure
     if (!aiResponse.ri_score || !aiResponse.category || !aiResponse.analysis) {
       console.error("Invalid RI response structure from AI");
-      return res.status(500).json({ 
-        error: { message: "AI returned invalid response structure" } 
+      return res.status(500).json({
+        error: { message: "AI returned invalid response structure" }
       });
     }
 
     // Validate RI score is between 1-5
     if (aiResponse.ri_score < 1 || aiResponse.ri_score > 5) {
       console.error(`Invalid RI score: ${aiResponse.ri_score}`);
-      return res.status(500).json({ 
-        error: { message: `Invalid RI score: ${aiResponse.ri_score}. Must be between 1-5` } 
+      return res.status(500).json({
+        error: {
+          message: `Invalid RI score: ${aiResponse.ri_score}. Must be between 1-5`
+        }
       });
     }
 
-
-
-
-// Convert JSON to markdown format for frontend
-const markdownReport = `
+    // Convert JSON to markdown format for frontend
+    const markdownReport = `
 ## Representational Index (RI): ${aiResponse.ri_score}
 
 **Category:** ${aiResponse.category}
@@ -1232,8 +1403,6 @@ ${aiResponse.summary.trim()}
 
 #### Subject Recognizability
 ${aiResponse.analysis.subject_recognizability}
-
-
 
 #### Fidelity to Reality
 ${aiResponse.analysis.fidelity_to_reality}
@@ -1252,24 +1421,20 @@ ${aiResponse.explanation}
 `;
 
     console.log("Sending RI analysis response to client");
-    res.json({ 
+    res.json({
       analysis: markdownReport.trim(),
       ri_score: aiResponse.ri_score,
       category: aiResponse.category
     });
-
   } catch (error) {
     console.error("Unexpected error in RI analysis:", error);
-    res.status(500).json({ 
-      error: { 
-        message: "Internal server error during analysis" 
-      } 
+    res.status(500).json({
+      error: {
+        message: "Internal server error during analysis"
+      }
     });
   }
 });
-
-
-
 
 
 
@@ -1343,27 +1508,7 @@ function writeDatabase(data) {
     }
 }
 
-// ====================================================
-// Calculate APPSI Function
-// ====================================================
 
-function calculateAPPSI(size, ppsi, coefficients) {
-  // Calculate LSSI (Log of Size in Square Inches)
-  const lssi = Math.log(size);
-  
-  // Calculate predicted PPSI at original LSSI using the model
-  const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
-  
-  // Calculate residual as a percentage of predicted PPSI
-  const residualPercentage = (ppsi - predictedPPSI) / predictedPPSI;
-  
-  // Calculate predicted PPSI at standardized LSSI (ln(200))
-  const standardLSSI = Math.log(200);
-  const predictedPPSIStandard = coefficients.constant * Math.pow(standardLSSI, coefficients.exponent);
-  
-  // Apply the percentage residual to the standardized predicted PPSI
-  return predictedPPSIStandard * (1 + residualPercentage);
-}
 
 // ====================================================
 // COMPLETE REPLACEMENT: Update All APPSI Function
@@ -1955,7 +2100,6 @@ app.get("/api/coefficients/calculate", (req, res) => {
 
 
 
-
 function formatAIAnalysisForReport(aiAnalysis) {
   if (!aiAnalysis) return '';
   
@@ -2238,211 +2382,275 @@ app.put("/api/records/:id", (req, res) => {
     }
 });
 
+
+
 // Updated recalculate APPSI endpoint - now uses artOnlyPrice method
 app.post("/api/records/recalculate-appsi", (req, res) => {
-    try {
-        const data = readDatabase();
-        const coefficients = data.metadata.coefficients;
-        
-        // Track results
-        const results = {
-            totalRecords: data.records.length,
-            updatedRecords: 0,
-            problematicRecords: [],
-            addedArtOnlyPrice: 0
-        };
-        
-        // Recalculate APPSI for all records using new method
-        data.records.forEach(record => {
-            // Ensure artOnlyPrice exists
-            if (!record.artOnlyPrice) {
-                record.artOnlyPrice = calculateArtOnlyPrice(
-                    record.price, 
-                    record.framed || 'N', 
-                    coefficients
-                );
-                results.addedArtOnlyPrice++;
-            }
-            
-            // Validate required fields for APPSI calculation
-            if (!record.size || !record.artOnlyPrice || 
-                isNaN(record.size) || isNaN(record.artOnlyPrice) || 
-                record.size <= 0 || record.artOnlyPrice <= 0) {
-                
-                results.problematicRecords.push({
-                    recordId: record.id,
-                    issues: {
-                        size: record.size,
-                        artOnlyPrice: record.artOnlyPrice,
-                        hasValidSize: !!record.size && !isNaN(record.size) && record.size > 0,
-                        hasValidArtOnlyPrice: !!record.artOnlyPrice && !isNaN(record.artOnlyPrice) && record.artOnlyPrice > 0
-                    }
-                });
-                
-                return; // Skip this record
-            }
-            
-            // Calculate APPSI using artOnlyPrice (new method)
-            const newAPPSI = calculateAPPSI(
-                record.size, 
-                record.artOnlyPrice, 
-                coefficients
-            );
-            
-            if (newAPPSI && newAPPSI > 0) {
-                record.appsi = newAPPSI;
-                results.updatedRecords++;
-            }
+  try {
+    const data = readDatabase();
+    const coefficients = data.metadata.coefficients;
+
+    // Track results
+    const results = {
+      totalRecords: data.records.length,
+      updatedRecords: 0,
+      problematicRecords: [],
+      addedArtOnlyPrice: 0
+    };
+
+    // Recalculate APPSI for all records using new method
+    data.records.forEach(record => {
+      // Ensure artOnlyPrice exists
+      if (!record.artOnlyPrice) {
+        record.artOnlyPrice = calculateArtOnlyPrice(
+          record.price,
+          record.framed || "N",
+          coefficients
+        );
+        results.addedArtOnlyPrice++;
+      }
+
+      // Validate required fields for APPSI calculation
+      if (
+        !record.size ||
+        !record.artOnlyPrice ||
+        isNaN(record.size) ||
+        isNaN(record.artOnlyPrice) ||
+        record.size <= 0 ||
+        record.artOnlyPrice <= 0
+      ) {
+        results.problematicRecords.push({
+          recordId: record.id,
+          issues: {
+            size: record.size,
+            artOnlyPrice: record.artOnlyPrice,
+            hasValidSize:
+              !!record.size && !isNaN(record.size) && record.size > 0,
+            hasValidArtOnlyPrice:
+              !!record.artOnlyPrice &&
+              !isNaN(record.artOnlyPrice) &&
+              record.artOnlyPrice > 0
+          }
         });
-        
-        // Write updated database
-        writeDatabase(data);
-        
-        res.json({
-            message: 'Successfully recalculated APPSI using artOnlyPrice method',
-            ...results
-        });
-    } catch (error) {
-        console.error('Error in APPSI recalculation:', error);
-        res.status(500).json({ error: 'Failed to recalculate APPSI', details: error.message });
-    }
+
+        return; // Skip this record
+      }
+
+      // Calculate APPSI using artOnlyPrice (new method)
+      const newAPPSI = calculateAPPSI(
+        record.size,
+        record.artOnlyPrice,
+        coefficients
+      );
+
+      if (newAPPSI && newAPPSI > 0) {
+        record.appsi = newAPPSI;
+        results.updatedRecords++;
+      }
+    });
+
+    // Write updated database
+    writeDatabase(data);
+
+    res.json({
+      message: "Successfully recalculated APPSI using artOnlyPrice method",
+      ...results
+    });
+  } catch (error) {
+    console.error("Error in APPSI recalculation:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to recalculate APPSI", details: error.message });
+  }
 });
 
 // Updated POST coefficients - recalculates all APPSI when coefficients change
 app.post("/api/coefficients", (req, res) => {
-    try {
-        const data = readDatabase();
-        
-        // Update coefficients
-        if (!data.metadata.coefficients) {
-            data.metadata.coefficients = {};
-        }
-        
-        // Update all coefficient fields
-        Object.keys(req.body).forEach(key => {
-            if (key !== 'medium') {
-                data.metadata.coefficients[key] = req.body[key];
-            }
-        });
-        
-        // Update medium multipliers if provided
-        if (req.body.medium) {
-            data.metadata.medium = { ...data.metadata.medium, ...req.body.medium };
-        }
-        
-        data.metadata.lastUpdated = new Date().toISOString();
-        
-        // Recalculate all artOnlyPrice and APPSI values with new coefficients
-        let recalculatedCount = 0;
-        data.records.forEach(record => {
-            // Recalculate artOnlyPrice with potentially new frame coefficients
-            if (record.price && record.price > 0) {
-                record.artOnlyPrice = calculateArtOnlyPrice(
-                    record.price, 
-                    record.framed || 'N', 
-                    data.metadata.coefficients
-                );
-            }
-            
-            // Recalculate APPSI with new coefficients and artOnlyPrice
-            if (record.size && record.artOnlyPrice && record.size > 0 && record.artOnlyPrice > 0) {
-                record.appsi = calculateAPPSI(
-                    record.size, 
-                    record.artOnlyPrice, 
-                    data.metadata.coefficients
-                );
-                recalculatedCount++;
-            }
-        });
-        
-        writeDatabase(data);
-        
-        res.json({
-            message: 'Coefficients updated successfully',
-            recalculatedRecords: recalculatedCount,
-            coefficients: data.metadata.coefficients,
-            medium: data.metadata.medium
-        });
-    } catch (error) {
-        console.error('Error updating coefficients:', error);
-        res.status(500).json({ error: error.message });
+  try {
+    const data = readDatabase();
+
+    // Update coefficients
+    if (!data.metadata.coefficients) {
+      data.metadata.coefficients = {};
     }
+
+    // Update all coefficient fields
+    Object.keys(req.body).forEach(key => {
+      if (key !== "medium") {
+        data.metadata.coefficients[key] = req.body[key];
+      }
+    });
+
+    // Update medium multipliers if provided
+    if (req.body.medium) {
+      data.metadata.medium = { ...data.metadata.medium, ...req.body.medium };
+    }
+
+    data.metadata.lastUpdated = new Date().toISOString();
+
+    // Recalculate all artOnlyPrice and APPSI values with new coefficients
+    let recalculatedCount = 0;
+    data.records.forEach(record => {
+      // Recalculate artOnlyPrice with potentially new frame coefficients
+      if (record.price && record.price > 0) {
+        record.artOnlyPrice = calculateArtOnlyPrice(
+          record.price,
+          record.framed || "N",
+          data.metadata.coefficients
+        );
+      }
+
+      // Recalculate APPSI with new coefficients and artOnlyPrice
+      if (
+        record.size &&
+        record.artOnlyPrice &&
+        record.size > 0 &&
+        record.artOnlyPrice > 0
+      ) {
+        record.appsi = calculateAPPSI(
+          record.size,
+          record.artOnlyPrice,
+          data.metadata.coefficients
+        );
+        recalculatedCount++;
+      }
+    });
+
+    writeDatabase(data);
+
+    res.json({
+      message: "Coefficients updated successfully",
+      recalculatedRecords: recalculatedCount,
+      coefficients: data.metadata.coefficients,
+      medium: data.metadata.medium
+    });
+  } catch (error) {
+    console.error("Error updating coefficients:", error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get("/api/sizeyourprice", (req, res) => {
   try {
     const data = readDatabase();
-    
+
     // Extract just the coefficients from the database
     const coefficients = {
       constant: data.metadata.coefficients.constant,
       exponent: data.metadata.coefficients.exponent
     };
-    
+
     res.json(coefficients);
   } catch (error) {
-    console.error('Error in Size Your Price endpoint:', error);
-    res.status(500).json({ 
-      error: { 
-        message: error.message || "An error occurred retrieving the coefficients" 
-      } 
+    console.error("Error in Size Your Price endpoint:", error);
+    res.status(500).json({
+      error: {
+        message:
+          error.message ||
+          "An error occurred retrieving the coefficients"
+      }
     });
   }
 });
 
-
-
-
-
-
-
-
 // Add this constant at the top of server.js (after your other constants)
 const VALID_FACTOR_NAMES = [
-  "Line", "Shape", "Form", "Space", "Color/Hue", "Texture", "Tone/Value", 
-  "Saturation", "Composition", "Volume", "Balance", "Contrast", "Emphasis", 
-  "Movement", "Rhythm", "Variety", "Proportion", "Harmony", "Cohesiveness", 
-  "Pattern", "Brushwork", "Chiaroscuro", "Impasto", "Sfumato", "Glazing", 
-  "Scumbling", "Pointillism", "Wet-on-Wet", "Uniqueness", "Creativity", 
-  "Mood", "Viewer Engagement", "Emotional Resonance"
+  "Line",
+  "Shape",
+  "Form",
+  "Space",
+  "Color/Hue",
+  "Texture",
+  "Tone/Value",
+  "Saturation",
+  "Composition",
+  "Volume",
+  "Balance",
+  "Contrast",
+  "Emphasis",
+  "Movement",
+  "Rhythm",
+  "Variety",
+  "Proportion",
+  "Harmony",
+  "Cohesiveness",
+  "Pattern",
+  "Brushwork",
+  "Chiaroscuro",
+  "Impasto",
+  "Sfumato",
+  "Glazing",
+  "Scumbling",
+  "Pointillism",
+  "Wet-on-Wet",
+  "Uniqueness",
+  "Creativity",
+  "Mood",
+  "Viewer Engagement",
+  "Emotional Resonance"
 ];
 
 // REPLACE your entire /analyze-art endpoint with this:
 app.post("/analyze-art", async (req, res) => {
   try {
     console.log("Received art analysis request");
-    const { prompt, image, artTitle, artistName, subjectPhrase } = req.body;
-    
+    const {
+      prompt,
+      image,
+      artTitle,
+      artistName,
+      subjectPhrase,
+      temperature: requestedTemp
+    } = req.body;
+
+    const temperature =
+      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
+
     if (!prompt || !image || (!ANTHROPIC_API_KEY && !OPENAI_API_KEY)) {
-      return res.status(400).json({ error: { message: "Missing prompt, image, or API key" } });
+      return res
+        .status(400)
+        .json({ error: { message: "Missing prompt, image, or API key" } });
     }
 
     // Simple placeholder replacement - no hardcoded additions
     const finalPrompt = prompt
-      .replace('{{TITLE}}', artTitle)
-      .replace('{{ARTIST}}', artistName)
-      .replace('{{SUBJECT}}', subjectPhrase);
+      .replace("{{TITLE}}", artTitle)
+      .replace("{{ARTIST}}", artistName)
+      .replace("{{SUBJECT}}", subjectPhrase);
 
     const messages = [
       {
         role: "user",
         content: [
           { type: "text", text: finalPrompt },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } }
+          {
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${image}` }
+          }
         ]
       }
     ];
 
-    const systemContent = "You are an expert fine art analyst specializing in providing constructive feedback and refinement recommendations for artworks. Always respond with valid JSON only.";
+    const systemContent =
+      "You are an expert fine art analyst specializing in providing constructive feedback and refinement recommendations for artworks. Always respond with valid JSON only.";
 
-    const analysisText = await callAI(messages, 2000, systemContent);
+    const analysisText = await callAI(
+      messages,
+      2000,
+      systemContent,
+      false,
+      temperature
+    );
 
     // Parse the JSON response
     let parsedAnalysis;
     try {
-      let cleanedResponse = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      cleanedResponse = cleanedResponse.replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
-      cleanedResponse = cleanedResponse.replace(/\}\s*\]/g, '}]'); // Fix missing closing brackets
+      let cleanedResponse = analysisText
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "")
+        .trim();
+      cleanedResponse = cleanedResponse.replace(/,(\s*[}\]])/g, "$1"); // Remove trailing commas
+      cleanedResponse = cleanedResponse.replace(/\}\s*\]/g, "}]"); // Fix missing closing brackets
       parsedAnalysis = JSON.parse(cleanedResponse);
     } catch (parseError) {
       console.error("Failed to parse AI response as JSON:", parseError);
@@ -2454,7 +2662,11 @@ app.post("/analyze-art", async (req, res) => {
     }
 
     // Validate the JSON structure
-    if (!parsedAnalysis.overview || !parsedAnalysis.strengths || !parsedAnalysis.opportunities) {
+    if (
+      !parsedAnalysis.overview ||
+      !parsedAnalysis.strengths ||
+      !parsedAnalysis.opportunities
+    ) {
       console.error("Invalid JSON structure received from AI");
       return res.json({
         analysis: analysisText,
@@ -2463,12 +2675,17 @@ app.post("/analyze-art", async (req, res) => {
     }
 
     // Validate recommendedStudy factors
-    if (parsedAnalysis.recommendedStudy && Array.isArray(parsedAnalysis.recommendedStudy)) {
-      // Check for exactly 3 factors
+    if (
+      parsedAnalysis.recommendedStudy &&
+      Array.isArray(parsedAnalysis.recommendedStudy)
+    ) {
+      // Check for exactly 3 factors (comment says 3, but code uses 2 – left as-is)
       if (parsedAnalysis.recommendedStudy.length !== 2) {
-        console.warn(`Expected 3 recommended study factors, got ${parsedAnalysis.recommendedStudy.length}`);
+        console.warn(
+          `Expected 3 recommended study factors, got ${parsedAnalysis.recommendedStudy.length}`
+        );
       }
-      
+
       // Validate factor names against the 33 approved list
       const invalidFactors = [];
       parsedAnalysis.recommendedStudy.forEach(study => {
@@ -2476,14 +2693,20 @@ app.post("/analyze-art", async (req, res) => {
           invalidFactors.push(study.factor);
         }
       });
-      
+
       if (invalidFactors.length > 0) {
-        console.error(`Invalid factor names detected: ${invalidFactors.join(', ')}`);
-        console.error("These factors are not in the approved 33 Essential Factors list");
-        return res.status(500).json({ 
-          error: { 
-            message: `AI used invalid factor names: ${invalidFactors.join(', ')}. Please try again.` 
-          } 
+        console.error(
+          `Invalid factor names detected: ${invalidFactors.join(", ")}`
+        );
+        console.error(
+          "These factors are not in the approved 33 Essential Factors list"
+        );
+        return res.status(500).json({
+          error: {
+            message: `AI used invalid factor names: ${invalidFactors.join(
+              ", "
+            )}. Please try again.`
+          }
         });
       }
     } else {
@@ -2505,50 +2728,82 @@ app.post("/analyze-art", async (req, res) => {
 
     console.log("Sending structured art analysis response to client");
     res.json(finalResponse);
-
   } catch (error) {
     console.error("Error in /analyze-art:", error.message);
-    const errMsg = error.response?.data?.error?.message || error.message || "Unknown error";
+    const errMsg =
+      error.response?.data?.error?.message || error.message || "Unknown error";
     res.status(500).json({ error: { message: errMsg } });
   }
 });
-
-
-
-
-
-
-
-
-
-
 
 app.post("/api/valuation", async (req, res) => {
   try {
     console.log("Starting valuation process");
 
-    const { smi, ri, cli, size, targetedRI, subjectImageBase64, media, title, artist, subjectDescription, height, width } = req.body;
+    const {
+      smi,
+      ri,
+      cli,
+      size,
+      targetedRI,
+      subjectImageBase64,
+      media,
+      title,
+      artist,
+      subjectDescription,
+      height,
+      width,
+      temperature: requestedTemp
+    } = req.body;
+
+    const temperature =
+      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
 
     console.log("Valuation inputs:", {
-      smi, ri, cli, size,
-      targetedRI: Array.isArray(targetedRI) ? targetedRI : 'Not an array',
+      smi,
+      ri,
+      cli,
+      size,
+      targetedRI: Array.isArray(targetedRI) ? targetedRI : "Not an array",
       hasSubjectImage: !!subjectImageBase64,
-      media, title, artist, subjectDescription, height, width
+      media,
+      title,
+      artist,
+      subjectDescription,
+      height,
+      width
     });
 
     const db = readDatabase();
     const allRecords = db.records || [];
     const coefficients = db.metadata.coefficients;
 
-    if (!smi || !ri || !cli || !size || !targetedRI || !Array.isArray(targetedRI) || !subjectImageBase64 || !height || !width) {
-      return res.status(400).json({ error: "Missing required valuation inputs." });
+    if (
+      !smi ||
+      !ri ||
+      !cli ||
+      !size ||
+      !targetedRI ||
+      !Array.isArray(targetedRI) ||
+      !subjectImageBase64 ||
+      !height ||
+      !width
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Missing required valuation inputs." });
     }
 
-    // Step 1: Generate AI analysis (unchanged)
+    // Step 1: Generate AI analysis (unchanged except for temperature)
     let aiAnalysis = "";
     try {
-      const promptPath = path.join(__dirname, 'public', 'prompts', 'VALUATION_DESCRIPTION.txt');
-      const prompt = fs.readFileSync(promptPath, 'utf8').trim();
+      const promptPath = path.join(
+        __dirname,
+        "public",
+        "prompts",
+        "VALUATION_DESCRIPTION.txt"
+      );
+      const prompt = fs.readFileSync(promptPath, "utf8").trim();
       if (prompt.length < 50) {
         throw new Error("Prompt for ART_ANALYSIS.txt not found or too short");
       }
@@ -2557,41 +2812,58 @@ app.post("/api/valuation", async (req, res) => {
         {
           role: "user",
           content: [
-            { type: "text", text: subjectDescription ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"` : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}` },
-            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subjectImageBase64}` } }
+            {
+              type: "text",
+              text: subjectDescription
+                ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"`
+                : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}`
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${subjectImageBase64}`
+              }
+            }
           ]
         }
       ];
 
-      aiAnalysis = await callAI(messages, 300, prompt);
+      aiAnalysis = await callAI(
+        messages,
+        300,
+        prompt,
+        false,
+        temperature
+      );
       console.log("Analysis completed successfully");
     } catch (error) {
       console.error("Analysis failed:", error.message);
-      return res.status(500).json({ 
-        error: "Analysis failed", 
-        details: error.response?.data?.error?.message || error.message 
+      return res.status(500).json({
+        error: "Analysis failed",
+        details: error.response?.data?.error?.message || error.message
       });
     }
 
     // Step 2: Filter valid comps
     const comps = allRecords.filter(r => {
-      const isValid = r.ri !== undefined &&
-                      targetedRI.includes(Number(r.ri)) &&
-                      typeof r.smi === 'number' &&
-                      typeof r.cli === 'number' &&
-                      typeof r.appsi === 'number' &&
-                      r.thumbnailBase64 &&
-                      r.artistName &&
-                      r.title &&
-                      r.height &&
-                      r.width &&
-                      r.medium &&
-                      r.price;
+      const isValid =
+        r.ri !== undefined &&
+        targetedRI.includes(Number(r.ri)) &&
+        typeof r.smi === "number" &&
+        typeof r.cli === "number" &&
+        typeof r.appsi === "number" &&
+        r.thumbnailBase64 &&
+        r.artistName &&
+        r.title &&
+        r.height &&
+        r.width &&
+        r.medium &&
+        r.price;
       return isValid;
     });
 
     console.log(`Found ${comps.length} valid comparison records`);
-    
+
     if (comps.length === 0) {
       return res.status(400).json({
         error: "No valid comparison records found for the specified criteria.",
@@ -2603,16 +2875,18 @@ app.post("/api/valuation", async (req, res) => {
     const meanStd = (arr, key) => {
       const values = arr.map(r => r[key]);
       const mean = values.reduce((a, b) => a + b, 0) / values.length;
-      const std = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length);
+      const std = Math.sqrt(
+        values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length
+      );
       return { mean, std };
     };
 
-    const z = (v, mean, std) => std ? (v - mean) / std : 0;
+    const z = (v, mean, std) => (std ? (v - mean) / std : 0);
 
     const stats = {
-      smi: meanStd(comps, 'smi'),
-      ri: meanStd(comps, 'ri'),
-      cli: meanStd(comps, 'cli')
+      smi: meanStd(comps, "smi"),
+      ri: meanStd(comps, "ri"),
+      cli: meanStd(comps, "cli")
     };
 
     const zSubject = {
@@ -2621,34 +2895,39 @@ app.post("/api/valuation", async (req, res) => {
       cli: z(cli, stats.cli.mean, stats.cli.std)
     };
 
-const weights = { smi: 0.40, ri: 0.10, cli: 0.50 };
-const MAX_DISTANCE_THRESHOLD = 0.40; // Reject comps with distance > 0.40 (top 12%)
+    const weights = { smi: 0.4, ri: 0.1, cli: 0.5 };
+    const MAX_DISTANCE_THRESHOLD = 0.4; // Reject comps with distance > 0.40 (top 12%)
 
-// Step 4: Calculate scalar distances and filter by threshold
-const enriched = comps.map(r => {
-  const zd = {
-    smi: z(r.smi, stats.smi.mean, stats.smi.std),
-    ri: z(r.ri, stats.ri.mean, stats.ri.std),
-    cli: z(r.cli, stats.cli.mean, stats.cli.std)
-  };
-  const dist = Math.sqrt(
-    weights.smi * Math.pow(zd.smi - zSubject.smi, 2) +
-    weights.ri * Math.pow(zd.ri - zSubject.ri, 2) +
-    weights.cli * Math.pow(zd.cli - zSubject.cli, 2)
-  );
-  return { ...r, scalarDistance: dist };
-})
-.filter(r => r.scalarDistance <= MAX_DISTANCE_THRESHOLD) // Filter out distant comps
-.sort((a, b) => a.scalarDistance - b.scalarDistance);
+    // Step 4: Calculate scalar distances and filter by threshold
+    const enriched = comps
+      .map(r => {
+        const zd = {
+          smi: z(r.smi, stats.smi.mean, stats.smi.std),
+          ri: z(r.ri, stats.ri.mean, stats.ri.std),
+          cli: z(r.cli, stats.cli.mean, stats.cli.std)
+        };
+        const dist = Math.sqrt(
+          weights.smi * Math.pow(zd.smi - zSubject.smi, 2) +
+            weights.ri * Math.pow(zd.ri - zSubject.ri, 2) +
+            weights.cli * Math.pow(zd.cli - zSubject.cli, 2)
+        );
+        return { ...r, scalarDistance: dist };
+      })
+      .filter(r => r.scalarDistance <= MAX_DISTANCE_THRESHOLD) // Filter out distant comps
+      .sort((a, b) => a.scalarDistance - b.scalarDistance);
 
-// Log filtering results
-console.log(`After distance filtering (≤${MAX_DISTANCE_THRESHOLD}): ${enriched.length} comps remain`);
+    // Log filtering results
+    console.log(
+      `After distance filtering (≤${MAX_DISTANCE_THRESHOLD}): ${enriched.length} comps remain`
+    );
 
-// Check if we have enough comps after filtering
-if (enriched.length < 5) {
-  console.warn(`⚠️ Only ${enriched.length} comps within distance threshold. Consider expanding RI range or threshold.`);
-  // Continue anyway - use whatever we have
-}
+    // Check if we have enough comps after filtering
+    if (enriched.length < 5) {
+      console.warn(
+        `⚠️ Only ${enriched.length} comps within distance threshold. Consider expanding RI range or threshold.`
+      );
+      // Continue anyway - use whatever we have
+    }
 
     // Step 5: Calculate predictedPPSI for subject
     const subject = {
@@ -2662,7 +2941,8 @@ if (enriched.length < 5) {
     };
 
     const lssi = Math.log(subject.SSI);
-    const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
+    const predictedPPSI =
+      coefficients.constant * Math.pow(lssi, coefficients.exponent);
 
     // Step 6: Select top 10 comps with enhanced data and calculate adjustments
     const topComps = enriched.slice(0, 10).map(r => ({
@@ -2680,51 +2960,44 @@ if (enriched.length < 5) {
       thumbnailBase64: r.thumbnailBase64
     }));
 
-    // Calculate sizeAdjFactor (from existing code)
-    subject.predictAt200 = coefficients.constant * Math.pow(Math.log(200), coefficients.exponent);
+    // Calculate sizeAdjFactor
+    subject.predictAt200 =
+      coefficients.constant * Math.pow(Math.log(200), coefficients.exponent);
     subject.predictAtSubj = predictedPPSI;
     subject.ratio = subject.predictAtSubj / subject.predictAt200;
     subject.sizeAdjFactor = subject.ratio - 1;
 
-    console.log("Sending enhanced valuation response with analysis and complete comparable data");
-    
+    console.log(
+      "Sending enhanced valuation response with analysis and complete comparable data"
+    );
 
-res.json({
-  topComps,
-  coefficients,
-  medium: db.metadata.medium, 
-  aiAnalysis: formatAIAnalysisForReport(aiAnalysis)
-});
-
-
+    res.json({
+      topComps,
+      coefficients,
+      medium: db.metadata.medium,
+      aiAnalysis: formatAIAnalysisForReport(aiAnalysis)
+    });
   } catch (error) {
     console.error("Valuation request failed:", error.message);
-    res.status(500).json({ 
-      error: "Valuation processing failed", 
-      details: error.response?.data?.error?.message || error.message 
+    res.status(500).json({
+      error: "Valuation processing failed",
+      details: error.response?.data?.error?.message || error.message
     });
   }
 });
 
-
-
-
-
-
-
-
-app.get('/api/debug-export', (req, res) => {
+app.get("/api/debug-export", (req, res) => {
   try {
     const data = readDatabase();
     const exportSubset = data.records.map(r => ({
       ID: r.id,
-      'Artist Name': r.artistName,
+      "Artist Name": r.artistName,
       Title: r.title,
       SMI: r.SMI,
       RI: r.RI,
       CLI: r.CLI,
       APPSI: r.APPSI,
-      'Price ($)': r['Price ($)']
+      "Price ($)": r["Price ($)"]
     }));
     res.json(exportSubset);
   } catch (error) {
@@ -2734,27 +3007,42 @@ app.get('/api/debug-export', (req, res) => {
 
 app.post("/api/compare-subject-comp", async (req, res) => {
   try {
-    const { subject, comp } = req.body;
-    
+    const {
+      subject,
+      comp,
+      temperature: requestedTemp
+    } = req.body;
+
+    const temperature =
+      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
+
     console.log(`Starting comparison for comp ID ${comp.recordId}`);
 
     if (!subject || !comp) {
-      return res.status(400).json({ error: { message: "Missing subject or comp data" } });
+      return res
+        .status(400)
+        .json({ error: { message: "Missing subject or comp data" } });
     }
 
     // Check for image data with detailed logging
     if (!subject.imageBase64) {
       console.error("Missing subject imageBase64");
-      return res.status(400).json({ error: { message: "Subject must include imageBase64" } });
+      return res
+        .status(400)
+        .json({ error: { message: "Subject must include imageBase64" } });
     }
-    
+
     if (!comp.imageBase64) {
       console.error(`Missing comp imageBase64 for ID ${comp.recordId}`);
-      return res.status(400).json({ error: { message: "Comp must include imageBase64" } });
+      return res
+        .status(400)
+        .json({ error: { message: "Comp must include imageBase64" } });
     }
 
     if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
-      return res.status(500).json({ error: { message: "Missing API Key" } });
+      return res
+        .status(500)
+        .json({ error: { message: "Missing API Key" } });
     }
 
     console.log(`Comparing Subject to Comp ID ${comp.recordId}`);
@@ -2762,12 +3050,18 @@ app.post("/api/compare-subject-comp", async (req, res) => {
     // Check image data format
     if (!subject.imageBase64.match(/^[A-Za-z0-9+/=]+$/)) {
       console.error("Subject image data is not valid base64");
-      return res.status(400).json({ error: { message: "Subject image data is not valid base64" } });
+      return res.status(400).json({
+        error: { message: "Subject image data is not valid base64" }
+      });
     }
-    
+
     if (!comp.imageBase64.match(/^[A-Za-z0-9+/=]+$/)) {
-      console.error(`Comp ID ${comp.recordId} image data is not valid base64`);
-      return res.status(400).json({ error: { message: "Comp image data is not valid base64" } });
+      console.error(
+        `Comp ID ${comp.recordId} image data is not valid base64`
+      );
+      return res.status(400).json({
+        error: { message: "Comp image data is not valid base64" }
+      });
     }
 
     // Build the prompt for ChatGPT
@@ -2798,34 +3092,58 @@ Criterion 6: Yes or No
 
     // Send request to AI
     console.log("Sending request to AI for comparison");
-    
+
     const messages = [
       {
         role: "user",
         content: [
           { type: "text", text: comparisonPrompt },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subject.imageBase64}` } },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${comp.imageBase64}` } }
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${subject.imageBase64}`
+            }
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${comp.imageBase64}`
+            }
+          }
         ]
       }
     ];
 
-    const systemContent = "You are a strict fine art evaluator following exact instructions.";
+    const systemContent =
+      "You are a strict fine art evaluator following exact instructions.";
 
-    const chatReply = await callAI(messages, 200, systemContent);
+    const chatReply = await callAI(
+      messages,
+      200,
+      systemContent,
+      false,
+      temperature
+    );
 
-    console.log(`Received comparison reply for Comp ID ${comp.recordId}:`, chatReply.substring(0, 200));
+    console.log(
+      `Received comparison reply for Comp ID ${comp.recordId}:`,
+      chatReply.substring(0, 200)
+    );
 
     // Parse results
-    const yesNoResults = chatReply.match(/Criterion\s*\d+:\s*(Yes|No)/gi);
+    const yesNoResults = chatReply.match(
+      /Criterion\s*\d+:\s*(Yes|No)/gi
+    );
 
     if (!yesNoResults || yesNoResults.length !== 6) {
       console.error("Invalid format received from AI comparison");
-      return res.status(500).json({ error: { message: "Invalid response format from AI" } });
+      return res.status(500).json({
+        error: { message: "Invalid response format from AI" }
+      });
     }
 
     // Define criterion weights
-    const criteriaWeights = [0.20, 0.20, 0.15, 0.10, 0.15, 0.20];
+    const criteriaWeights = [0.2, 0.2, 0.15, 0.1, 0.15, 0.2];
 
     let totalScore = 0;
 
@@ -2837,18 +3155,22 @@ Criterion 6: Yes or No
     });
 
     // Determine final result
-    const finalResult = totalScore > 0.50 ? "Superior" : "Inferior";
-    console.log(`Comparison result for Comp ID ${comp.recordId}: ${finalResult} (score: ${totalScore})`);
+    const finalResult = totalScore > 0.5 ? "Superior" : "Inferior";
+    console.log(
+      `Comparison result for Comp ID ${comp.recordId}: ${finalResult} (score: ${totalScore})`
+    );
 
     res.json({
       totalScore: Math.round(totalScore * 100), // Return as percentage
       finalResult: finalResult
     });
-
   } catch (error) {
-    console.error("Error in /api/compare-subject-comp:", error.message);
+    console.error(
+      "Error in /api/compare-subject-comp:",
+      error.message
+    );
     let errorDetails = "Unknown error";
-    
+
     if (error.response) {
       errorDetails = JSON.stringify({
         status: error.response.status,
@@ -2857,22 +3179,32 @@ Criterion 6: Yes or No
     } else if (error.message) {
       errorDetails = error.message;
     }
-    
+
     res.status(500).json({ error: { message: errorDetails } });
   }
 });
 
 
 
-
-
-
 // ✅ NEW ENDPOINT: Generate Narrative Explanation
 app.post("/api/generate-narrative", async (req, res) => {
   try {
-    const { superiors, inferiors, comps, ruleUsed, smvppsi } = req.body;
+    const {
+      superiors,
+      inferiors,
+      comps,
+      ruleUsed,
+      smvppsi,
+      temperature: requestedTemp
+    } = req.body;
 
-    if (!comps || !Array.isArray(comps) || comps.length === 0 || !ruleUsed || typeof smvppsi !== "number") {
+    if (
+      !comps ||
+      !Array.isArray(comps) ||
+      comps.length === 0 ||
+      !ruleUsed ||
+      typeof smvppsi !== "number"
+    ) {
       return res.status(400).json({
         error: "Missing required fields: comps[], ruleUsed, smvppsi (number)"
       });
@@ -2882,22 +3214,32 @@ app.post("/api/generate-narrative", async (req, res) => {
       return res.status(500).json({ error: "Missing API Key" });
     }
 
+    const temperature =
+      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
+
     // Format input summary for GPT
-    const compLines = comps.map(c => {
-      return `RecordID ${c.recordId}: SMI=${c.smi}, RI=${c.ri}, CLI=${c.cli}, APPSI=${c.appsi.toFixed(2)}, Distance=${c.scalarDistance?.toFixed(4) ?? "NA"}, Label=${c.label}`;
-    }).join("\n");
+    const compLines = comps
+      .map(c => {
+        return `RecordID ${c.recordId}: SMI=${c.smi}, RI=${c.ri}, CLI=${c.cli}, APPSI=${c.appsi.toFixed(
+          2
+        )}, Distance=${c.scalarDistance?.toFixed(4) ?? "NA"}, Label=${c.label}`;
+      })
+      .join("\n");
 
     let conditionIntro = "";
     if (ruleUsed === "All Inferior") {
-      conditionIntro = "Since all selected comparable artworks were deemed inferior to the subject,";
+      conditionIntro =
+        "Since all selected comparable artworks were deemed inferior to the subject,";
     } else if (ruleUsed === "All Superior") {
-      conditionIntro = "Since all selected comparable artworks were deemed superior to the subject,";
+      conditionIntro =
+        "Since all selected comparable artworks were deemed superior to the subject,";
     } else {
-      conditionIntro = "Because the selected comparables included a mix of both superior and inferior artworks,";
+      conditionIntro =
+        "Because the selected comparables included a mix of both superior and inferior artworks,";
     }
 
     const prompt = `
-You are a fine art valuation assistant. Based on the visual classification and pricing logic, generate a professional, narrative paragraph titled \"Analysis of Comparable Artworks\".
+You are a fine art valuation assistant. Based on the visual classification and pricing logic, generate a professional, narrative paragraph titled "Analysis of Comparable Artworks".
 
 Use this information:
 
@@ -2915,16 +3257,19 @@ Write one professional paragraph that:
 - Do NOT include any headings — return just the paragraph text.
 `;
 
-    const messages = [
-      { role: "user", content: prompt }
-    ];
+    const messages = [{ role: "user", content: prompt }];
 
     const systemContent = "You are a fine art valuation assistant.";
 
-    const paragraph = await callAI(messages, 400, systemContent);
-    
-    res.json({ narrative: paragraph.trim() });
+    const paragraph = await callAI(
+      messages,
+      400,
+      systemContent,
+      false,
+      temperature
+    );
 
+    res.json({ narrative: paragraph.trim() });
   } catch (error) {
     console.error("Narrative generation error:", error);
     res.status(500).json({
@@ -2953,9 +3298,9 @@ app.get("/api/debug-database", (req, res) => {
       sampleFieldNames: fieldNames
     });
   } catch (error) {
-    res.status(500).json({ 
+    res.status(500).json({
       error: error.message,
-      stack: error.stack 
+      stack: error.stack
     });
   }
 });
@@ -2966,11 +3311,11 @@ app.get("/api/debug-record/:id", (req, res) => {
     const recordId = parseInt(req.params.id);
     const data = readDatabase();
     const record = data.records.find(r => r.id === recordId);
-    
+
     if (!record) {
-      return res.status(404).json({ error: 'Record not found' });
+      return res.status(404).json({ error: "Record not found" });
     }
-    
+
     res.json({
       id: record.id,
       isActive: record.isActive,
@@ -2987,10 +3332,20 @@ app.get("/api/debug-record/:id", (req, res) => {
         appsi_type: typeof record.appsi
       },
       valid: {
-        smi_valid: record.smi !== undefined && record.smi !== null && !isNaN(record.smi),
-        ri_valid: record.ri !== undefined && record.ri !== null && !isNaN(record.ri),
-        cli_valid: record.cli !== undefined && record.cli !== null && !isNaN(record.cli),
-        appsi_valid: record.appsi !== undefined && record.appsi !== null && !isNaN(record.appsi)
+        smi_valid:
+          record.smi !== undefined &&
+          record.smi !== null &&
+          !isNaN(record.smi),
+        ri_valid:
+          record.ri !== undefined && record.ri !== null && !isNaN(record.ri),
+        cli_valid:
+          record.cli !== undefined &&
+          record.cli !== null &&
+          !isNaN(record.cli),
+        appsi_valid:
+          record.appsi !== undefined &&
+          record.appsi !== null &&
+          !isNaN(record.appsi)
       }
     });
   } catch (error) {
@@ -3004,11 +3359,15 @@ app.get("/api/debug-scan-images", (req, res) => {
     const data = readDatabase();
     const flagged = [];
 
-    data.records.forEach((record) => {
+    data.records.forEach(record => {
       const findings = {};
-      if ('imagePath' in record) findings.imagePath = record.imagePath;
-      if ('imageFile' in record) findings.imageFile = record.imageFile;
-      if (record.imageBase64 && typeof record.imageBase64 === 'string' && record.imageBase64.includes('http')) {
+      if ("imagePath" in record) findings.imagePath = record.imagePath;
+      if ("imageFile" in record) findings.imageFile = record.imageFile;
+      if (
+        record.imageBase64 &&
+        typeof record.imageBase64 === "string" &&
+        record.imageBase64.includes("http")
+      ) {
         findings.imageBase64 = record.imageBase64;
       }
       if (Object.keys(findings).length > 0) {
@@ -3037,19 +3396,21 @@ app.post("/api/debug-clean-images", (req, res) => {
 
     data.records.forEach(record => {
       // Remove legacy fields
-      if ('imagePath' in record) {
+      if ("imagePath" in record) {
         delete record.imagePath;
         cleanedCount++;
       }
-      if ('imageFile' in record) {
+      if ("imageFile" in record) {
         delete record.imageFile;
         cleanedCount++;
       }
 
       // Fix raw base64 (no prefix)
-      if (record.imageBase64 &&
-          typeof record.imageBase64 === "string" &&
-          !record.imageBase64.startsWith("data:image")) {
+      if (
+        record.imageBase64 &&
+        typeof record.imageBase64 === "string" &&
+        !record.imageBase64.startsWith("data:image")
+      ) {
         record.imageBase64 = `data:image/jpeg;base64,${record.imageBase64}`;
         fixedBase64Count++;
       }
@@ -3070,77 +3431,83 @@ app.post("/api/debug-clean-images", (req, res) => {
 });
 
 app.post("/api/records/calculate-lssi", (req, res) => {
-    try {
-        const data = readDatabase();
-        
-        // Track records updated
-        let recordsUpdated = 0;
-        let recordsWithErrors = 0;
-        
-        // Update LSSI for all records
-        data.records.forEach(record => {
-            try {
-                // Skip records without size
-                if (!record.size || isNaN(record.size) || record.size <= 0) {
-                    recordsWithErrors++;
-                    return;
-                }
-                
-                // Calculate or update LSSI
-                record.lssi = Math.log(record.size);
-                recordsUpdated++;
-            } catch (error) {
-                console.error(`Error calculating LSSI for record ${record.id}:`, error);
-                recordsWithErrors++;
-            }
-        });
-        
-        // Write updated database
-        writeDatabase(data);
-        
-        res.json({
-            message: 'Successfully calculated LSSI for records',
-            totalRecords: data.records.length,
-            recordsUpdated: recordsUpdated,
-            recordsWithErrors: recordsWithErrors
-        });
-    } catch (error) {
-        console.error('Error in LSSI calculation endpoint:', error);
-        res.status(500).json({ error: 'Failed to calculate LSSI', details: error.message });
-    }
+  try {
+    const data = readDatabase();
+
+    // Track records updated
+    let recordsUpdated = 0;
+    let recordsWithErrors = 0;
+
+    // Update LSSI for all records
+    data.records.forEach(record => {
+      try {
+        // Skip records without size
+        if (!record.size || isNaN(record.size) || record.size <= 0) {
+          recordsWithErrors++;
+          return;
+        }
+
+        // Calculate or update LSSI
+        record.lssi = Math.log(record.size);
+        recordsUpdated++;
+      } catch (error) {
+        console.error(
+          `Error calculating LSSI for record ${record.id}:`,
+          error
+        );
+        recordsWithErrors++;
+      }
+    });
+
+    // Write updated database
+    writeDatabase(data);
+
+    res.json({
+      message: "Successfully calculated LSSI for records",
+      totalRecords: data.records.length,
+      recordsUpdated: recordsUpdated,
+      recordsWithErrors: recordsWithErrors
+    });
+  } catch (error) {
+    console.error("Error in LSSI calculation endpoint:", error);
+    res.status(500).json({
+      error: "Failed to calculate LSSI",
+      details: error.message
+    });
+  }
 });
 
-app.get('/download/:filename', (req, res) => {
+app.get("/download/:filename", (req, res) => {
   const { filename } = req.params;
-  const filePath = path.join('/mnt/data', filename);
-  
+  const filePath = path.join("/mnt/data", filename);
+
   if (!fs.existsSync(filePath)) {
-    return res.status(404).send('File not found.');
+    return res.status(404).send("File not found.");
   }
-  
+
   // ✅ Add these headers for better large file handling:
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
   // ✅ Use streaming for better performance:
   const fileStream = fs.createReadStream(filePath);
   fileStream.pipe(res);
-  
-  fileStream.on('error', (err) => {
-    console.error('❌ Download failed:', err);
-    res.status(500).send('Error downloading file.');
+
+  fileStream.on("error", err => {
+    console.error("❌ Download failed:", err);
+    res.status(500).send("Error downloading file.");
   });
 });
 
-app.get('/api/metadata', async (req, res) => {
+app.get("/api/metadata", async (req, res) => {
   try {
     // Use the existing DB_PATH constant
-    const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-    
+    const db = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
+
     // Debug log to verify structure
-    console.log('Database metadata structure:', {
+    console.log("Database metadata structure:", {
       hasMetadata: !!db.metadata,
       hasCoefficients: !!db.metadata?.coefficients,
       lastUpdated: db.metadata?.lastUpdated
@@ -3148,77 +3515,74 @@ app.get('/api/metadata', async (req, res) => {
 
     // Return coefficients or empty object if none exists
     res.json(db.metadata?.coefficients || {});
-
   } catch (error) {
-    console.error('Metadata endpoint error:', {
+    console.error("Metadata endpoint error:", {
       error: error.message,
       dbPath: DB_PATH,
       fileExists: fs.existsSync(DB_PATH),
-      fileAccessible: fs.accessSync ? 'Checking...' : 'Cannot check'
+      fileAccessible: fs.accessSync ? "Checking..." : "Cannot check"
     });
-    
-    res.status(500).json({ 
-      error: 'Failed to load metadata',
+
+    res.status(500).json({
+      error: "Failed to load metadata",
       // Only show details in development
-      details: process.env.NODE_ENV === 'development' ? {
-        message: error.message,
-        dbPath: DB_PATH
-      } : null
+      details:
+        process.env.NODE_ENV === "development"
+          ? {
+              message: error.message,
+              dbPath: DB_PATH
+            }
+          : null
     });
   }
 });
 
-app.post('/api/metadata/update', async (req, res) => {
+app.post("/api/metadata/update", async (req, res) => {
   try {
-    const db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-    
+    const db = JSON.parse(fs.readFileSync(DB_PATH, "utf8"));
+
     // Initialize metadata if it doesn't exist
     db.metadata = db.metadata || {};
     db.metadata.coefficients = db.metadata.coefficients || {};
-    
+
     // Merge updates with existing values
     const updatedCoefficients = {
-      ...db.metadata.coefficients,  // Keep existing values
-      ...req.body,                  // Apply new values
+      ...db.metadata.coefficients, // Keep existing values
+      ...req.body, // Apply new values
       lastUpdated: new Date().toISOString() // Add timestamp
     };
-    
+
     // Special handling for medium multipliers
     if (req.body.medium) {
       updatedCoefficients.medium = {
         ...(db.metadata.coefficients.medium || {}), // Keep existing medium values
-        ...req.body.medium                         // Apply medium updates
+        ...req.body.medium // Apply medium updates
       };
     }
-    
+
     // Save the merged data
     db.metadata.coefficients = updatedCoefficients;
     fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
-    
-    res.json({ 
+
+    res.json({
       success: true,
       updated: updatedCoefficients
     });
-    
   } catch (error) {
-    console.error('Update failed:', error);
+    console.error("Update failed:", error);
     res.status(500).json({
-      error: 'Update failed',
-      details: process.env.NODE_ENV === 'development' ? error.message : null
+      error: "Update failed",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : null
     });
   }
 });
 
-
-
-
-
-
-app.get('/api/health', (req, res) => {
+app.get("/api/health", (req, res) => {
   try {
     const stats = fs.statSync(DB_PATH);
     res.json({
-      status: 'healthy',
+      status: "healthy",
       db: {
         path: DB_PATH,
         exists: true,
@@ -3228,126 +3592,168 @@ app.get('/api/health', (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
-      status: 'unhealthy',
+      status: "unhealthy",
       error: error.message,
       dbPath: DB_PATH
     });
   }
 });
 
-
-
-
-
-
-
-
-
-
 // Add this endpoint to your server.js file
 
-app.post('/api/batch-calculate-smi', async (req, res) => {
+app.post("/api/batch-calculate-smi", async (req, res) => {
   try {
-    console.log('Starting batch SMI calculation...');
-    
-    const imagesDir = '/mnt/data/images';
-    const promptPath = path.join(__dirname, 'public', 'prompts', 'SMI_prompt.txt');
-    
+    console.log("Starting batch SMI calculation...");
+
+    const { temperature: requestedTemp } = req.body || {};
+    const temperature =
+      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
+
+    const imagesDir = "/mnt/data/images";
+    const promptPath = path.join(
+      __dirname,
+      "public",
+      "prompts",
+      "SMI_prompt.txt"
+    );
+
     // Check if directories exist
     if (!fs.existsSync(imagesDir)) {
-      return res.status(400).json({ error: `Images directory not found: ${imagesDir}` });
+      return res
+        .status(400)
+        .json({ error: `Images directory not found: ${imagesDir}` });
     }
-    
+
     if (!fs.existsSync(promptPath)) {
-      return res.status(400).json({ error: `SMI prompt file not found: ${promptPath}` });
+      return res
+        .status(400)
+        .json({ error: `SMI prompt file not found: ${promptPath}` });
     }
-    
+
     // Load the SMI prompt
-    const prompt = fs.readFileSync(promptPath, 'utf8').trim();
+    const prompt = fs.readFileSync(promptPath, "utf8").trim();
     if (prompt.length < 100) {
-      return res.status(400).json({ error: 'SMI prompt file appears to be empty or too short' });
+      return res.status(400).json({
+        error: "SMI prompt file appears to be empty or too short"
+      });
     }
-    
+
     // Get all image files
-    const imageFiles = fs.readdirSync(imagesDir)
+    const imageFiles = fs
+      .readdirSync(imagesDir)
       .filter(file => file.match(/^\d+\.(jpg|jpeg|png)$/i))
       .sort((a, b) => {
-        const aNum = parseInt(a.split('.')[0]);
-        const bNum = parseInt(b.split('.')[0]);
+        const aNum = parseInt(a.split(".")[0]);
+        const bNum = parseInt(b.split(".")[0]);
         return aNum - bNum;
       });
-    
+
     console.log(`Found ${imageFiles.length} image files to process`);
-    
+
     if (imageFiles.length === 0) {
-      return res.status(400).json({ error: 'No valid image files found (expecting format: recordID.jpg)' });
+      return res.status(400).json({
+        error:
+          "No valid image files found (expecting format: recordID.jpg)"
+      });
     }
-    
+
     const results = [];
     const errors = [];
     let processedCount = 0;
-    
+
     // Process each image
     for (const filename of imageFiles) {
       try {
-        const recordId = filename.split('.')[0];
-        console.log(`Processing record ${recordId} (${processedCount + 1}/${imageFiles.length})`);
-        
+        const recordId = filename.split(".")[0];
+        console.log(
+          `Processing record ${recordId} (${processedCount + 1}/${
+            imageFiles.length
+          })`
+        );
+
         // Read and convert image to base64
         const imagePath = path.join(imagesDir, filename);
         const imageBuffer = fs.readFileSync(imagePath);
-        const base64Image = imageBuffer.toString('base64');
-        
+        const base64Image = imageBuffer.toString("base64");
+
         // Prepare the prompt with minimal info since we don't have artist/title
         const finalPrompt = `Title: "Record ${recordId}"\nArtist: "Unknown"\n\n${prompt}`;
-        
+
         // Create messages for AI
         const messages = [
           {
             role: "user",
             content: [
               { type: "text", text: finalPrompt },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${base64Image}`
+                }
+              }
             ]
           }
         ];
-        
-        const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Provide your response in the exact JSON format specified.";
-        
+
+        const systemContent =
+          "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Provide your response in the exact JSON format specified.";
+
         // Call AI for analysis
-        const aiResponse = await callAI(messages, 2000, systemContent, true);
-        
+        const aiResponse = await callAI(
+          messages,
+          2000,
+          systemContent,
+          true,
+          temperature
+        );
+
         // Validate response
-        if (!aiResponse || !aiResponse.category_scores || !aiResponse.final_smi) {
-          throw new Error('Invalid AI response format');
+        if (
+          !aiResponse ||
+          !aiResponse.category_scores ||
+          !aiResponse.final_smi
+        ) {
+          throw new Error("Invalid AI response format");
         }
-        
+
         // Validate category scores
-        const requiredCategories = ['composition', 'color', 'technical', 'originality', 'emotional'];
+        const requiredCategories = [
+          "composition",
+          "color",
+          "technical",
+          "originality",
+          "emotional"
+        ];
         for (const category of requiredCategories) {
           const score = aiResponse.category_scores[category];
-          if (typeof score !== 'number' || isNaN(score) || score < 1.0 || score > 5.0) {
+          if (
+            typeof score !== "number" ||
+            isNaN(score) ||
+            score < 1.0 ||
+            score > 5.0
+          ) {
             throw new Error(`Invalid ${category} score: ${score}`);
           }
           // Check 0.5 increment requirement
           if ((score * 2) % 1 !== 0) {
-            throw new Error(`${category} score ${score} is not in 0.5 increments`);
+            throw new Error(
+              `${category} score ${score} is not in 0.5 increments`
+            );
           }
         }
-        
+
         // Recalculate SMI using backend logic for consistency
-        const calculatedSMI = (
-          (aiResponse.category_scores.composition * 0.20) +
-          (aiResponse.category_scores.color * 0.20) +
-          (aiResponse.category_scores.technical * 0.25) +
-          (aiResponse.category_scores.originality * 0.20) +
-          (aiResponse.category_scores.emotional * 0.15)
-        );
-        
+        const calculatedSMI =
+          aiResponse.category_scores.composition * 0.2 +
+          aiResponse.category_scores.color * 0.2 +
+          aiResponse.category_scores.technical * 0.25 +
+          aiResponse.category_scores.originality * 0.2 +
+          aiResponse.category_scores.emotional * 0.15;
+
         // Round up to nearest 0.25
         const roundedSMI = roundSMIUp(calculatedSMI);
         const finalSMI = roundedSMI.toFixed(2);
-        
+
         results.push({
           recordId: parseInt(recordId),
           smi: finalSMI,
@@ -3357,16 +3763,18 @@ app.post('/api/batch-calculate-smi', async (req, res) => {
           originality: aiResponse.category_scores.originality,
           emotional: aiResponse.category_scores.emotional
         });
-        
+
         processedCount++;
         console.log(`✅ Record ${recordId}: SMI = ${finalSMI}`);
-        
+
         // Add small delay to avoid overwhelming the AI API
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
       } catch (error) {
-        const recordId = filename.split('.')[0];
-        console.error(`❌ Error processing record ${recordId}:`, error.message);
+        const recordId = filename.split(".")[0];
+        console.error(
+          `❌ Error processing record ${recordId}:`,
+          error.message
+        );
         errors.push({
           recordId: recordId,
           error: error.message,
@@ -3374,28 +3782,35 @@ app.post('/api/batch-calculate-smi', async (req, res) => {
         });
       }
     }
-    
+
     // Generate CSV content
-    const csvHeader = 'RecordID,SMI,Composition,Color,Technical,Originality,Emotional\n';
-    const csvRows = results.map(r => 
-      `${r.recordId},${r.smi},${r.composition},${r.color},${r.technical},${r.originality},${r.emotional}`
-    ).join('\n');
+    const csvHeader =
+      "RecordID,SMI,Composition,Color,Technical,Originality,Emotional\n";
+    const csvRows = results
+      .map(
+        r =>
+          `${r.recordId},${r.smi},${r.composition},${r.color},${r.technical},${r.originality},${r.emotional}`
+      )
+      .join("\n");
     const csvContent = csvHeader + csvRows;
-    
+
     // Save CSV file
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .slice(0, 19);
     const csvFilename = `batch_smi_results_${timestamp}.csv`;
-    const csvPath = path.join('/mnt/data', csvFilename);
+    const csvPath = path.join("/mnt/data", csvFilename);
     fs.writeFileSync(csvPath, csvContent);
-    
+
     console.log(`✅ Batch processing completed!`);
     console.log(`📊 Successfully processed: ${results.length}`);
     console.log(`❌ Errors: ${errors.length}`);
     console.log(`💾 Results saved to: ${csvFilename}`);
-    
+
     res.json({
       success: true,
-      message: 'Batch SMI calculation completed',
+      message: "Batch SMI calculation completed",
       summary: {
         totalFiles: imageFiles.length,
         successfullyProcessed: results.length,
@@ -3406,180 +3821,196 @@ app.post('/api/batch-calculate-smi', async (req, res) => {
       results: results,
       errors: errors.length > 0 ? errors : undefined
     });
-    
   } catch (error) {
-    console.error('❌ Batch processing failed:', error);
-    res.status(500).json({ 
-      error: 'Batch processing failed', 
-      details: error.message 
+    console.error("❌ Batch processing failed:", error);
+    res.status(500).json({
+      error: "Batch processing failed",
+      details: error.message
     });
   }
 });
 
 // Helper function to trigger batch processing (optional - for testing)
-app.get('/api/start-batch-smi', (req, res) => {
+app.get("/api/start-batch-smi", (req, res) => {
   res.json({
-    message: 'Send POST request to /api/batch-calculate-smi to start batch processing',
-    instructions: 'This will process all images in the images directory and generate a CSV file'
+    message:
+      "Send POST request to /api/batch-calculate-smi to start batch processing",
+    instructions:
+      "This will process all images in the images directory and generate a CSV file"
   });
 });
 
-
-
-const DATABASE_FILE_PATH = '/mnt/data/art_database.json';  // Common mount path
-
+const DATABASE_FILE_PATH = "/mnt/data/art_database.json"; // Common mount path
 
 function migrateAddArtOnlyPrice(databaseData) {
-    console.log('Starting migration: Adding artOnlyPrice field...');
-    
-    // Get frame coefficients from metadata
-    const frameConstant = databaseData.metadata.coefficients['frame-constant'];
-    const frameExponent = databaseData.metadata.coefficients['frame-exponent'];
-    
-    console.log(`Using frame coefficients: constant=${frameConstant}, exponent=${frameExponent}`);
-    
-    let processed = 0;
-    let added = 0;
-    let skipped = 0;
-    
-    // Process each record
-    databaseData.records.forEach(record => {
-        processed++;
-        
-        // Skip if artOnlyPrice already exists
-        if (record.hasOwnProperty('artOnlyPrice')) {
-            skipped++;
-            console.log(`Record ${record.id}: Already has artOnlyPrice (${record.artOnlyPrice}), skipping`);
-            return;
-        }
-        
-        // Calculate artOnlyPrice
-        const artOnlyPrice = calculateArtOnlyPrice(
-            record.price, 
-            record.framed, 
-            databaseData.metadata.coefficients
-        );
-        
-        // Add the new field
-        record.artOnlyPrice = Math.round(artOnlyPrice * 100) / 100; // Round to 2 decimal places
-        added++;
-        
-        // Log some examples
-        if (processed <= 5) {
-            console.log(`Record ${record.id}: price=${record.price}, framed=${record.framed}, artOnlyPrice=${record.artOnlyPrice}`);
-        }
-    });
-    
-    // Update metadata to record migration
-    databaseData.metadata.lastUpdated = new Date().toISOString();
-    databaseData.metadata.migrations = databaseData.metadata.migrations || [];
-    databaseData.metadata.migrations.push({
-        name: 'add_artOnlyPrice',
-        date: new Date().toISOString(),
-        recordsProcessed: processed,
-        recordsUpdated: added,
-        recordsSkipped: skipped
-    });
-    
-    console.log('Migration completed:');
-    console.log(`- Records processed: ${processed}`);
-    console.log(`- Records updated: ${added}`);
-    console.log(`- Records skipped: ${skipped}`);
-    
-    return databaseData;
+  console.log("Starting migration: Adding artOnlyPrice field...");
+
+  // Get frame coefficients from metadata
+  const frameConstant =
+    databaseData.metadata.coefficients["frame-constant"];
+  const frameExponent =
+    databaseData.metadata.coefficients["frame-exponent"];
+
+  console.log(
+    `Using frame coefficients: constant=${frameConstant}, exponent=${frameExponent}`
+  );
+
+  let processed = 0;
+  let added = 0;
+  let skipped = 0;
+
+  // Process each record
+  databaseData.records.forEach(record => {
+    processed++;
+
+    // Skip if artOnlyPrice already exists
+    if (record.hasOwnProperty("artOnlyPrice")) {
+      skipped++;
+      console.log(
+        `Record ${record.id}: Already has artOnlyPrice (${record.artOnlyPrice}), skipping`
+      );
+      return;
+    }
+
+    // Calculate artOnlyPrice
+    const artOnlyPrice = calculateArtOnlyPrice(
+      record.price,
+      record.framed,
+      databaseData.metadata.coefficients
+    );
+
+    // Add the new field
+    record.artOnlyPrice = Math.round(artOnlyPrice * 100) / 100; // Round to 2 decimal places
+    added++;
+
+    // Log some examples
+    if (processed <= 5) {
+      console.log(
+        `Record ${record.id}: price=${record.price}, framed=${record.framed}, artOnlyPrice=${record.artOnlyPrice}`
+      );
+    }
+  });
+
+  // Update metadata to record migration
+  databaseData.metadata.lastUpdated = new Date().toISOString();
+  databaseData.metadata.migrations =
+    databaseData.metadata.migrations || [];
+  databaseData.metadata.migrations.push({
+    name: "add_artOnlyPrice",
+    date: new Date().toISOString(),
+    recordsProcessed: processed,
+    recordsUpdated: added,
+    recordsSkipped: skipped
+  });
+
+  console.log("Migration completed:");
+  console.log(`- Records processed: ${processed}`);
+  console.log(`- Records updated: ${added}`);
+  console.log(`- Records skipped: ${skipped}`);
+
+  return databaseData;
 }
 
 // API endpoint to run migration (add to your Express routes)
-app.post('/api/migrate/add-artOnlyPrice', (req, res) => {
-    try {
-        console.log('🚀 Starting artOnlyPrice migration via API...');
-        
-        // 1. Read the database file
-        console.log(`📖 Reading database from: ${DATABASE_FILE_PATH}`);
-        const rawData = fs.readFileSync(DATABASE_FILE_PATH, 'utf8');
-        const databaseData = JSON.parse(rawData);
-        
-        console.log(`✅ Database loaded: ${databaseData.records.length} records found`);
-        
-        // 2. Create automatic backup
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const backupPath = DATABASE_FILE_PATH.replace('.json', `_backup_${timestamp}.json`);
-        fs.writeFileSync(backupPath, rawData);
-        console.log(`💾 Backup created: ${backupPath}`);
-        
-        // 3. Run migration
-        const updatedDatabase = migrateAddArtOnlyPrice(databaseData);
-        
-        // 4. Save updated database
-        const updatedJson = JSON.stringify(updatedDatabase, null, 2);
-        fs.writeFileSync(DATABASE_FILE_PATH, updatedJson);
-        
-        console.log('✅ MIGRATION COMPLETED SUCCESSFULLY!');
-        
-        // 5. Verification
-        let withArtOnly = 0;
-        let framedCount = 0;
-        
-        updatedDatabase.records.forEach(record => {
-            if (record.hasOwnProperty('artOnlyPrice')) {
-                withArtOnly++;
-                if (record.framed === 'Y') framedCount++;
-            }
-        });
-        
-        const result = {
-            success: true,
-            message: 'Migration completed successfully',
-            stats: {
-                totalRecords: updatedDatabase.records.length,
-                recordsWithArtOnlyPrice: withArtOnly,
-                framedPieces: framedCount,
-                unframedPieces: withArtOnly - framedCount
-            },
-            backupFile: backupPath
-        };
-        
-        console.log('Migration stats:', result.stats);
-        res.json(result);
-        
-    } catch (error) {
-        console.error('❌ MIGRATION FAILED:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message,
-            message: 'Migration failed - database unchanged'
-        });
-    }
+app.post("/api/migrate/add-artOnlyPrice", (req, res) => {
+  try {
+    console.log("🚀 Starting artOnlyPrice migration via API...");
+
+    // 1. Read the database file
+    console.log(`📖 Reading database from: ${DATABASE_FILE_PATH}`);
+    const rawData = fs.readFileSync(DATABASE_FILE_PATH, "utf8");
+    const databaseData = JSON.parse(rawData);
+
+    console.log(
+      `✅ Database loaded: ${databaseData.records.length} records found`
+    );
+
+    // 2. Create automatic backup
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupPath = DATABASE_FILE_PATH.replace(
+      ".json",
+      `_backup_${timestamp}.json`
+    );
+    fs.writeFileSync(backupPath, rawData);
+    console.log(`💾 Backup created: ${backupPath}`);
+
+    // 3. Run migration
+    const updatedDatabase = migrateAddArtOnlyPrice(databaseData);
+
+    // 4. Save updated database
+    const updatedJson = JSON.stringify(updatedDatabase, null, 2);
+    fs.writeFileSync(DATABASE_FILE_PATH, updatedJson);
+
+    console.log("✅ MIGRATION COMPLETED SUCCESSFULLY!");
+
+    // 5. Verification
+    let withArtOnly = 0;
+    let framedCount = 0;
+
+    updatedDatabase.records.forEach(record => {
+      if (record.hasOwnProperty("artOnlyPrice")) {
+        withArtOnly++;
+        if (record.framed === "Y") framedCount++;
+      }
+    });
+
+    const result = {
+      success: true,
+      message: "Migration completed successfully",
+      stats: {
+        totalRecords: updatedDatabase.records.length,
+        recordsWithArtOnlyPrice: withArtOnly,
+        framedPieces: framedCount,
+        unframedPieces: withArtOnly - framedCount
+      },
+      backupFile: backupPath
+    };
+
+    console.log("Migration stats:", result.stats);
+    res.json(result);
+  } catch (error) {
+    console.error("❌ MIGRATION FAILED:", error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: "Migration failed - database unchanged"
+    });
+  }
 });
 
 // Optional: CLI script if you want to run it directly on server
 function runMigrationCLI() {
-    if (process.argv.includes('--migrate-artOnlyPrice')) {
-        console.log('🎨 Running artOnlyPrice migration...');
-        
-        try {
-            const rawData = fs.readFileSync(DATABASE_FILE_PATH, 'utf8');
-            const databaseData = JSON.parse(rawData);
-            
-            // Create backup
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const backupPath = DATABASE_FILE_PATH.replace('.json', `_backup_${timestamp}.json`);
-            fs.writeFileSync(backupPath, rawData);
-            
-            // Run migration
-            const updatedDatabase = migrateAddArtOnlyPrice(databaseData);
-            
-            // Save
-            fs.writeFileSync(DATABASE_FILE_PATH, JSON.stringify(updatedDatabase, null, 2));
-            
-            console.log('✅ Migration completed via CLI');
-            process.exit(0);
-            
-        } catch (error) {
-            console.error('❌ CLI Migration failed:', error);
-            process.exit(1);
-        }
+  if (process.argv.includes("--migrate-artOnlyPrice")) {
+    console.log("🎨 Running artOnlyPrice migration...");
+
+    try {
+      const rawData = fs.readFileSync(DATABASE_FILE_PATH, "utf8");
+      const databaseData = JSON.parse(rawData);
+
+      // Create backup
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const backupPath = DATABASE_FILE_PATH.replace(
+        ".json",
+        `_backup_${timestamp}.json`
+      );
+      fs.writeFileSync(backupPath, rawData);
+
+      // Run migration
+      const updatedDatabase = migrateAddArtOnlyPrice(databaseData);
+
+      // Save
+      fs.writeFileSync(
+        DATABASE_FILE_PATH,
+        JSON.stringify(updatedDatabase, null, 2)
+      );
+
+      console.log("✅ Migration completed via CLI");
+      process.exit(0);
+    } catch (error) {
+      console.error("❌ CLI Migration failed:", error);
+      process.exit(1);
     }
+  }
 }
 
 // Run CLI migration if called with flag
@@ -3594,4 +4025,6 @@ app.use(express.static("public"));
 // START THE SERVER
 // ====================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () =>
+  console.log(`Server running on port ${PORT}`)
+);
