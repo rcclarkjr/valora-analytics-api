@@ -2896,7 +2896,7 @@ app.post("/api/valuation", async (req, res) => {
     };
 
     const weights = { smi: 0.44, ri: 0.12, cli: 0.44 };
-    const MAX_DISTANCE_THRESHOLD = 0.4; // Reject comps with distance > 0.40 (top 12%)
+    const MAX_DISTANCE_THRESHOLD = 999; // Reject comps with distance > 0.40 (top 12%)
 
     // Step 4: Calculate scalar distances and filter by threshold
     const enriched = comps
