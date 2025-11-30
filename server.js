@@ -317,39 +317,6 @@ async function callClaudeAPI(
     }
   }
 
-  const parsedResponse = await callAI(messages, 1500, systemContent, true);
-
-  // ADD THIS DETAILED CLI BREAKDOWN BLOCK:
-  console.log("=== DETAILED CLI BREAKDOWN ===");
-  console.log("Input Type:", parsedResponse.input_data?.input_type || "unknown");
-  console.log("Final CLI Value:", parsedResponse.cli_result?.cli_value);
-  console.log("Raw Score:", parsedResponse.cli_result?.raw_score);
-
-  // Log each category in detail
-  if (parsedResponse.category_analysis) {
-    console.log("\n--- CATEGORY ANALYSIS ---");
-    const categories = [
-      "art_education",
-      "exhibitions",
-      "awards",
-      "commissions",
-      "collections",
-      "publications",
-      "institutional"
-    ];
-
-    categories.forEach(category => {
-      const data = parsedResponse.category_analysis[category];
-      if (data) {
-        console.log(`${category.toUpperCase()}:`);
-        console.log(`  Score: ${data.score}`);
-        console.log(`  Contribution: ${data.contribution}`);
-        console.log(`  Reasoning: ${data.reasoning}`);
-        console.log("---");
-      }
-    });
-  }
-
   return responseText;
 }
 
@@ -405,6 +372,7 @@ async function callOpenAIAPI(
 
   return responseText;
 }
+
 
 
 
