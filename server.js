@@ -2801,23 +2801,40 @@ app.post("/api/valuation", async (req, res) => {
         throw new Error("Prompt for ART_ANALYSIS.txt not found or too short");
       }
 
+const textContent = subjectDescription
+        ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"`
+        : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}`;
+
       const messages = [
         {
           role: "user",
-          content: [
-            {
-              type: "text",
-              text: subjectDescription
-                ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"`
-                : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}`
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/jpeg;base64,${subjectImageBase64}`
-              }
-            }
-          ]
+          content: USE_CLAUDE
+            ? [
+                {
+                  type: "text",
+                  text: textContent
+                },
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: "image/jpeg",
+                    data: subjectImageBase64
+                  }
+                }
+              ]
+            : [
+                {
+                  type: "text",
+                  text: textContent
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:image/jpeg;base64,${subjectImageBase64}`
+                  }
+                }
+              ]
         }
       ];
 
