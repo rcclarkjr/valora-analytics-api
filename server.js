@@ -2736,6 +2736,30 @@ app.post("/analyze-art", async (req, res) => {
   }
 });
 
+
+
+
+function formatAIAnalysisForReport(aiResponse) {
+  if (!aiResponse || typeof aiResponse !== 'string') {
+    console.warn("No AI response to format");
+    return "Analysis not available";
+  }
+
+  // Try to extract JSON if present
+  try {
+    const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return parsed;
+    }
+  } catch (e) {
+    console.log("AI response is not JSON, returning as plain text");
+  }
+
+  // If not JSON, return the text as-is
+  return aiResponse.trim();
+}
+
 app.post("/api/valuation", async (req, res) => {
   try {
     console.log("Starting valuation process");
@@ -2756,8 +2780,9 @@ app.post("/api/valuation", async (req, res) => {
       temperature: requestedTemp
     } = req.body;
 
-    const temperature =
-      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
+    // Use different temperatures for different purposes
+    const smiTemperature = typeof requestedTemp === "number" ? requestedTemp : 0;
+    const narrativeTemperature = 0.5; // Higher temp for narrative generation
 
     console.log("Valuation inputs:", {
       smi,
@@ -2794,7 +2819,7 @@ app.post("/api/valuation", async (req, res) => {
         .json({ error: "Missing required valuation inputs." });
     }
 
-    // Step 1: Generate AI analysis (unchanged except for temperature)
+    // Step 1: Generate AI analysis
     let aiAnalysis = "";
     try {
       const promptPath = path.join(
@@ -2833,7 +2858,7 @@ app.post("/api/valuation", async (req, res) => {
         300,
         prompt,
         false,
-        temperature
+        narrativeTemperature  // Use higher temp for narrative
       );
       console.log("Analysis completed successfully");
     } catch (error) {
@@ -2871,7 +2896,7 @@ app.post("/api/valuation", async (req, res) => {
       });
     }
 
-    // Step 3: Z-score stats (unchanged)
+    // Step 3: Z-score stats
     const meanStd = (arr, key) => {
       const values = arr.map(r => r[key]);
       const mean = values.reduce((a, b) => a + b, 0) / values.length;
@@ -2896,7 +2921,7 @@ app.post("/api/valuation", async (req, res) => {
     };
 
     const weights = { smi: 0.44, ri: 0.12, cli: 0.44 };
-    const MAX_DISTANCE_THRESHOLD = 999; // Reject comps with distance > 0.40 (top 12%)
+    const DISTANCE_THRESHOLD = 999; // Temporarily allow ALL comps through for testing
 
     // Step 4: Calculate scalar distances and filter by threshold
     const enriched = comps
@@ -2913,13 +2938,18 @@ app.post("/api/valuation", async (req, res) => {
         );
         return { ...r, scalarDistance: dist };
       })
-      .filter(r => r.scalarDistance <= MAX_DISTANCE_THRESHOLD) // Filter out distant comps
+      .filter(r => r.scalarDistance <= DISTANCE_THRESHOLD)
       .sort((a, b) => a.scalarDistance - b.scalarDistance);
 
     // Log filtering results
-    console.log(
-      `After distance filtering (≤${MAX_DISTANCE_THRESHOLD}): ${enriched.length} comps remain`
-    );
+    console.log(`After distance filtering (≤${DISTANCE_THRESHOLD}): ${enriched.length} comps remain`);
+
+    // Add detailed logging for top 20 comps
+    console.log("\n=== TOP 20 COMPS BY DISTANCE ===");
+    enriched.slice(0, 20).forEach((comp, idx) => {
+      console.log(`#${idx + 1}: Distance=${comp.scalarDistance.toFixed(3)}, SMI=${comp.smi}, CLI=${comp.cli}, RI=${comp.ri}, Artist="${comp.artistName}", Title="${comp.title}"`);
+    });
+    console.log("================================\n");
 
     // Check if we have enough comps after filtering
     if (enriched.length < 5) {
@@ -2957,7 +2987,8 @@ app.post("/api/valuation", async (req, res) => {
       height: r.height,
       width: r.width,
       price: r.price,
-      thumbnailBase64: r.thumbnailBase64
+      thumbnailBase64: r.thumbnailBase64,
+      scalarDistance: r.scalarDistance  // Include distance for transparency
     }));
 
     // Calculate sizeAdjFactor
@@ -2979,12 +3010,18 @@ app.post("/api/valuation", async (req, res) => {
     });
   } catch (error) {
     console.error("Valuation request failed:", error.message);
+    console.error("Error stack:", error.stack);
     res.status(500).json({
       error: "Valuation processing failed",
       details: error.response?.data?.error?.message || error.message
     });
   }
 });
+
+
+
+
+
 
 app.get("/api/debug-export", (req, res) => {
   try {
