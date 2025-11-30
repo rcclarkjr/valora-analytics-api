@@ -41,7 +41,7 @@ app.use(
 );
 
 // THE ONE LINE TO SWITCH AIs - Change true/false to switch everything
-const USE_CLAUDE = false; // true = Claude Opus, false = OpenAI GPT-4.1
+const USE_CLAUDE = false; // true = Claude Opus, false = OpenAI gpt-4-turbo
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -338,7 +338,7 @@ async function callOpenAIAPI(
     : messages;
 
   const requestBody = {
-    model: "gpt-4.1",
+    model: "gpt-4-turbo",
     messages: finalMessages,
     max_tokens: maxTokens,
     temperature
