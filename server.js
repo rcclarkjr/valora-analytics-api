@@ -338,7 +338,7 @@ async function callOpenAIAPI(
     : messages;
 
   const requestBody = {
-    model: "gpt-4-turbo-vision",
+    model: "gpt-4.1",
     messages: finalMessages,
     max_tokens: maxTokens,
     temperature
