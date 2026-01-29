@@ -348,7 +348,9 @@ async function callOpenAIAPI(
     requestBody.response_format = { type: "json_object" };
   }
 
-  const response = await axios.post(
+let response;
+try {
+  response = await axios.post(
     "https://api.openai.com/v1/chat/completions",
     requestBody,
     {
@@ -358,6 +360,17 @@ async function callOpenAIAPI(
       }
     }
   );
+} catch (error) {
+  console.error("OpenAI API Error Details:", {
+    status: error.response?.status,
+    statusText: error.response?.statusText,
+    errorData: error.response?.data,
+    requestedModel: requestBody.model,
+    messageCount: finalMessages.length,
+    hasImages: JSON.stringify(requestBody).includes('image_url')
+  });
+  throw error;
+}
 
   const responseText = response.data.choices[0]?.message?.content || "";
 
