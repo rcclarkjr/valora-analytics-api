@@ -583,7 +583,7 @@ app.get('/debug-temp-images', (req, res) => {
 
 
 // ====================
-// MAINTENANCE MODE ENDPOINTS (WITH DEBUG LOGGING)
+// MAINTENANCE MODE ENDPOINTS
 // ====================
 
 const MAINTENANCE_CONFIG_PATH = '/mnt/data/maintenance_config.json';
@@ -591,39 +591,20 @@ const MAINTENANCE_CONFIG_PATH = '/mnt/data/maintenance_config.json';
 // Helper function to read maintenance config
 function readMaintenanceConfig() {
   try {
-    console.log(`🔍 DEBUG: Attempting to read from: ${MAINTENANCE_CONFIG_PATH}`);
-    console.log(`🔍 DEBUG: File exists? ${fs.existsSync(MAINTENANCE_CONFIG_PATH)}`);
-    
     if (!fs.existsSync(MAINTENANCE_CONFIG_PATH)) {
-      console.log('🔍 DEBUG: File does not exist, creating default config');
-      
-      const dir = path.dirname(MAINTENANCE_CONFIG_PATH);
-      console.log(`🔍 DEBUG: Directory ${dir} exists? ${fs.existsSync(dir)}`);
-      
       const defaultConfig = {
         offline: false,
         lastUpdated: new Date().toISOString()
       };
-      
-      try {
-        fs.writeFileSync(MAINTENANCE_CONFIG_PATH, JSON.stringify(defaultConfig, null, 2));
-        console.log('✅ DEBUG: Created new maintenance config file');
-        console.log(`✅ DEBUG: File now exists? ${fs.existsSync(MAINTENANCE_CONFIG_PATH)}`);
-      } catch (writeError) {
-        console.error('❌ DEBUG: Error creating file:', writeError.message);
-      }
-      
+      fs.writeFileSync(MAINTENANCE_CONFIG_PATH, JSON.stringify(defaultConfig, null, 2));
+      console.log('✅ Created new maintenance config file');
       return defaultConfig;
     }
     
-    console.log('🔍 DEBUG: Reading existing file');
     const data = fs.readFileSync(MAINTENANCE_CONFIG_PATH, 'utf8');
-    console.log('🔍 DEBUG: File contents:', data);
-    
-    const parsed = JSON.parse(data);
-    return parsed;
+    return JSON.parse(data);
   } catch (error) {
-    console.error('❌ DEBUG: Error reading config:', error.message);
+    console.error('Error reading maintenance config:', error.message);
     return { offline: false, lastUpdated: new Date().toISOString() };
   }
 }
@@ -631,20 +612,15 @@ function readMaintenanceConfig() {
 // Helper function to write maintenance config
 function writeMaintenanceConfig(offline) {
   try {
-    console.log(`🔍 DEBUG: Writing offline=${offline} to ${MAINTENANCE_CONFIG_PATH}`);
-    
     const config = {
       offline: offline,
       lastUpdated: new Date().toISOString()
     };
-    
     fs.writeFileSync(MAINTENANCE_CONFIG_PATH, JSON.stringify(config, null, 2));
     console.log(`✅ Maintenance config updated: ${offline ? 'OFFLINE' : 'ONLINE'}`);
-    console.log(`🔍 DEBUG: Write successful, file exists: ${fs.existsSync(MAINTENANCE_CONFIG_PATH)}`);
-    
     return true;
   } catch (error) {
-    console.error('❌ DEBUG: Error writing config:', error.message);
+    console.error('Error writing maintenance config:', error.message);
     return false;
   }
 }
