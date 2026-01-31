@@ -3022,34 +3022,35 @@ const textContent = subjectDescription
 
     const stats = {
       smi: meanStd(comps, "smi"),
-      ri: meanStd(comps, "ri"),
       cli: meanStd(comps, "cli")
     };
 
-    const zSubject = {
-      smi: z(smi, stats.smi.mean, stats.smi.std),
-      ri: z(ri, stats.ri.mean, stats.ri.std),
-      cli: z(cli, stats.cli.mean, stats.cli.std)
-    };
+const zSubject = {
+  smi: z(smi, stats.smi.mean, stats.smi.std),
+  cli: z(cli, stats.cli.mean, stats.cli.std)
+};
 
-    const weights = { smi: 0.44, ri: 0.12, cli: 0.44 };
+	const weights = { smi: 0.50, cli: 0.50 };
+
     const DISTANCE_THRESHOLD = 999; // Temporarily allow ALL comps through for testing
 
     // Step 4: Calculate scalar distances and filter by threshold
-    const enriched = comps
-      .map(r => {
-        const zd = {
-          smi: z(r.smi, stats.smi.mean, stats.smi.std),
-          ri: z(r.ri, stats.ri.mean, stats.ri.std),
-          cli: z(r.cli, stats.cli.mean, stats.cli.std)
-        };
-        const dist = Math.sqrt(
-          weights.smi * Math.pow(zd.smi - zSubject.smi, 2) +
-            weights.ri * Math.pow(zd.ri - zSubject.ri, 2) +
-            weights.cli * Math.pow(zd.cli - zSubject.cli, 2)
-        );
-        return { ...r, scalarDistance: dist };
-      })
+
+
+const enriched = comps
+  .map(r => {
+    const zd = {
+      smi: z(r.smi, stats.smi.mean, stats.smi.std),
+      cli: z(r.cli, stats.cli.mean, stats.cli.std)
+    };
+    const dist = Math.sqrt(
+      weights.smi * Math.pow(zd.smi - zSubject.smi, 2) +
+        weights.cli * Math.pow(zd.cli - zSubject.cli, 2)
+    );
+    return { ...r, scalarDistance: dist };
+  })
+
+
       .filter(r => r.scalarDistance <= DISTANCE_THRESHOLD)
       .sort((a, b) => a.scalarDistance - b.scalarDistance);
 
