@@ -576,6 +576,68 @@ app.get('/debug-temp-images', (req, res) => {
 });
 
 
+
+
+
+// ====================
+// MAINTENANCE MODE ENDPOINTS
+// ====================
+
+// Simple in-memory storage for maintenance mode state
+let maintenanceMode = false;
+
+// GET endpoint - Check if site is in maintenance mode
+app.get('/api/maintenance-status', (req, res) => {
+  try {
+    console.log(`📊 Maintenance status check: ${maintenanceMode ? 'OFFLINE' : 'ONLINE'}`);
+    
+    res.json({ 
+      offline: maintenanceMode,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error checking maintenance status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST endpoint - Toggle maintenance mode (admin only)
+app.post('/api/maintenance-toggle', (req, res) => {
+  try {
+    const { password, offline } = req.body;
+    
+    console.log(`🔧 Maintenance toggle request received: ${offline ? 'OFFLINE' : 'ONLINE'}`);
+    
+    // IMPORTANT: Change this to a real password!
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'your-secret-password';
+    
+    if (password !== ADMIN_PASSWORD) {
+      console.log('❌ Unauthorized maintenance toggle attempt');
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    // Update maintenance mode
+    maintenanceMode = offline;
+    
+    console.log(`✅ Maintenance mode ${maintenanceMode ? 'ENABLED' : 'DISABLED'}`);
+    
+    res.json({ 
+      success: true,
+      offline: maintenanceMode,
+      message: `Site is now ${maintenanceMode ? 'OFFLINE' : 'ONLINE'}`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error toggling maintenance mode:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+
+
+
+
 // ====================
 // API ROUTES
 // ====================
@@ -1037,6 +1099,12 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
     });
   }
 });
+
+
+
+
+
+
 
 
 // Endpoint for Skill Mastery Index (SMI) analysis
