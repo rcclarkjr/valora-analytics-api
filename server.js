@@ -579,21 +579,86 @@ app.get('/debug-temp-images', (req, res) => {
 
 
 
+
+
+
 // ====================
-// MAINTENANCE MODE ENDPOINTS
+// MAINTENANCE MODE ENDPOINTS (WITH DEBUG LOGGING)
 // ====================
 
-// Simple in-memory storage for maintenance mode state
-let maintenanceMode = false;
+const MAINTENANCE_CONFIG_PATH = '/mnt/data/maintenance_config.json';
+
+// Helper function to read maintenance config
+function readMaintenanceConfig() {
+  try {
+    console.log(`🔍 DEBUG: Attempting to read from: ${MAINTENANCE_CONFIG_PATH}`);
+    console.log(`🔍 DEBUG: File exists? ${fs.existsSync(MAINTENANCE_CONFIG_PATH)}`);
+    
+    if (!fs.existsSync(MAINTENANCE_CONFIG_PATH)) {
+      console.log('🔍 DEBUG: File does not exist, creating default config');
+      
+      const dir = path.dirname(MAINTENANCE_CONFIG_PATH);
+      console.log(`🔍 DEBUG: Directory ${dir} exists? ${fs.existsSync(dir)}`);
+      
+      const defaultConfig = {
+        offline: false,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      try {
+        fs.writeFileSync(MAINTENANCE_CONFIG_PATH, JSON.stringify(defaultConfig, null, 2));
+        console.log('✅ DEBUG: Created new maintenance config file');
+        console.log(`✅ DEBUG: File now exists? ${fs.existsSync(MAINTENANCE_CONFIG_PATH)}`);
+      } catch (writeError) {
+        console.error('❌ DEBUG: Error creating file:', writeError.message);
+      }
+      
+      return defaultConfig;
+    }
+    
+    console.log('🔍 DEBUG: Reading existing file');
+    const data = fs.readFileSync(MAINTENANCE_CONFIG_PATH, 'utf8');
+    console.log('🔍 DEBUG: File contents:', data);
+    
+    const parsed = JSON.parse(data);
+    return parsed;
+  } catch (error) {
+    console.error('❌ DEBUG: Error reading config:', error.message);
+    return { offline: false, lastUpdated: new Date().toISOString() };
+  }
+}
+
+// Helper function to write maintenance config
+function writeMaintenanceConfig(offline) {
+  try {
+    console.log(`🔍 DEBUG: Writing offline=${offline} to ${MAINTENANCE_CONFIG_PATH}`);
+    
+    const config = {
+      offline: offline,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    fs.writeFileSync(MAINTENANCE_CONFIG_PATH, JSON.stringify(config, null, 2));
+    console.log(`✅ Maintenance config updated: ${offline ? 'OFFLINE' : 'ONLINE'}`);
+    console.log(`🔍 DEBUG: Write successful, file exists: ${fs.existsSync(MAINTENANCE_CONFIG_PATH)}`);
+    
+    return true;
+  } catch (error) {
+    console.error('❌ DEBUG: Error writing config:', error.message);
+    return false;
+  }
+}
 
 // GET endpoint - Check if site is in maintenance mode
 app.get('/api/maintenance-status', (req, res) => {
   try {
-    console.log(`📊 Maintenance status check: ${maintenanceMode ? 'OFFLINE' : 'ONLINE'}`);
+    const config = readMaintenanceConfig();
+    console.log(`📊 Maintenance status check: ${config.offline ? 'OFFLINE' : 'ONLINE'}`);
     
     res.json({ 
-      offline: maintenanceMode,
-      timestamp: new Date().toISOString()
+      offline: config.offline,
+      timestamp: new Date().toISOString(),
+      lastUpdated: config.lastUpdated
     });
   } catch (error) {
     console.error('Error checking maintenance status:', error);
@@ -608,7 +673,6 @@ app.post('/api/maintenance-toggle', (req, res) => {
     
     console.log(`🔧 Maintenance toggle request received: ${offline ? 'OFFLINE' : 'ONLINE'}`);
     
-    // IMPORTANT: Change this to a real password!
     const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'your-secret-password';
     
     if (password !== ADMIN_PASSWORD) {
@@ -616,15 +680,18 @@ app.post('/api/maintenance-toggle', (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     
-    // Update maintenance mode
-    maintenanceMode = offline;
+    const success = writeMaintenanceConfig(offline);
     
-    console.log(`✅ Maintenance mode ${maintenanceMode ? 'ENABLED' : 'DISABLED'}`);
+    if (!success) {
+      return res.status(500).json({ error: 'Failed to update maintenance status' });
+    }
+    
+    console.log(`✅ Maintenance mode ${offline ? 'ENABLED' : 'DISABLED'}`);
     
     res.json({ 
       success: true,
-      offline: maintenanceMode,
-      message: `Site is now ${maintenanceMode ? 'OFFLINE' : 'ONLINE'}`,
+      offline: offline,
+      message: `Site is now ${offline ? 'OFFLINE' : 'ONLINE'}`,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -632,6 +699,9 @@ app.post('/api/maintenance-toggle', (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
 
 
 
