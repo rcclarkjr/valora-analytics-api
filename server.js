@@ -40,18 +40,74 @@ app.use(
   })
 );
 
-// THE ONE LINE TO SWITCH AIs - Change true/false to switch everything
-const USE_CLAUDE = false; // true = Claude Opus, false = OpenAI gpt-4-turbo
+
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+
+
+
+
 
 // Global default temperature (you can change this number)
 const DEFAULT_TEMPERATURE = 0.0;
 
 // ====================
+// MODEL CONFIGURATION
+// ====================
+
+const VALID_OPENAI_MODELS = ["gpt-4o", "gpt-4.1", "gpt-4.1-mini"];
+const DEFAULT_MODEL = "gpt-4.1";
+const MODEL_CONFIG_PATH = '/mnt/data/model_config.json';
+
+function readModelConfig() {
+  try {
+    if (!fs.existsSync(MODEL_CONFIG_PATH)) {
+      const defaultConfig = {
+        activeModel: DEFAULT_MODEL,
+        lastUpdated: new Date().toISOString()
+      };
+      fs.writeFileSync(MODEL_CONFIG_PATH, JSON.stringify(defaultConfig, null, 2));
+      console.log('✅ Created new model config file');
+      return defaultConfig;
+    }
+
+    const data = fs.readFileSync(MODEL_CONFIG_PATH, 'utf8');
+    const config = JSON.parse(data);
+
+    // Safety check: if someone manually edits the file with a bad model name, reset it
+    if (!VALID_OPENAI_MODELS.includes(config.activeModel)) {
+      console.warn(`⚠️ Invalid model in config: ${config.activeModel}, resetting to default`);
+      config.activeModel = DEFAULT_MODEL;
+      writeModelConfig(config.activeModel);
+    }
+
+    return config;
+  } catch (error) {
+    console.error('Error reading model config:', error.message);
+    return { activeModel: DEFAULT_MODEL, lastUpdated: new Date().toISOString() };
+  }
+}
+
+function writeModelConfig(model) {
+  try {
+    const config = {
+      activeModel: model,
+      lastUpdated: new Date().toISOString()
+    };
+    fs.writeFileSync(MODEL_CONFIG_PATH, JSON.stringify(config, null, 2));
+    console.log(`✅ Model config updated: ${model}`);
+    return true;
+  } catch (error) {
+    console.error('Error writing model config:', error.message);
+    return false;
+  }
+}
+
+// ====================
 // UTILITY FUNCTIONS
 // ====================
+
+
 
 // Helper function to extract category scores from analysis text with improved regex patterns
 function extractCategoryScores(analysisText) {
@@ -167,11 +223,12 @@ function roundSMIUp(value) {
   return Math.round(increments * 100) / 100;
 }
 
+
+
 // ====================
-// UNIVERSAL AI CALLER FUNCTIONS
+// AI CALLER FUNCTION
 // ====================
 
-// Main function - automatically routes to Claude or OpenAI based on USE_CLAUDE flag
 async function callAI(
   messages,
   maxTokens = 1000,
@@ -179,158 +236,13 @@ async function callAI(
   useJSON = false,
   temperature = DEFAULT_TEMPERATURE
 ) {
-  if (USE_CLAUDE) {
-    return await callClaudeAPI(
-      messages,
-      maxTokens,
-      systemContent,
-      useJSON,
-      temperature
-    );
-  } else {
-    return await callOpenAIAPI(
-      messages,
-      maxTokens,
-      systemContent,
-      useJSON,
-      temperature
-    );
-  }
-}
-
-// Claude Opus implementation
-async function callClaudeAPI(
-  messages,
-  maxTokens,
-  systemContent,
-  useJSON,
-  temperature = DEFAULT_TEMPERATURE
-) {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error("Anthropic API key not found");
-  }
-
-  const anthropicMessages = [];
-  let systemPrompt = systemContent;
-
-  // Convert OpenAI format to Claude format
-  messages.forEach(msg => {
-    if (msg.role === "system") {
-      systemPrompt = msg.content;
-    } else if (msg.role === "user") {
-      if (Array.isArray(msg.content)) {
-        // Handle mixed content (text + images)
-        const content = msg.content.map(item => {
-          if (item.type === "text") {
-            return { type: "text", text: item.text };
-          } else if (item.type === "image_url") {
-            const base64Data = item.image_url.url.replace(
-              /^data:image\/[^;]+;base64,/,
-              ""
-            );
-            return {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: "image/jpeg",
-                data: base64Data
-              }
-            };
-          }
-          return item;
-        });
-        anthropicMessages.push({ role: "user", content });
-      } else {
-        anthropicMessages.push({
-          role: "user",
-          content: [{ type: "text", text: msg.content }]
-        });
-      }
-    }
-  });
-
-  const requestBody = {
-    model: "claude-3-opus-latest",
-    max_tokens: maxTokens,
-    temperature,
-    messages: anthropicMessages
-  };
-
-  if (systemPrompt) {
-    requestBody.system = systemPrompt;
-  }
-
-  const response = await axios.post(
-    "https://api.anthropic.com/v1/messages",
-    requestBody,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01"
-      }
-    }
-  );
-
-  const responseText = response.data.content[0].text;
-
-  // Handle JSON responses
-  if (useJSON) {
-    try {
-      // Strip markdown code blocks if present
-      let cleanJson = responseText;
-      if (responseText.includes("```json")) {
-        cleanJson = responseText
-          .replace(/```json\s*/, "")
-          .replace(/\s*```$/, "");
-      }
-
-      // Find the JSON object - everything from first { to the matching closing }
-      const startIndex = cleanJson.indexOf("{");
-      if (startIndex === -1) {
-        throw new Error("No JSON object found in response");
-      }
-
-      let braceCount = 0;
-      let endIndex = startIndex;
-
-      // Find the matching closing brace
-      for (let i = startIndex; i < cleanJson.length; i++) {
-        if (cleanJson[i] === "{") braceCount++;
-        if (cleanJson[i] === "}") braceCount--;
-        if (braceCount === 0) {
-          endIndex = i;
-          break;
-        }
-      }
-
-      // Extract just the JSON portion
-      const jsonOnly = cleanJson.substring(startIndex, endIndex + 1);
-      console.log("Extracted JSON:", jsonOnly.substring(0, 100) + "...");
-
-      return JSON.parse(jsonOnly);
-    } catch (parseError) {
-      console.error("JSON parse error:", parseError);
-      console.error("Raw response length:", responseText.length);
-      console.error("First 500 chars:", responseText.substring(0, 500));
-      throw new Error(`Claude returned invalid JSON: ${parseError.message}`);
-    }
-  }
-
-  return responseText;
-}
-
-// OpenAI implementation (your existing logic)
-async function callOpenAIAPI(
-  messages,
-  maxTokens,
-  systemContent,
-  useJSON,
-  temperature = DEFAULT_TEMPERATURE
-) {
   if (!OPENAI_API_KEY) {
     throw new Error("OpenAI API key not found");
   }
+
+  // Read the active model from persistent config
+  const modelConfig = readModelConfig();
+  const activeModel = modelConfig.activeModel;
 
   // Add system message if provided
   const finalMessages = systemContent
@@ -338,7 +250,7 @@ async function callOpenAIAPI(
     : messages;
 
   const requestBody = {
-    model: "gpt-4.1",
+    model: activeModel,
     messages: finalMessages,
     max_tokens: maxTokens,
     temperature
@@ -348,29 +260,29 @@ async function callOpenAIAPI(
     requestBody.response_format = { type: "json_object" };
   }
 
-let response;
-try {
-  response = await axios.post(
-    "https://api.openai.com/v1/chat/completions",
-    requestBody,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`
+  let response;
+  try {
+    response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      requestBody,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`
+        }
       }
-    }
-  );
-} catch (error) {
-  console.error("OpenAI API Error Details:", {
-    status: error.response?.status,
-    statusText: error.response?.statusText,
-    errorData: error.response?.data,
-    requestedModel: requestBody.model,
-    messageCount: finalMessages.length,
-    hasImages: JSON.stringify(requestBody).includes('image_url')
-  });
-  throw error;
-}
+    );
+  } catch (error) {
+    console.error("OpenAI API Error Details:", {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      errorData: error.response?.data,
+      requestedModel: activeModel,
+      messageCount: finalMessages.length,
+      hasImages: JSON.stringify(requestBody).includes('image_url')
+    });
+    throw error;
+  }
 
   const responseText = response.data.choices[0]?.message?.content || "";
 
@@ -385,6 +297,7 @@ try {
 
   return responseText;
 }
+
 
 
 
@@ -642,6 +555,11 @@ app.get('/api/maintenance-status', (req, res) => {
   }
 });
 
+
+
+
+
+
 // POST endpoint - Toggle maintenance mode (admin only)
 app.post('/api/maintenance-toggle', (req, res) => {
   try {
@@ -676,9 +594,62 @@ app.post('/api/maintenance-toggle', (req, res) => {
   }
 });
 
+// GET endpoint - Retrieve current active model and valid model list
+app.get('/api/model-status', (req, res) => {
+  try {
+    const config = readModelConfig();
+    console.log(`📊 Model status check: ${config.activeModel}`);
 
+    res.json({
+      activeModel: config.activeModel,
+      validModels: VALID_OPENAI_MODELS,
+      lastUpdated: config.lastUpdated,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error checking model status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
+// POST endpoint - Switch active model (admin only)
+app.post('/api/model-switch', (req, res) => {
+  try {
+    const { password, model } = req.body;
 
+    console.log(`🤖 Model switch request received: ${model}`);
+
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'your-secret-password';
+
+    if (password !== ADMIN_PASSWORD) {
+      console.log('❌ Unauthorized model switch attempt');
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!VALID_OPENAI_MODELS.includes(model)) {
+      console.log(`❌ Invalid model requested: ${model}`);
+      return res.status(400).json({ error: `Invalid model. Must be one of: ${VALID_OPENAI_MODELS.join(', ')}` });
+    }
+
+    const success = writeModelConfig(model);
+
+    if (!success) {
+      return res.status(500).json({ error: 'Failed to update model config' });
+    }
+
+    console.log(`✅ Active model switched to: ${model}`);
+
+    res.json({
+      success: true,
+      activeModel: model,
+      message: `Active model switched to ${model}`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error switching model:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 
 
@@ -792,7 +763,7 @@ app.get("/PromptAnalyzeArt.txt", (req, res) => {
 });
 
 // ====================
-// REVISED ENDPOINT: Convert Bio to Questionnaire Only (older version)
+// REVISED ENDPOINT: Convert Bio to Questionnaire Only
 // ====================
 app.post("/analyze-cli", async (req, res) => {
   try {
@@ -814,7 +785,7 @@ app.post("/analyze-cli", async (req, res) => {
       });
     }
 
-    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       return res.status(500).json({
         error: { message: "Server configuration error: Missing API key" }
       });
@@ -896,163 +867,7 @@ app.post("/analyze-cli", async (req, res) => {
   }
 });
 
-// ====================
-// REVISED ENDPOINT: Convert Bio to Questionnaire Only (newer version)
-// ====================
-app.post("/analyze-cli", async (req, res) => {
-  try {
-    console.log("Received CLI bio-to-questionnaire request");
-    const { artistName, artistResume, temperature: requestedTemp } = req.body;
 
-    const temperature =
-      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
-
-    if (!artistName) {
-      return res.status(400).json({
-        error: { message: "Artist name is required" }
-      });
-    }
-
-    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
-      return res.status(500).json({
-        error: { message: "Server configuration error: Missing API key" }
-      });
-    }
-
-    // Handle empty or minimal bio
-    if (!artistResume || artistResume.trim().length < 10) {
-      console.log(
-        "Empty or minimal bio provided, returning default questionnaire"
-      );
-      return res.json({
-        questionnaire: {
-          education: "none",
-          exhibitions: "none",
-          awards: "none",
-          commissions: "none",
-          collections: "none",
-          publications: "none",
-          institutional: "none"
-        },
-        source: "default_answers"
-      });
-    }
-
-    console.log(
-      `Processing bio-to-questionnaire for artist: "${artistName}"`
-    );
-
-    const questionnairePrompt = `
-Analyze the following artist's career information and answer the questionnaire by selecting the appropriate level for each category.
-
-For each category, respond with EXACTLY one of these three options:
-- "high" for High-Profile accomplishments
-- "mid" for Mid-Profile accomplishments  
-- "none" for Low-Profile/None
-
-Categories and Criteria:
-
-1. Art Education (10%):
-   - High-Profile: MFA, BFA, or formal art school degree
-   - Mid-Profile: Art workshops, continuing education classes, or extensive self-study
-   - Low-Profile/None: No formal art training or very minimal training
-
-2. Exhibitions (25%):
-   - High-Profile: Solo exhibitions, major gallery shows, museum exhibitions
-   - Mid-Profile: Group exhibitions, local art fairs, community art centers
-   - Low-Profile/None: No exhibitions or very small local venues
-
-3. Awards & Competitions (15%):
-   - High-Profile: National or international awards, high ranking in major art competitions
-   - Mid-Profile: Regional or local awards, entry in community art contests
-   - Low-Profile/None: No awards or very small community recognitions
-
-4. Commissions (10%):
-   - High-Profile: Public art, corporate commissions, major private commissions
-   - Mid-Profile: Smaller private commissions, local business commissions
-   - Low-Profile/None: No commissions or very small personal commissions
-
-5. Collections (15%):
-   - High-Profile: Museum collections, well-known collectors, corporate collections
-   - Mid-Profile: Private collectors, small businesses, personal collections
-   - Low-Profile/None: No collections or very informal sales
-
-6. Publications (15%):
-   - High-Profile: Major magazines, newspapers, art journals, podcasts, TV features
-   - Mid-Profile: Local newspapers, community newsletters, blogs
-   - Low-Profile/None: No media coverage or very small mentions
-
-7. Institutional Interest (10%):
-   - High-Profile: Museum representation, major gallery representation, curatorial interest, secondary market sales
-   - Mid-Profile: Small gallery representation, art center affiliations
-   - Low-Profile/None: No institutional interest or very minimal local connections
-
-Artist Career Information:
-${artistResume}
-
-Respond with ONLY a JSON object in this exact format:
-{
-  "education": "high|mid|none",
-  "exhibitions": "high|mid|none", 
-  "awards": "high|mid|none",
-  "commissions": "high|mid|none",
-  "collections": "high|mid|none",
-  "publications": "high|mid|none",
-  "institutional": "high|mid|none"
-}`;
-
-    console.log("Sending bio to AI for questionnaire conversion");
-
-    const messages = [
-      {
-        role: "user",
-        content: `Artist: "${artistName}"\n\n${questionnairePrompt}`
-      }
-    ];
-
-    const systemContent =
-      "You are an expert art career analyst. Analyze the artist's bio and respond with only the requested JSON format.";
-
-    const aiResponse = await callAI(
-      messages,
-      500,
-      systemContent,
-      true,
-      temperature
-    );
-
-    const requiredFields = [
-      "education",
-      "exhibitions",
-      "awards",
-      "commissions",
-      "collections",
-      "publications",
-      "institutional"
-    ];
-    const missingFields = requiredFields.filter(field => !aiResponse[field]);
-
-    if (missingFields.length > 0) {
-      console.log(`AI response missing fields: ${missingFields.join(", ")}`);
-      return res.status(500).json({
-        error: {
-          message: `AI analysis incomplete: missing ${missingFields.join(", ")}`
-        }
-      });
-    }
-
-    console.log("Sending questionnaire response to frontend");
-    res.json({
-      questionnaire: aiResponse,
-      source: "ai_converted"
-    });
-  } catch (error) {
-    console.error("Error in bio-to-questionnaire conversion:", error.message);
-    res.status(500).json({
-      error: { message: error.message || "Bio analysis failed" }
-    });
-  }
-});
 
 app.post("/generate-career-summary", async (req, res) => {
   try {
@@ -1082,7 +897,7 @@ app.post("/generate-career-summary", async (req, res) => {
       });
     }
 
-    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       return res.status(500).json({
         error: { message: "Server configuration error: Missing API key" }
       });
@@ -1182,7 +997,7 @@ app.post("/analyze-smi", async (req, res) => {
         .json({ error: { message: "Image is required" } });
     }
 
-    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       console.log("Missing API key");
       return res.status(500).json({
         error: {
@@ -1411,7 +1226,7 @@ app.post("/analyze-ri", async (req, res) => {
         .json({ error: { message: "Image is required" } });
     }
 
-    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       console.log("Missing API key");
       return res.status(500).json({
         error: {
@@ -2701,7 +2516,7 @@ app.post("/analyze-art", async (req, res) => {
     const temperature =
       typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
 
-    if (!prompt || !image || (!ANTHROPIC_API_KEY && !OPENAI_API_KEY)) {
+    if (!prompt || !image || (!OPENAI_API_KEY)) {
       return res
         .status(400)
         .json({ error: { message: "Missing prompt, image, or API key" } });
@@ -2932,38 +2747,27 @@ const textContent = subjectDescription
         ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"`
         : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}`;
 
-      const messages = [
+
+
+const messages = [
         {
           role: "user",
-          content: USE_CLAUDE
-            ? [
-                {
-                  type: "text",
-                  text: textContent
-                },
-                {
-                  type: "image",
-                  source: {
-                    type: "base64",
-                    media_type: "image/jpeg",
-                    data: subjectImageBase64
-                  }
-                }
-              ]
-            : [
-                {
-                  type: "text",
-                  text: textContent
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:image/jpeg;base64,${subjectImageBase64}`
-                  }
-                }
-              ]
+          content: [
+            {
+              type: "text",
+              text: textContent
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${subjectImageBase64}`
+              }
+            }
+          ]
         }
       ];
+
+
 
       aiAnalysis = await callAI(
         messages,
@@ -3189,7 +2993,7 @@ app.post("/api/compare-subject-comp", async (req, res) => {
         .json({ error: { message: "Comp must include imageBase64" } });
     }
 
-    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       return res
         .status(500)
         .json({ error: { message: "Missing API Key" } });
@@ -3360,7 +3164,7 @@ app.post("/api/generate-narrative", async (req, res) => {
       });
     }
 
-    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       return res.status(500).json({ error: "Missing API Key" });
     }
 
