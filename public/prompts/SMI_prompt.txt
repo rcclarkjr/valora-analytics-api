@@ -115,7 +115,7 @@ Round to nearest tenth using standard rounding (0.05 rounds up):
 
 ═══════════════════════════════════════════════════════════════════════════════
 CATEGORY 1: CORE ELEMENTS (Factors 1-10)
-Weight total: 0.349
+Weight total: 0.311
 ═══════════════════════════════════════════════════════════════════════════════
 
 ### FACTOR 1: Line
@@ -372,7 +372,7 @@ relationships; forms have compelling sculptural solidity.
 
 ═══════════════════════════════════════════════════════════════════════════════
 CATEGORY 2: DESIGN PRINCIPLES (Factors 11-20)
-Weight total: 0.367
+Weight total: 0.348
 ═══════════════════════════════════════════════════════════════════════════════
 
 ### FACTOR 11: Balance
@@ -626,7 +626,7 @@ effective pattern choices; pattern is integral to work's visual impact.
 
 ═══════════════════════════════════════════════════════════════════════════════
 CATEGORY 3: TECHNIQUES (Factors 21-28)
-Weight total: 0.144
+Weight total: 0.148
 ═══════════════════════════════════════════════════════════════════════════════
 
 **TECHNIQUE SCORING NOTE:** These factors assess specific painting/drawing 
@@ -860,7 +860,7 @@ is integral to work's vitality and painterly beauty.
 
 ═══════════════════════════════════════════════════════════════════════════════
 CATEGORY 4: ARTISTIC VOICE (Factors 29-33)
-Weight total: 0.215
+Weight total: 0.193
 ═══════════════════════════════════════════════════════════════════════════════
 
 ### FACTOR 29: Uniqueness/Originality
