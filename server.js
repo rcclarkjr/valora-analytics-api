@@ -56,35 +56,18 @@ const DEFAULT_TEMPERATURE = 0.0;
 // ====================
 
 const VALID_OPENAI_MODELS = ["gpt-4o", "gpt-4.1", "gpt-4.1-mini"];
-const DEFAULT_MODEL = "gpt-4.1";
 const MODEL_CONFIG_PATH = '/mnt/data/model_config.json';
 
 function readModelConfig() {
   try {
     if (!fs.existsSync(MODEL_CONFIG_PATH)) {
-      const defaultConfig = {
-        activeModel: DEFAULT_MODEL,
-        lastUpdated: new Date().toISOString()
-      };
-      fs.writeFileSync(MODEL_CONFIG_PATH, JSON.stringify(defaultConfig, null, 2));
-      console.log('✅ Created new model config file');
-      return defaultConfig;
+      return null;  // No model configured yet
     }
-
-    const data = fs.readFileSync(MODEL_CONFIG_PATH, 'utf8');
-    const config = JSON.parse(data);
-
-    // Safety check: if someone manually edits the file with a bad model name, reset it
-    if (!VALID_OPENAI_MODELS.includes(config.activeModel)) {
-      console.warn(`⚠️ Invalid model in config: ${config.activeModel}, resetting to default`);
-      config.activeModel = DEFAULT_MODEL;
-      writeModelConfig(config.activeModel);
-    }
-
-    return config;
+    const data = fs.readFileSync(MODEL_CONFIG_PATH, "utf8");
+    return JSON.parse(data);
   } catch (error) {
-    console.error('Error reading model config:', error.message);
-    return { activeModel: DEFAULT_MODEL, lastUpdated: new Date().toISOString() };
+    console.error("Error reading model config:", error);
+    return null;
   }
 }
 
@@ -242,6 +225,11 @@ async function callAI(
 
   // Read the active model from persistent config
   const modelConfig = readModelConfig();
+  
+  if (!modelConfig || !modelConfig.activeModel) {
+    throw new Error("NO_MODEL_CONFIGURED: Admin must select an OpenAI model in Admin Menu before any apps can function");
+  }
+  
   const activeModel = modelConfig.activeModel;
 
   // Add system message if provided
@@ -595,20 +583,26 @@ app.post('/api/maintenance-toggle', (req, res) => {
 });
 
 // GET endpoint - Retrieve current active model and valid model list
-app.get('/api/model-status', (req, res) => {
+app.get("/api/model-status", (req, res) => {
   try {
-    const config = readModelConfig();
-    console.log(`📊 Model status check: ${config.activeModel}`);
-
+    const modelConfig = readModelConfig();
+    
+    if (!modelConfig) {
+      return res.json({
+        success: true,
+        activeModel: null,
+        message: "No model configured. Please select a model to activate TAA apps."
+      });
+    }
+    
     res.json({
-      activeModel: config.activeModel,
-      validModels: VALID_OPENAI_MODELS,
-      lastUpdated: config.lastUpdated,
-      timestamp: new Date().toISOString()
+      success: true,
+      activeModel: modelConfig.activeModel,
+      lastUpdated: modelConfig.lastUpdated
     });
   } catch (error) {
-    console.error('Error checking model status:', error);
-    res.status(500).json({ error: error.message });
+    console.error("Error getting model status:", error);
+    res.status(500).json({ success: false, error: "Failed to read model status" });
   }
 });
 
