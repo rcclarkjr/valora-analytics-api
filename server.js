@@ -977,6 +977,7 @@ app.post("/analyze-smi", async (req, res) => {
       image,
       artTitle,
       artistName,
+	  subjectPhrase,
       temperature: requestedTemp
     } = req.body;
 
@@ -1240,11 +1241,16 @@ app.post("/analyze-ri", async (req, res) => {
     );
     console.log(`Prompt length: ${prompt.length} characters`);
 
-    // Construct the prompt with artwork information
-    const finalPrompt = `Title: "${artTitle}"
-Artist: "${artistName}"
 
-${prompt}`;
+
+
+
+    // Construct the prompt with artwork information
+	const finalPrompt = prompt;  // Use exactly what frontend sent!
+
+
+
+
 
     console.log("Sending request to AI for RI analysis");
 
