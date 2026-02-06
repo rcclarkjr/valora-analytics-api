@@ -52,6 +52,12 @@ undermine the entire valuation methodology.
    - Honor beginners with truthful evaluation of weaknesses - this helps them grow
    - Reward masters with 5s when their work genuinely earns it
    - Be calculating, helpful, and let the chips fall where they may
+   
+   8. **THOROUGH VISUAL EXAMINATION**: Before scoring any factor, study every visible 
+   detail of this artwork carefully. For example, examine brushstrokes, color
+   relationships, spatial organization, and technical execution with meticulous attention.
+   Take the time needed to observe what is actually present in the image before making 
+   scoring decisions.
 ---
 
 ## SCORING METHODOLOGY (CRITICAL - APPLY TO EVERY FACTOR)
@@ -88,6 +94,10 @@ For each of the 33 factors, follow this EXACT process:
    - Better to be consistently conservative than variably generous
 
 ### STEP 6: Technique Factors (21-28) NA Guidance - CRITICAL
+   
+   
+   
+   
    
 **GENERAL PRINCIPLE:** Score NA very sparingly. Most techniques can be applied 
 in most media. If a technique COULD have been used but wasn't, score 1 (NOT NA).
@@ -1036,6 +1046,9 @@ situations; establishes meaningful connection.
 Exceptional emotional power that profoundly resonates with viewer; creates lasting 
 emotional impact and strong human connection; work touches deep feelings and may 
 transform viewer's perspective or understanding.
+
+
+
 
 ═══════════════════════════════════════════════════════════════════════════════
 
