@@ -1053,8 +1053,7 @@ Add this to your JSON output:
           { type: "text", text: finalPrompt },
           {
             type: "image_url",
-            image_url: { url: `data:image/jpeg;base64,${image}` },
-			detail: "high"
+            image_url: { url: `data:image/jpeg;base64,${image}` }
           }
         ]
       }
