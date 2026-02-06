@@ -954,10 +954,6 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
 
 
 
-
-
-
-
 // Endpoint for Skill Mastery Index (SMI) analysis
 app.post("/analyze-smi", async (req, res) => {
   try {
@@ -967,9 +963,9 @@ app.post("/analyze-smi", async (req, res) => {
       image,
       artTitle,
       artistName,
-	  subjectPhrase,
+      subjectPhrase,
       temperature: requestedTemp,
-	  returnFactorScores
+      returnFactorScores
     } = req.body;
 
     const temperature =
@@ -1003,19 +999,19 @@ app.post("/analyze-smi", async (req, res) => {
       `Processing SMI request for artwork: "${artTitle}" by ${artistName}`
     );
     console.log(`Prompt length: ${prompt.length} characters`);
-	if (returnFactorScores) {
-  console.log("✓ Factor scores requested for batch processing");
-}
+    if (returnFactorScores) {
+      console.log("✓ Factor scores requested for batch processing");
+    }
 
     // Construct the prompt with artwork information
-let finalPrompt = `Title: "${artTitle}"
+    let finalPrompt = `Title: "${artTitle}"
 Artist: "${artistName}"
 
 ${prompt}`;
 
-// Append factor score instructions for batch processing
-if (returnFactorScores) {
-  finalPrompt += `
+    // Append factor score instructions for batch processing
+    if (returnFactorScores) {
+      finalPrompt += `
 
 ═══════════════════════════════════════════════════════════════════════════════
 ADDITIONAL OUTPUT REQUIREMENT FOR BATCH PROCESSING
@@ -1046,9 +1042,7 @@ Add this to your JSON output:
 }
 
 **CRITICAL:** Array must have EXACTLY 33 values in correct order.`;
-}
-
-
+    }
 
     console.log("Sending request to AI for SMI analysis (33 factors)");
 
@@ -1059,7 +1053,8 @@ Add this to your JSON output:
           { type: "text", text: finalPrompt },
           {
             type: "image_url",
-            image_url: { url: `data:image/jpeg;base64,${image}` }
+            image_url: { url: `data:image/jpeg;base64,${image}` },
+			detail: "high"
           }
         ]
       }
@@ -1123,6 +1118,93 @@ Add this to your JSON output:
       });
     }
 
+    // ============================================================================
+    // ENFORCE 1-3-5 SCALE AND RECALCULATE SMI
+    // ============================================================================
+    if (returnFactorScores && aiResponse.factor_scores && Array.isArray(aiResponse.factor_scores)) {
+      // Check if any scores need correction
+      let needsRecalculation = false;
+      const originalScores = [...aiResponse.factor_scores];
+      
+      // Convert 2→1 and 4→5
+      aiResponse.factor_scores = aiResponse.factor_scores.map((score, index) => {
+        if (score === 2) {
+          console.log(`  Factor ${index + 1}: Converting score 2 → 1`);
+          needsRecalculation = true;
+          return 1;
+        }
+        if (score === 4) {
+          console.log(`  Factor ${index + 1}: Converting score 4 → 5`);
+          needsRecalculation = true;
+          return 5;
+        }
+        return score;
+      });
+      
+      // Recalculate SMI if any scores were corrected
+      if (needsRecalculation) {
+        console.log("✓ Factor scores normalized to 1-3-5 scale");
+        
+        // Individual factor weights from SMI rubric (exact values)
+        const factorWeights = [
+          // Core Elements (F1-F10)
+          0.037,  // F1: Line
+          0.037,  // F2: Shape
+          0.031,  // F3: Form
+          0.037,  // F4: Space
+          0.037,  // F5: Color/Hue
+          0.025,  // F6: Texture
+          0.043,  // F7: Tone/Value
+          0.031,  // F8: Saturation
+          0.043,  // F9: Composition
+          0.025,  // F10: Volume
+          // Design Principles (F11-F20)
+          0.037,  // F11: Balance
+          0.043,  // F12: Contrast
+          0.043,  // F13: Emphasis/Focal Point
+          0.037,  // F14: Movement
+          0.037,  // F15: Rhythm
+          0.037,  // F16: Variety
+          0.037,  // F17: Proportion
+          0.037,  // F18: Harmony
+          0.043,  // F19: Cohesiveness/Unity
+          0.037,  // F20: Pattern
+          // Techniques (F21-F28)
+          0.025,  // F21: Brushwork/Mark-Making
+          0.018,  // F22: Chiaroscuro
+          0.018,  // F23: Impasto
+          0.018,  // F24: Sfumato
+          0.025,  // F25: Glazing
+          0.018,  // F26: Scumbling
+          0.018,  // F27: Pointillism/Divisionism
+          0.025,  // F28: Wet-on-Wet/Alla Prima
+          // Artistic Voice (F29-F33)
+          0.043,  // F29: Uniqueness/Originality
+          0.049,  // F30: Creativity/Innovation
+          0.043,  // F31: Mood/Atmosphere
+          0.037,  // F32: Viewer Engagement
+          0.043   // F33: Emotional Resonance
+        ];
+        
+        let weightedSum = 0;
+        let totalWeight = 0;
+        
+        for (let i = 0; i < 33; i++) {
+          if (aiResponse.factor_scores[i] !== 0) { // Skip NA factors
+            weightedSum += aiResponse.factor_scores[i] * factorWeights[i];
+            totalWeight += factorWeights[i];
+          }
+        }
+        
+        const recalculatedSMI = weightedSum / totalWeight;
+        const originalSMI = aiResponse.smi;
+        aiResponse.smi = recalculatedSMI.toFixed(2);
+        
+        console.log(`✓ SMI recalculated: ${originalSMI} → ${aiResponse.smi} (corrected from AI calculation)`);
+      }
+    }
+    // ============================================================================
+
     // Validate the NEW JSON structure (33-factor system)
     if (!aiResponse.category_summaries) {
       console.log("Missing category_summaries in AI response");
@@ -1165,43 +1247,41 @@ Add this to your JSON output:
       }
     }
 
-// NEW: Validate factor scores if requested
-if (returnFactorScores) {
-  if (!aiResponse.factor_scores || !Array.isArray(aiResponse.factor_scores)) {
-    console.log("Missing or invalid factor_scores array in AI response");
-    return res.status(500).json({
-      error: {
-        message: "Invalid AI response: missing or invalid factor_scores array"
+    // NEW: Validate factor scores if requested
+    if (returnFactorScores) {
+      if (!aiResponse.factor_scores || !Array.isArray(aiResponse.factor_scores)) {
+        console.log("Missing or invalid factor_scores array in AI response");
+        return res.status(500).json({
+          error: {
+            message: "Invalid AI response: missing or invalid factor_scores array"
+          }
+        });
       }
-    });
-  }
-  
-  if (aiResponse.factor_scores.length !== 33) {
-    console.log(`Expected 33 factor scores, got ${aiResponse.factor_scores.length}`);
-    return res.status(500).json({
-      error: {
-        message: `Invalid AI response: expected 33 factor scores, got ${aiResponse.factor_scores.length}`
+      
+      if (aiResponse.factor_scores.length !== 33) {
+        console.log(`Expected 33 factor scores, got ${aiResponse.factor_scores.length}`);
+        return res.status(500).json({
+          error: {
+            message: `Invalid AI response: expected 33 factor scores, got ${aiResponse.factor_scores.length}`
+          }
+        });
       }
-    });
-  }
-  
-  // Validate each score is 0, 1, 3, or 5
-  for (let i = 0; i < aiResponse.factor_scores.length; i++) {
-    const score = aiResponse.factor_scores[i];
-    if (![0, 1, 3, 5].includes(score)) {
-      console.log(`Invalid factor score at position ${i + 1}: ${score}`);
-      return res.status(500).json({
-        error: {
-          message: `Invalid factor score at position ${i + 1}: ${score}. Must be 0, 1, 3, or 5.`
+      
+      // Validate each score is 0, 1, 3, or 5 (after normalization)
+      for (let i = 0; i < aiResponse.factor_scores.length; i++) {
+        const score = aiResponse.factor_scores[i];
+        if (![0, 1, 3, 5].includes(score)) {
+          console.log(`Invalid factor score at position ${i + 1}: ${score}`);
+          return res.status(500).json({
+            error: {
+              message: `Invalid factor score at position ${i + 1}: ${score}. Must be 0, 1, 3, or 5.`
+            }
+          });
         }
-      });
+      }
+      
+      console.log("✓ Factor scores validated: 33 scores received");
     }
-  }
-  
-  console.log("✓ Factor scores validated: 33 scores received");
-}
-
-
 
     // Validate SMI value
     const smiValue = parseFloat(aiResponse.smi);
@@ -1219,26 +1299,23 @@ if (returnFactorScores) {
     console.log(`SMI Value: ${formattedSMI}`);
     console.log("All category summaries validated successfully");
 
-// Prepare final response
-const finalResponse = {
-  smi: formattedSMI,
-  category_summaries: categorySummaries,
-  brief_description: aiResponse.brief_description || "",
-  ai_response: aiResponse
-};
+    // Prepare final response
+    const finalResponse = {
+      smi: formattedSMI,
+      category_summaries: categorySummaries,
+      brief_description: aiResponse.brief_description || "",
+      ai_response: aiResponse
+    };
 
-// NEW: Include factor scores if requested
-if (returnFactorScores && aiResponse.factor_scores) {
-  finalResponse.factor_scores = aiResponse.factor_scores;
-  console.log("✓ Including factor scores in response");
-}
+    // NEW: Include factor scores if requested
+    if (returnFactorScores && aiResponse.factor_scores) {
+      finalResponse.factor_scores = aiResponse.factor_scores;
+      console.log("✓ Including factor scores in response");
+    }
 
-console.log("Sending final SMI response to client");
-res.json(finalResponse);
-	
-	
-	
-	
+    console.log("Sending final SMI response to client");
+    res.json(finalResponse);
+
   } catch (error) {
     console.error("Unexpected error in SMI analysis:", error);
     res.status(500).json({
@@ -1276,6 +1353,10 @@ function handleApiError(error, res) {
     }
   });
 }
+
+
+
+
 
 // Endpoint for Representational Index (RI) analysis
 app.post("/analyze-ri", async (req, res) => {
