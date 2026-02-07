@@ -2800,7 +2800,12 @@ const cleanName = study.factor.replace(/^\d+\.\s*/, "").trim();
 if (VALID_FACTOR_NAMES.includes(cleanName)) { study.factor = cleanName; 
 } else { invalidFactors.push(study.factor); } });
 
-if (invalidFactors.length > 0) {return res.status(500).json({ error: { message: "AI used invalid factor names. Please try again." } }); } 
+	if (invalidFactors.length > 0) {return res.status(500).json({ error: { message: "AI used invalid 
+	factor names. Please try again."
+	} });}}
+	
+	
+	
 
     const finalResponse = {
       title: "Analysis: 33 Essential Factors",
