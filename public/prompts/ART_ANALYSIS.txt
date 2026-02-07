@@ -327,11 +327,17 @@ Analyze an artwork and calculate the Bang-for-Buck Index (BFB) as a tool for sel
 Respond ONLY with a valid JSON object containing:
 
 1. `overview`: A 2-3 sentence summary of the work's technical and emotional standing.
-2. `strengths`: A list of the bottom 2 factors (lowest BFB).
-3. `opportunities`: Three detailed "What to do" refinement instructions based on the top 3 BFB factors (High BFB).
-4. `recommendedStudy`: An array of exactly 3 factor names (strings only) from the top 3 BFB factors. Example: ["Line", "Color/Hue", "Tone/Value"].
-5. `smi`: The final weighted average score.
 
----
+2. `strengths`: An array of exactly 2 objects representing the bottom 2 factors (lowest BFB). Each object must have:
+   - `title`: The factor name (string)
+   - `description`: A brief explanation of why this is a strength (string, 1-2 sentences)
+   Example: [{"title": "Mood", "description": "The painting excels at..."}, {"title": "Composition", "description": "The arrangement..."}]
 
-**I have restored every instruction and full rubric statement. Is this version of ART_ANALYSIS.txt now complete and ready for you to use?**
+3. `opportunities`: An array of exactly 3 objects representing the top 3 BFB factors. Each object must have:
+   - `category`: The factor name (string)
+   - `steps`: An array of 2-3 objects, each with a `description` field (string) containing actionable refinement advice
+   Example: [{"category": "Texture", "steps": [{"description": "Increase the variety..."}, {"description": "Refine the transitions..."}]}, ...]
+
+4. `recommendedStudy`: An array of exactly 3 factor names (strings only) from the top 3 BFB factors. 
+   Example: ["Texture", "Tone/Value", "Color/Hue"]
+   
