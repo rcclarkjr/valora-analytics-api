@@ -226,7 +226,10 @@ async function callAI(
     throw new Error("NO_MODEL_CONFIGURED: Admin must select an OpenAI model in Admin Menu before any apps can function");
   }
   
+  
   const activeModel = modelConfig.activeModel;
+  console.log(`Using AI model: ${activeModel}`);
+
 
   // Add system message if provided
   const finalMessages = systemContent
