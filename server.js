@@ -1316,11 +1316,17 @@ Add this to your JSON output:
     console.log("All category summaries validated successfully");
 
     // Prepare final response
-    const finalResponse = {
-      smi: formattedSMI,
-      category_summaries: categorySummaries,
-      brief_description: aiResponse.brief_description || "",
-      ai_response: aiResponse
+const finalResponse = {
+      title: "Analysis: 33 Essential Factors",
+      artTitle: artTitle,
+      artistName: artistName,
+      subjectPhrase: subjectPhrase,
+      overview: parsedAnalysis.overview,
+      // Trim to exact requirements for the report
+      strengths: (parsedAnalysis.strengths || []).slice(0, 2),
+      opportunities: (parsedAnalysis.opportunities || []).slice(0, 3),
+      recommendedStudy: (parsedAnalysis.recommendedStudy || []).slice(0, 3),
+      timestamp: new Date().toISOString()
     };
 
     // NEW: Include factor scores if requested
@@ -2687,7 +2693,9 @@ const VALID_FACTOR_NAMES = [
   "Emotional Resonance"
 ];
 
-// REPLACE your entire /analyze-art endpoint with this:
+
+
+
 app.post("/analyze-art", async (req, res) => {
   try {
     console.log("Received art analysis request");
@@ -2697,6 +2705,7 @@ app.post("/analyze-art", async (req, res) => {
       artTitle,
       artistName,
       subjectPhrase,
+	  medium,
       temperature: requestedTemp
     } = req.body;
 
@@ -2710,10 +2719,12 @@ app.post("/analyze-art", async (req, res) => {
     }
 
     // Simple placeholder replacement - no hardcoded additions
-    const finalPrompt = prompt
-      .replace("{{TITLE}}", artTitle)
-      .replace("{{ARTIST}}", artistName)
-      .replace("{{SUBJECT}}", subjectPhrase);
+	const finalPrompt = prompt
+		.replace("{{TITLE}}", artTitle)
+		.replace("{{ARTIST}}", artistName)
+		.replace("{{SUBJECT}}", subjectPhrase)
+		.replace("{{MEDIUM}}", medium)
+		.replace("{{INTENT}}", subjectPhrase);
 
     const messages = [
       {
