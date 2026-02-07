@@ -994,14 +994,19 @@ app.post("/analyze-smi", async (req, res) => {
       });
     }
 
-    // Log info about the request
+// Log info about the request
     console.log(
       `Processing SMI request for artwork: "${artTitle}" by ${artistName}`
     );
     console.log(`Prompt length: ${prompt.length} characters`);
+    if (subjectPhrase) {
+      console.log(`Subject phrase: "${subjectPhrase}"`);
+    }
     if (returnFactorScores) {
       console.log("✓ Factor scores requested for batch processing");
     }
+	
+	
 
 // Construct the prompt with artwork information INCLUDING subject phrase
     let finalPrompt = `Title: "${artTitle}"
