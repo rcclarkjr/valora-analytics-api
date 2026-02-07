@@ -2665,42 +2665,6 @@ app.get("/api/sizeyourprice", (req, res) => {
   }
 });
 
-// Add this constant at the top of server.js (after your other constants)
-const VALID_FACTOR_NAMES = [
-  "Line",
-  "Shape",
-  "Form",
-  "Space",
-  "Color/Hue",
-  "Texture",
-  "Tone/Value",
-  "Saturation",
-  "Composition",
-  "Volume",
-  "Balance",
-  "Contrast",
-  "Emphasis",
-  "Movement",
-  "Rhythm",
-  "Variety",
-  "Proportion",
-  "Harmony",
-  "Cohesiveness",
-  "Pattern",
-  "Brushwork",
-  "Chiaroscuro",
-  "Impasto",
-  "Sfumato",
-  "Glazing",
-  "Scumbling",
-  "Pointillism",
-  "Wet-on-Wet",
-  "Uniqueness",
-  "Creativity",
-  "Mood",
-  "Viewer Engagement",
-  "Emotional Resonance"
-];
 
 
 
