@@ -19,6 +19,42 @@ const VALID_FACTOR_NAMES = [
   "Mood", "Viewer Engagement", "Emotional Resonance"
 ];
 
+const FACTOR_DEFINITIONS = {
+  "Line": "using line to create rhythm and guide the eye",
+  "Shape": "relationships between forms and negative space",
+  "Form": "creating three-dimensional volume and mass",
+  "Space": "depth and spatial relationships between elements",
+  "Color/Hue": "palette selection and emotional color impact",
+  "Texture": "surface quality and tactile visual experience",
+  "Tone/Value": "light and dark relationships for depth",
+  "Saturation": "color intensity to create focus and atmosphere",
+  "Cohesiveness": "unity of style, technique, and concept",
+  "Pattern": "rhythmic repetition of visual elements",
+  "Balance": "distribution of visual weight in composition",
+  "Contrast": "abrupt tonal shift for emphasis and drama",
+  "Emphasis": "creating clear focal points for the viewer",
+  "Movement": "visual flow and directional energy",
+  "Rhythm": "tempo and progression through repetition",
+  "Variety": "diversity of elements to maintain interest",
+  "Proportion": "size relationships between elements",
+  "Harmony": "elements working together in unity",
+  "Perspective": "creating convincing illusion of depth",
+  "Composition": "structural arrangement of all elements",
+  "Brushwork": "stroke quality and paint application",
+  "Chiaroscuro": "light and shadow modeling technique",
+  "Impasto": "thick paint application for texture",
+  "Sfumato": "soft, blended edge transitions",
+  "Glazing": "transparent layering for luminosity",
+  "Scumbling": "semi-opaque layering for atmospheric effects",
+  "Pointillism": "optical color mixing using dots",
+  "Wet-on-Wet": "blending paint while still wet",
+  "Uniqueness": "personal voice and innovative approach",
+  "Creativity": "imaginative concept and vision",
+  "Mood": "emotional atmosphere and tone",
+  "Viewer Engagement": "drawing and holding viewer attention",
+  "Emotional Resonance": "connecting to universal human emotions"
+};
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -2756,48 +2792,58 @@ app.post("/analyze-art", async (req, res) => {
     }
 
 
-
-
-// Validate recommendedStudy factors
+// Validate and enrich recommendedStudy factors
 if (parsedAnalysis.recommendedStudy && Array.isArray(parsedAnalysis.recommendedStudy)) {
   // Check for exactly 3 factors
   if (parsedAnalysis.recommendedStudy.length !== 3) {
-    console.warn(
-      `Expected 3 recommended study factors, got ${parsedAnalysis.recommendedStudy.length}`
-    );
+    console.warn(`Expected 3 recommended study factors, got ${parsedAnalysis.recommendedStudy.length}`);
   }
 
   const invalidFactors = [];
   
-  parsedAnalysis.recommendedStudy.forEach((study, index) => {
-    // DEFENSIVE CHECK: Ensure study and study.factor exist
-    if (!study || !study.factor) {
-      console.error(`Recommended study item at index ${index} is missing factor property:`, study);
-      invalidFactors.push(`[Missing factor at index ${index}]`);
-      return; // Skip this item
+  parsedAnalysis.recommendedStudy = parsedAnalysis.recommendedStudy.map((study, index) => {
+    // Handle if AI returns just strings (factor names only)
+    if (typeof study === 'string') {
+      const cleanName = study.replace(/^\d+\.\s*/, "").trim();
+      
+      if (VALID_FACTOR_NAMES.includes(cleanName)) {
+        return {
+          factor: cleanName,
+          definition: FACTOR_DEFINITIONS[cleanName]
+        };
+      } else {
+        invalidFactors.push(study);
+        return null;
+      }
     }
     
-    // Clean the factor name (remove leading numbers like "1. ")
+    // Handle if AI returns objects
+    if (!study || !study.factor) {
+      console.error(`Study item at index ${index} missing factor:`, study);
+      invalidFactors.push(`[Missing factor at index ${index}]`);
+      return null;
+    }
+    
     const cleanName = study.factor.replace(/^\d+\.\s*/, "").trim();
     
     if (VALID_FACTOR_NAMES.includes(cleanName)) {
-      study.factor = cleanName;
+      return {
+        factor: cleanName,
+        definition: study.definition || FACTOR_DEFINITIONS[cleanName]
+      };
     } else {
       invalidFactors.push(study.factor);
+      return null;
     }
-  });
+  }).filter(Boolean);
 
   if (invalidFactors.length > 0) {
-    console.error("Invalid or missing factors found:", invalidFactors);
+    console.error("Invalid factors:", invalidFactors);
     return res.status(500).json({
-      error: {
-        message: "AI returned invalid or incomplete study factors. Please try again."
-      }
+      error: { message: "AI returned invalid study factors. Please try again." }
     });
   }
 }
-
-
 	
 
     const finalResponse = {
