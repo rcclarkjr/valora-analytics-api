@@ -340,4 +340,7 @@ Respond ONLY with a valid JSON object containing:
 
 4. `recommendedStudy`: An array of exactly 3 factor names (strings only) from the top 3 BFB factors. 
    Example: ["Texture", "Tone/Value", "Color/Hue"]
+
+5. `smi`: The calculated Skill Mastery Index as a number (not a string) rounded to two decimal places.
+   Example: 4.30
    
