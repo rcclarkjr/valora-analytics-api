@@ -1003,9 +1003,18 @@ app.post("/analyze-smi", async (req, res) => {
       console.log("✓ Factor scores requested for batch processing");
     }
 
-    // Construct the prompt with artwork information
+// Construct the prompt with artwork information INCLUDING subject phrase
     let finalPrompt = `Title: "${artTitle}"
-Artist: "${artistName}"
+Artist: "${artistName}"`;
+
+    // Add subject phrase if provided with contextual explanation
+    if (subjectPhrase && subjectPhrase.trim().length > 0) {
+      finalPrompt += `
+Subject/Intent: "${subjectPhrase.trim()}"
+(This describes what the artwork depicts and the artist's intent. Consider this context when evaluating technical execution - for example, distorted proportions may be an intentional stylistic choice rather than a technical deficiency.)`;
+    }
+
+    finalPrompt += `
 
 ${prompt}`;
 
@@ -1324,6 +1333,11 @@ Add this to your JSON output:
     });
   }
 });
+
+
+
+
+
 
 // Error handler function
 function handleApiError(error, res) {
