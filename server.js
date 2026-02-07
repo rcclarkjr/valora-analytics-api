@@ -2794,33 +2794,13 @@ app.post("/analyze-art", async (req, res) => {
         );
       }
 
-      // Validate factor names against the 33 approved list
-      const invalidFactors = [];
-      parsedAnalysis.recommendedStudy.forEach(study => {
-        if (!VALID_FACTOR_NAMES.includes(study.factor)) {
-          invalidFactors.push(study.factor);
-        }
-      });
+const invalidFactors = []; parsedAnalysis.recommendedStudy.forEach(study => { 
+const cleanName = study.factor.replace(/^\d+\.\s*/, "").trim();
 
-      if (invalidFactors.length > 0) {
-        console.error(
-          `Invalid factor names detected: ${invalidFactors.join(", ")}`
-        );
-        console.error(
-          "These factors are not in the approved 33 Essential Factors list"
-        );
-        return res.status(500).json({
-          error: {
-            message: `AI used invalid factor names: ${invalidFactors.join(
-              ", "
-            )}. Please try again.`
-          }
-        });
-      }
-    } else {
-      console.warn("Missing or invalid recommendedStudy array");
-      parsedAnalysis.recommendedStudy = [];
-    }
+if (VALID_FACTOR_NAMES.includes(cleanName)) { study.factor = cleanName; 
+} else { invalidFactors.push(study.factor); } });
+
+if (invalidFactors.length > 0) {return res.status(500).json({ error: { message: "AI used invalid factor names. Please try again." } }); } 
 
     const finalResponse = {
       title: "Analysis: 33 Essential Factors",
