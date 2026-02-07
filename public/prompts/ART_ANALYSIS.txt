@@ -329,7 +329,7 @@ Respond ONLY with a valid JSON object containing:
 1. `overview`: A 2-3 sentence summary of the work's technical and emotional standing.
 2. `strengths`: A list of the bottom 2 factors (lowest BFB).
 3. `opportunities`: Three detailed "What to do" refinement instructions based on the top 3 BFB factors (High BFB).
-4. `recommendedStudy`: A list of those top 3 BFB factors for deeper technical study.
+4. `recommendedStudy`: An array of exactly 3 factor names (strings only) from the top 3 BFB factors. Example: ["Line", "Color/Hue", "Tone/Value"].
 5. `smi`: The final weighted average score.
 
 ---
