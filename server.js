@@ -10,6 +10,15 @@ const sharp = require("sharp");
 const archiver = require("archiver");
 const unzipper = require("unzipper");
 
+const VALID_FACTOR_NAMES = [
+  "Line", "Shape", "Form", "Space", "Color/Hue", "Texture", "Tone/Value", 
+  "Saturation", "Cohesiveness", "Pattern", "Balance", "Contrast", "Emphasis", 
+  "Movement", "Rhythm", "Variety", "Proportion", "Harmony", "Perspective", 
+  "Composition", "Brushwork", "Chiaroscuro", "Impasto", "Sfumato", "Glazing", 
+  "Scumbling", "Pointillism", "Wet-on-Wet", "Uniqueness", "Creativity", 
+  "Mood", "Viewer Engagement", "Emotional Resonance"
+];
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -2782,27 +2791,49 @@ app.post("/analyze-art", async (req, res) => {
       });
     }
 
-    // Validate recommendedStudy factors
-    if (
-      parsedAnalysis.recommendedStudy &&
-      Array.isArray(parsedAnalysis.recommendedStudy)
-    ) {
-      // Check for exactly 3 factors (comment says 3, but code uses 2 – left as-is)
-      if (parsedAnalysis.recommendedStudy.length !== 2) {
-        console.warn(
-          `Expected 3 recommended study factors, got ${parsedAnalysis.recommendedStudy.length}`
-        );
+
+
+
+// Validate recommendedStudy factors
+if (parsedAnalysis.recommendedStudy && Array.isArray(parsedAnalysis.recommendedStudy)) {
+  // Check for exactly 3 factors
+  if (parsedAnalysis.recommendedStudy.length !== 3) {
+    console.warn(
+      `Expected 3 recommended study factors, got ${parsedAnalysis.recommendedStudy.length}`
+    );
+  }
+
+  const invalidFactors = [];
+  
+  parsedAnalysis.recommendedStudy.forEach((study, index) => {
+    // DEFENSIVE CHECK: Ensure study and study.factor exist
+    if (!study || !study.factor) {
+      console.error(`Recommended study item at index ${index} is missing factor property:`, study);
+      invalidFactors.push(`[Missing factor at index ${index}]`);
+      return; // Skip this item
+    }
+    
+    // Clean the factor name (remove leading numbers like "1. ")
+    const cleanName = study.factor.replace(/^\d+\.\s*/, "").trim();
+    
+    if (VALID_FACTOR_NAMES.includes(cleanName)) {
+      study.factor = cleanName;
+    } else {
+      invalidFactors.push(study.factor);
+    }
+  });
+
+  if (invalidFactors.length > 0) {
+    console.error("Invalid or missing factors found:", invalidFactors);
+    return res.status(500).json({
+      error: {
+        message: "AI returned invalid or incomplete study factors. Please try again."
       }
+    });
+  }
+}
 
-const invalidFactors = []; parsedAnalysis.recommendedStudy.forEach(study => { 
-const cleanName = study.factor.replace(/^\d+\.\s*/, "").trim();
 
-if (VALID_FACTOR_NAMES.includes(cleanName)) { study.factor = cleanName; 
-} else { invalidFactors.push(study.factor); } });
-
-if (invalidFactors.length > 0) { return res.status(500).json({ error: { message: "AI used invalid factor names. Please try again." } }); } }
-	
-	
 	
 
     const finalResponse = {
