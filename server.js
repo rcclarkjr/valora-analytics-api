@@ -2856,6 +2856,7 @@ if (parsedAnalysis.recommendedStudy && Array.isArray(parsedAnalysis.recommendedS
       opportunities: parsedAnalysis.opportunities,
       recommendedStudy: parsedAnalysis.recommendedStudy || [],
 	  smi: parsedAnalysis.smi || null,
+	  diagnostics: parsedAnalysis.diagnostics || null,  
       timestamp: new Date().toISOString()
     };
 
