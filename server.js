@@ -2753,7 +2753,7 @@ app.post("/analyze-art", async (req, res) => {
 
     const analysisText = await callAI(
       messages,
-      2000,
+      4000,
       systemContent,
       false,
       temperature
