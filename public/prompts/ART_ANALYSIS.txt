@@ -45,12 +45,27 @@ Analyze an artwork and calculate the Bang-for-Buck Index (BFB) as a tool for sel
 * **STRICT RULE:** Do not mention scores, BFB values, or "Master Artist" names (e.g., Titian, Dalí) in the output.
 
 
+8. **SMI Score Transformation:** Before calculating SMI, create a transformed score set ONLY for SMI calculation:
+* For each of the 33 factors:
+  - If original Score = 2, use 1 for SMI calculation
+  - If original Score = 4, use 5 for SMI calculation
+  - If original Score = 1, 3, or 5, use the original score for SMI calculation
+  - If Score = NA, remain NA (excluded from SMI as before)
+* This transformation applies ONLY to SMI calculation and does NOT affect BFB calculations or any other analysis.
+* Calculate SMI using these transformed scores with the existing weighted average formula:
+  - Transformed Column 6 = Transformed Score × Weight
+  - Column 7 (WtExt) = If Transformed Score > 0 then Weight, else 0
+  - SMI = Sum(Transformed Column 6) ÷ Sum(Column 7), rounded to two decimal places
+
+
 
 ## Scoring Rules:
 
-* Column 6 (Extended) = Score * Weight.
+* All initial scoring uses the original 1-5 scale.
+* Column 6 (Extended) = Score × Weight (for initial BFB calculations).
 * Column 7 (WtExt) = If Score > 0 then Weight, else 0.
-* SMI (Weighted Average) = Sum(Column 6) ÷ Sum(Column 7), rounded to two decimal places.
+* BFB calculations use the original scores (1-5).
+* SMI calculation uses the transformed scores per step 8 above.
 
 ---
 
@@ -141,7 +156,7 @@ Analyze an artwork and calculate the Bang-for-Buck Index (BFB) as a tool for sel
 * Score 1: Visual instability; the weight of the composition is skewed haphazardly.
 * Score 2: Literal or rigid balance; relies on heavy-handed centering or repetitive symmetry.
 * Score 3: Harmonious equilibrium; effectively uses strategic focal point placement to distribute visual weight.
-* Score 4: Masterful Minimalism (like Friedrich’s Monk); achieves powerful balance through negative space and a single off-center "anchor."
+* Score 4: Masterful Minimalism (like Friedrich's Monk); achieves powerful balance through negative space and a single off-center "anchor."
 * Score 5: Dynamic Equilibrium; perfectly balances "visual weights" (color, contrast, texture) to create stability and movement.
 
 **Row 12: Contrast** (Weight: 0.043)
@@ -154,7 +169,7 @@ Analyze an artwork and calculate the Bang-for-Buck Index (BFB) as a tool for sel
 
 **Row 13: Emphasis** (Weight: 0.043)
 
-* Score 1: Lack of a focal point; the viewer’s eye wanders aimlessly.
+* Score 1: Lack of a focal point; the viewer's eye wanders aimlessly.
 * Score 2: Accidental emphasis; an area draws attention due to an unintended high-contrast "spot."
 * Score 3: Clear focal point; uses placement and basic contrast to ensure the main subject is noticed first.
 * Score 4: Strategic hierarchy (like Delacroix); masterfully uses tonal isolation and sharp detail to anchor the viewer.
@@ -164,8 +179,8 @@ Analyze an artwork and calculate the Bang-for-Buck Index (BFB) as a tool for sel
 
 * Score 1: Static and "frozen"; elements feel disconnected or rigid, providing no visual path.
 * Score 2: Basic directional cues; uses simple lines or gestures, but the flow is often interrupted.
-* Score 3: Fluid visual path; uses diagonal lines or rhythmic repetition to guide the viewer’s eye through the narrative.
-* Score 4: Dynamic turbulence (like Géricault’s Medusa); employs opposing diagonals and twisting gestures for motion.
+* Score 3: Fluid visual path; uses diagonal lines or rhythmic repetition to guide the viewer's eye through the narrative.
+* Score 4: Dynamic turbulence (like Géricault's Medusa); employs opposing diagonals and twisting gestures for motion.
 * Score 5: Kinetic unity; creates a "perpetual motion" effect where light, brushwork, and composition propel the eye.
 
 **Row 15: Rhythm** (Weight: 0.031)
@@ -173,7 +188,7 @@ Analyze an artwork and calculate the Bang-for-Buck Index (BFB) as a tool for sel
 * Score 1: Monotonous or chaotic; repetition is either too mechanical or completely absent.
 * Score 2: Simple repetition; repeats a color or shape but lacks variation to keep the viewer engaged.
 * Score 3: Harmonious flow; uses alternation or progression to create a steady, structural rhythm.
-* Score 4: Orchestrated balance (like David’s Horatii); uses repeating geometric forms and "color beats" to reinforce order.
+* Score 4: Orchestrated balance (like David's Horatii); uses repeating geometric forms and "color beats" to reinforce order.
 * Score 5: Sophisticated visual tempo; weaves multiple rhythms to create a complex "staccato" or "flowing" energy.
 
 **Row 16: Variety** (Weight: 0.031)
@@ -188,8 +203,8 @@ Analyze an artwork and calculate the Bang-for-Buck Index (BFB) as a tool for sel
 
 * Score 1: Distorted or awkward; size relationships feel accidental, disrupting believability.
 * Score 2: Basic scaling; elements are generally the right size but foreground/background relationship feels flat.
-* Score 3: Anatomical and spatial accuracy (like Lippi’s Christ Child); uses realistic proportions for harmony.
-* Score 4: Symbolic scaling (like Lippi’s Madonna); uses proportion to denote spiritual importance while maintaining grace.
+* Score 3: Anatomical and spatial accuracy (like Lippi's Christ Child); uses realistic proportions for harmony.
+* Score 4: Symbolic scaling (like Lippi's Madonna); uses proportion to denote spiritual importance while maintaining grace.
 * Score 5: Mathematical mastery; employs systems like the Golden Ratio to achieve perfect, stable harmony.
 
 **Row 18: Harmony** (Weight: 0.043)
@@ -293,7 +308,7 @@ Analyze an artwork and calculate the Bang-for-Buck Index (BFB) as a tool for sel
 * Score 1: Relies on literal, predictable depictions; no "What If?" exploration or imaginative departure.
 * Score 2: Shows minor imaginative twists but stays largely within conventional bounds.
 * Score 3: Demonstrates conceptual innovation; successfully blends unlikely elements or reinterprets a symbol.
-* Score 4: Strong inventive concept (like Dalí); uses imagery to challenge the viewer’s perception of reality.
+* Score 4: Strong inventive concept (like Dalí); uses imagery to challenge the viewer's perception of reality.
 * Score 5: Exceptional visionary execution; fuses hyper-realistic technique with surreal or deeply subconscious concepts.
 
 **Row 31: Mood** (Weight: 0.043)
@@ -341,6 +356,6 @@ Respond ONLY with a valid JSON object containing:
 4. `recommendedStudy`: An array of exactly 3 factor names (strings only) from the top 3 BFB factors. 
    Example: ["Texture", "Tone/Value", "Color/Hue"]
 
-5. `smi`: The calculated Skill Mastery Index as a number (not a string) rounded to two decimal places.
+5. `smi`: The calculated Skill Mastery Index as a number (not a string) rounded to two decimal places, using the transformed scores per step 8.
    Example: 4.30
    
