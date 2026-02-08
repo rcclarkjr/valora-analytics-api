@@ -2376,7 +2376,7 @@ function calculateAPPSI(size, artOnlyPrice, coefficients) {
 }
 
 // Updated POST /api/records
-app.post("/api/records", (req, res) => {
+app.post("/api/records", async (req, res) => {
     try {
         const data = readDatabase();
         const requiredFields = ['artistName', 'title', 'height', 'width', 'price'];
@@ -2432,6 +2432,38 @@ app.post("/api/records", (req, res) => {
         }
         
         delete newRecord.imagePath;
+		
+		
+		// Process image if provided
+if (newRecord.imageBase64) {
+    try {
+        // Strip data URI prefix if present
+        const base64Data = newRecord.imageBase64.replace(/^data:image\/\w+;base64,/, '');
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        
+        // Save full image to disk
+        const imagePath = path.join("/mnt/data/images", `record_${newId}.jpg`);
+        await sharp(imageBuffer).jpeg({ quality: 90 }).toFile(imagePath);
+        console.log(`Full image saved: ${imagePath}`);
+        
+        // Generate thumbnail and store on record
+        const thumbnailBuffer = await sharp(imageBuffer)
+            .resize(120, 120, { fit: 'inside' })
+            .jpeg({ quality: 70 })
+            .toBuffer();
+        newRecord.thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
+        console.log(`Thumbnail generated for record ${newId}`);
+        
+        // Remove full base64 from database record (it's on disk now)
+        delete newRecord.imageBase64;
+    } catch (imgError) {
+        console.error('Image processing failed:', imgError.message);
+    }
+}
+		
+		
+		
+		
         data.records.push(newRecord);
         console.log(`New record: ID=${newId}, Artist=${newRecord.artistName}, Title=${newRecord.title}, artOnlyPrice=${newRecord.artOnlyPrice}, APPSI=${newRecord.appsi}`);
         writeDatabase(data);
