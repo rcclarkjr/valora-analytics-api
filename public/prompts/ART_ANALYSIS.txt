@@ -359,21 +359,8 @@ Respond ONLY with a valid JSON object containing:
 5. `smi`: The calculated Skill Mastery Index as a number (not a string) rounded to two decimal places, using the transformed scores per step 8. This value must equal diagnostics.calculations.transformedSMI.
    Example: 4.30
    
-6. `diagnostics`: An object for debugging containing:
-   - `factors`: Array of 33 objects, each with:
-     * `factor`: Factor number (1-33)
-     * `name`: Factor name (string)
-     * `weight`: Factor weight (number)
-     * `original`: Original score (1-5 or "NA")
-     * `transformed`: Transformed score (1, 3, 5, or "NA")
-     * `originalExtended`: original × weight (or 0 if NA)
-     * `transformedExtended`: transformed × weight (or 0 if NA)
-   - `calculations`: Object containing:
-     * `totalWeights`: Sum of all 33 weights (should be ~1.197)
-     * `applicableWeights`: Sum of weights where score is not NA
-     * `originalSum`: Sum of all originalExtended values
-     * `transformedSum`: Sum of all transformedExtended values
-     * `originalSMI`: originalSum / applicableWeights (rounded to 2 decimals)
-     * `transformedSMI`: transformedSum / applicableWeights (rounded to 2 decimals)
-     * `step8Executed`: true (confirms transformation was applied)
-   Example: {"factors": [...], "calculations": {"totalWeights": 1.197, "applicableWeights": 1.166, "originalSum": 4.328, "transformedSum": 4.888, "originalSMI": 3.71, "transformedSMI": 4.19, "step8Executed": true}}
+6. `diagnostics`: An object containing:
+   - `originalSMI`: SMI calculated from original scores (number, 2 decimals)
+   - `transformedSMI`: SMI calculated from transformed scores (number, 2 decimals)
+   Example: {"originalSMI": 3.71, "transformedSMI": 4.19}
+   
