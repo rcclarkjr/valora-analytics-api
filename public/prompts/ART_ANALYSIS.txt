@@ -359,3 +359,9 @@ Respond ONLY with a valid JSON object containing:
 5. `smi`: The calculated Skill Mastery Index as a number (not a string) rounded to two decimal places, using the transformed scores per step 8.
    Example: 4.30
    
+6. `diagnostics`: An array of 33 objects for debugging, each containing:
+   - `factor`: Factor number (1-33)
+   - `name`: Factor name (string)
+   - `original`: Original score (1-5 or "NA")
+   - `transformed`: Transformed score (1, 3, 5, or "NA")
+   Example: [{"factor": 1, "name": "Line", "original": 3, "transformed": 3}, {"factor": 2, "name": "Shape", "original": 4, "transformed": 5}, ...]
