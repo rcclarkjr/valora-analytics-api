@@ -2860,6 +2860,14 @@ if (parsedAnalysis.recommendedStudy && Array.isArray(parsedAnalysis.recommendedS
     };
 
     console.log("Sending structured art analysis response to client");
+	
+if (finalResponse.diagnostics) {
+  console.log("\n=== DIAGNOSTIC SCORES ===");
+  console.table(finalResponse.diagnostics);
+}	
+	
+	
+	
     res.json(finalResponse);
   } catch (error) {
     console.error("Error in /analyze-art:", error.message);
