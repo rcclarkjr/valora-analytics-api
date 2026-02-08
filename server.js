@@ -2864,10 +2864,9 @@ if (parsedAnalysis.recommendedStudy && Array.isArray(parsedAnalysis.recommendedS
 	
 if (finalResponse.diagnostics) {
   console.log("\n=== DIAGNOSTIC SCORES ===");
-  console.table(finalResponse.diagnostics);
-}	
-	
-	
+  console.log(`Original SMI = ${finalResponse.diagnostics.originalSMI}`);
+  console.log(`Transformed SMI = ${finalResponse.diagnostics.transformedSMI}`);
+}
 	
     res.json(finalResponse);
   } catch (error) {
