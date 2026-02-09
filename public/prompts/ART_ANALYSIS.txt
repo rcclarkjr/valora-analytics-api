@@ -47,15 +47,15 @@ Analyze an artwork and calculate the Bang-for-Buck Index (BFB) as a tool for sel
 
 8. **SMI Score Transformation:** Before calculating SMI, create a transformed score set ONLY for SMI calculation:
 * For each of the 33 factors:
-  - If original Score = 2, use 1 for SMI calculation
-  - If original Score = 4, use 5 for SMI calculation
+  - If original Score = 2, use 2 for SMI calculation
+  - If original Score = 4, use 4 for SMI calculation
   - If original Score = 1, 3, or 5, use the original score for SMI calculation
   - If Score = NA, remain NA (excluded from SMI as before)
 * This transformation applies ONLY to SMI calculation and does NOT affect BFB calculations or any other analysis.
 * Calculate SMI using these transformed scores with the existing weighted average formula:
   - Transformed Column 6 = Transformed Score × Weight
   - Column 7 (WtExt) = If Transformed Score > 0 then Weight, else 0
-  - SMI = Sum(Transformed Column 6) ÷ Sum(Column 7), rounded to two decimal places
+  - SMI = Sum(Transformed Column 6) ÷ Sum(Column 7), rounded to the nearest 0.10 (e.g., 3.14 rounds to 3.10, 3.15 rounds to 3.20)
 
 
 
@@ -356,11 +356,10 @@ Respond ONLY with a valid JSON object containing:
 4. `recommendedStudy`: An array of exactly 3 factor names (strings only) from the top 3 BFB factors. 
    Example: ["Texture", "Tone/Value", "Color/Hue"]
    
-5. `smi`: The calculated Skill Mastery Index as a number (not a string) rounded to two decimal places, using the transformed scores per step 8. This value must equal diagnostics.calculations.transformedSMI.
+5. `smi`: The calculated Skill Mastery Index as a number (not a string) rounded to the nearest 0.10 (e.g., 3.14 rounds to 3.10, 3.15 rounds to 3.20).
    Example: 4.30
    
 6. `diagnostics`: An object containing:
-   - `originalSMI`: SMI calculated from original scores (number, 2 decimals)
-   - `transformedSMI`: SMI calculated from transformed scores (number, 2 decimals)
-   Example: {"originalSMI": 3.71, "transformedSMI": 4.19}
+   - `originalSMI`: SMI calculated from original scores (number, rounded to nearest 0.10)
+   - `transformedSMI`: SMI calculated from transformed scores (number, rounded to nearest 0.10)
    
