@@ -1047,15 +1047,16 @@ app.post("/analyze-smi", async (req, res) => {
     
     console.log("STEP 1: Loading integer classification prompt...");
     
-    let step1Prompt;
-    try {
-      step1Prompt = await fs.readFile('./prompts/smi_step1_prompt.txt', 'utf8');
-    } catch (fileError) {
-      console.error("Failed to load Step 1 prompt:", fileError.message);
-      return res.status(500).json({
-        error: { message: "Server configuration error: Missing Step 1 prompt file" }
-      });
-    }
+let step1Prompt;
+try {
+  const promptResponse = await axios.get('https://valora-analytics-api.onrender.com/prompts/smi_step1_prompt');
+  step1Prompt = promptResponse.data;
+} catch (fileError) {
+  console.error("Failed to load Step 1 prompt:", fileError.message);
+  return res.status(500).json({
+    error: { message: "Server configuration error: Missing Step 1 prompt file" }
+  });
+}
 
     // Build conversation context with artwork info
     let artworkContext = `Title: "${artTitle}"
@@ -1165,17 +1166,20 @@ ${step1Prompt}`;
     
     console.log(`STEP 2: Loading decimal refinement prompt for Level ${level}...`);
 
-    const step2PromptFile = `smi_step2_level${level}.txt`;
-    let step2Prompt;
-    
-    try {
-      step2Prompt = await fs.readFile(`./prompts/${step2PromptFile}`, 'utf8');
-    } catch (fileError) {
-      console.error(`Failed to load Step 2 prompt: ${step2PromptFile}`, fileError.message);
-      return res.status(500).json({
-        error: { message: `Server configuration error: Missing Step 2 prompt for level ${level}` }
-      });
-    }
+
+const step2PromptName = `smi_step2_level${level}`;
+let step2Prompt;
+
+try {
+  const promptResponse = await axios.get(`https://valora-analytics-api.onrender.com/prompts/${step2PromptName}`);
+  step2Prompt = promptResponse.data;
+} catch (fileError) {
+  console.error(`Failed to load Step 2 prompt: ${step2PromptName}`, fileError.message);
+  return res.status(500).json({
+    error: { message: `Server configuration error: Missing Step 2 prompt for level ${level}` }
+  });
+}
+
 
     // Add Step 2 prompt to conversation (image still accessible in messages[0])
     messages.push({
