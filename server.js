@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const axios = require("axios");
+const axios = require("axios");call
 const fs = require("fs");
 const path = require("path");
 const app = express();
@@ -1002,383 +1002,244 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
 
 
 
-// Endpoint for Skill Mastery Index (SMI) analysis
+
+// ====================================================================================
+// ENDPOINT: SKILL MASTERY INDEX (SMI) - TWO-STEP EVALUATION PROCESS
+// ====================================================================================
 app.post("/analyze-smi", async (req, res) => {
   try {
-    console.log("Received SMI analyze request");
+    console.log("Received SMI analysis request (Two-Step Process)");
+    
     const {
-      prompt,
       image,
       artTitle,
       artistName,
       subjectPhrase,
-      temperature: requestedTemp,
-      returnFactorScores
+      medium,
+      temperature: requestedTemp
     } = req.body;
 
-    const temperature =
-      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
+    const temperature = typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
 
-    if (!prompt) {
-      console.log("Missing prompt in request");
-      return res
-        .status(400)
-        .json({ error: { message: "Prompt is required" } });
-    }
-
+    // Validate required fields
     if (!image) {
       console.log("Missing image in request");
-      return res
-        .status(400)
-        .json({ error: { message: "Image is required" } });
+      return res.status(400).json({ 
+        error: { message: "Image is required" } 
+      });
     }
 
     if (!OPENAI_API_KEY) {
       console.log("Missing API key");
       return res.status(500).json({
-        error: {
-          message: "Server configuration error: Missing API key"
-        }
+        error: { message: "Server configuration error: Missing API key" }
       });
     }
 
-// Log info about the request
-    console.log(
-      `Processing SMI request for artwork: "${artTitle}" by ${artistName}`
-    );
-    console.log(`Prompt length: ${prompt.length} characters`);
+    console.log(`Processing SMI for: "${artTitle}" by ${artistName}`);
     if (subjectPhrase) {
-      console.log(`Subject phrase: "${subjectPhrase}"`);
+      console.log(`Subject/Intent: "${subjectPhrase}"`);
     }
-    if (returnFactorScores) {
-      console.log("✓ Factor scores requested for batch processing");
-    }
-	
-	
 
-// Construct the prompt with artwork information INCLUDING subject phrase
-    let finalPrompt = `Title: "${artTitle}"
+    // ================================================================================
+    // STEP 1: INTEGER CLASSIFICATION (1-5)
+    // ================================================================================
+    
+    console.log("STEP 1: Loading integer classification prompt...");
+    
+    let step1Prompt;
+    try {
+      step1Prompt = await fs.readFile('./prompts/smi_step1_prompt.txt', 'utf8');
+    } catch (fileError) {
+      console.error("Failed to load Step 1 prompt:", fileError.message);
+      return res.status(500).json({
+        error: { message: "Server configuration error: Missing Step 1 prompt file" }
+      });
+    }
+
+    // Build conversation context with artwork info
+    let artworkContext = `Title: "${artTitle}"
 Artist: "${artistName}"`;
 
-    // Add subject phrase if provided with contextual explanation
     if (subjectPhrase && subjectPhrase.trim().length > 0) {
-      finalPrompt += `
+      artworkContext += `
 Subject/Intent: "${subjectPhrase.trim()}"
-(This describes what the artwork depicts and the artist's intent. Consider this context when evaluating technical execution - for example, distorted proportions may be an intentional stylistic choice rather than a technical deficiency.)`;
+(This describes what the artwork depicts and the artist's intent. Consider this context when evaluating.)`;
     }
 
-    finalPrompt += `
-
-${prompt}`;
-
-    // Append factor score instructions for batch processing
-    if (returnFactorScores) {
-      finalPrompt += `
-
-═══════════════════════════════════════════════════════════════════════════════
-ADDITIONAL OUTPUT REQUIREMENT FOR BATCH PROCESSING
-═══════════════════════════════════════════════════════════════════════════════
-
-In addition to the standard JSON output, include an array called "factor_scores" 
-containing the individual score you assigned to each of the 33 factors.
-
-The array must contain EXACTLY 33 numbers in this exact order:
-[F1, F2, F3, ..., F33]
-
-Where:
-- F1-F10 = Core Elements
-- F11-F20 = Design Principles  
-- F21-F28 = Techniques
-- F29-F33 = Artistic Voice
-
-**Score values:**
-- Use 1, 3, or 5 for factors you scored
-- Use 0 for factors you scored as NA (Not Applicable)
-
-Add this to your JSON output:
-{
-  "smi": 3.4,
-  "category_summaries": { ... },
-  "brief_description": "...",
-  "factor_scores": [3, 3, 3, 3, 3, 1, 3, 3, 3, 3, 3, 5, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 0, 0, 3, 0, 0, 3, 3, 3, 3, 3, 3]
-}
-
-**CRITICAL:** Array must have EXACTLY 33 values in correct order.`;
+    if (medium && medium.trim().length > 0) {
+      artworkContext += `
+Medium: "${medium.trim()}"`;
     }
 
-    console.log("Sending request to AI for SMI analysis (33 factors)");
+    const step1FullPrompt = `${artworkContext}
 
+${step1Prompt}`;
+
+    // Initialize messages array with image + Step 1 prompt
     const messages = [
       {
         role: "user",
         content: [
-          { type: "text", text: finalPrompt },
           {
             type: "image_url",
             image_url: { url: `data:image/jpeg;base64,${image}` }
+          },
+          {
+            type: "text",
+            text: step1FullPrompt
           }
         ]
       }
     ];
 
-    const systemContent =
-      "You are an expert fine art analyst specializing in evaluating artistic skill mastery across 33 essential factors. Your task is to analyze the provided artwork and calculate the Skill Mastery Index (SMI) using the weighted 33-factor system. Return your analysis in valid JSON format only, following the prompt instructions exactly.";
+    console.log("STEP 1: Calling AI for integer classification...");
 
-    let analysisText;
+    const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Analyze the artwork and return your evaluation in valid JSON format only.";
+
+    let step1Response;
     try {
-      // useJSON = false here because we manually clean/parse JSON from the text
-      analysisText = await callAI(
+      step1Response = await callAI(
         messages,
-        3000,
+        1000,
         systemContent,
-        false,
+        true,  // useJSON = true for JSON response
         temperature
-      ); // Increased token limit for 33 factors
-      console.log("SMI Analysis completed successfully");
+      );
     } catch (error) {
-      console.log("AI request failed:", error.message);
+      console.error("Step 1 AI call failed:", error.message);
       return res.status(500).json({
-        error: { message: "AI analysis failed: " + error.message }
+        error: { message: "Step 1 evaluation failed: " + error.message }
       });
     }
 
-    console.log("Raw AI response:", analysisText);
+    console.log("STEP 1: Response received");
 
-    // Parse the JSON response from AI
-    let aiResponse;
+    // Validate Step 1 response structure
+    if (!step1Response.level || !step1Response.reasoning) {
+      console.error("Invalid Step 1 response structure:", step1Response);
+      return res.status(500).json({
+        error: { message: "Invalid Step 1 response: missing level or reasoning" }
+      });
+    }
+
+    const level = step1Response.level;
+    const step1Reasoning = step1Response.reasoning;
+
+    // Validate level is 1-5
+    if (!Number.isInteger(level) || level < 1 || level > 5) {
+      console.error(`Invalid level returned: ${level}`);
+      return res.status(500).json({
+        error: { message: `Invalid level classification: ${level}. Must be integer 1-5.` }
+      });
+    }
+
+    console.log(`STEP 1 RESULT: Level ${level}`);
+    console.log(`STEP 1 REASONING: ${step1Reasoning}`);
+
+    // Add Step 1 assistant response to conversation history
+    messages.push({
+      role: "assistant",
+      content: JSON.stringify(step1Response)
+    });
+
+    // ================================================================================
+    // HANDLE LEVEL 5 (No Step 2 needed)
+    // ================================================================================
+    
+    if (level === 5) {
+      console.log("Level 5 detected - skipping Step 2 (masterwork = 5.0)");
+      
+      const finalResponse = {
+        smi: "5.0",
+        analysis: `${step1Reasoning}\n\nLevel 5 works receive a final score of 5.0 without decimal refinement, as they represent complete mastery.`
+      };
+
+      console.log("Sending Level 5 response to client");
+      return res.json(finalResponse);
+    }
+
+    // ================================================================================
+    // STEP 2: DECIMAL REFINEMENT (for levels 1-4)
+    // ================================================================================
+    
+    console.log(`STEP 2: Loading decimal refinement prompt for Level ${level}...`);
+
+    const step2PromptFile = `smi_step2_level${level}.txt`;
+    let step2Prompt;
+    
     try {
-      // Clean up the response - remove any markdown code blocks or extra text
-      let cleanResponse = analysisText.trim();
-
-      // Remove code block markers if present
-      if (cleanResponse.startsWith("```json")) {
-        cleanResponse = cleanResponse
-          .replace(/^```json\s*/, "")
-          .replace(/\s*```$/, "");
-      } else if (cleanResponse.startsWith("```")) {
-        cleanResponse = cleanResponse
-          .replace(/^```\s*/, "")
-          .replace(/\s*```$/, "");
-      }
-
-      // Find JSON object if there's extra text
-      const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        cleanResponse = jsonMatch[0];
-      }
-
-      aiResponse = JSON.parse(cleanResponse);
-      console.log("Successfully parsed AI JSON response");
-    } catch (parseError) {
-      console.log("Failed to parse AI response as JSON:", parseError.message);
-      console.log("AI response was:", analysisText);
+      step2Prompt = await fs.readFile(`./prompts/${step2PromptFile}`, 'utf8');
+    } catch (fileError) {
+      console.error(`Failed to load Step 2 prompt: ${step2PromptFile}`, fileError.message);
       return res.status(500).json({
-        error: {
-          message: "AI did not return valid JSON format. Please try again."
-        }
+        error: { message: `Server configuration error: Missing Step 2 prompt for level ${level}` }
       });
     }
 
-    // ============================================================================
-    // ENFORCE 1-3-5 SCALE AND RECALCULATE SMI
-    // ============================================================================
-    if (returnFactorScores && aiResponse.factor_scores && Array.isArray(aiResponse.factor_scores)) {
-      // Check if any scores need correction
-      let needsRecalculation = false;
-      const originalScores = [...aiResponse.factor_scores];
-      
-      // Convert 2→1 and 4→5
-      aiResponse.factor_scores = aiResponse.factor_scores.map((score, index) => {
-        if (score === 2) {
-          console.log(`  Factor ${index + 1}: Converting score 2 → 1`);
-          needsRecalculation = true;
-          return 1;
-        }
-        if (score === 4) {
-          console.log(`  Factor ${index + 1}: Converting score 4 → 5`);
-          needsRecalculation = true;
-          return 5;
-        }
-        return score;
-      });
-      
-      // Recalculate SMI if any scores were corrected
-      if (needsRecalculation) {
-        console.log("✓ Factor scores normalized to 1-3-5 scale");
-        
-        // Individual factor weights from SMI rubric (exact values)
-        const factorWeights = [
-          // Core Elements (F1-F10)
-          0.037,  // F1: Line
-          0.037,  // F2: Shape
-          0.031,  // F3: Form
-          0.037,  // F4: Space
-          0.037,  // F5: Color/Hue
-          0.025,  // F6: Texture
-          0.043,  // F7: Tone/Value
-          0.031,  // F8: Saturation
-          0.043,  // F9: Composition
-          0.025,  // F10: Volume
-          // Design Principles (F11-F20)
-          0.037,  // F11: Balance
-          0.043,  // F12: Contrast
-          0.043,  // F13: Emphasis/Focal Point
-          0.037,  // F14: Movement
-          0.037,  // F15: Rhythm
-          0.037,  // F16: Variety
-          0.037,  // F17: Proportion
-          0.037,  // F18: Harmony
-          0.043,  // F19: Cohesiveness/Unity
-          0.037,  // F20: Pattern
-          // Techniques (F21-F28)
-          0.025,  // F21: Brushwork/Mark-Making
-          0.018,  // F22: Chiaroscuro
-          0.018,  // F23: Impasto
-          0.018,  // F24: Sfumato
-          0.025,  // F25: Glazing
-          0.018,  // F26: Scumbling
-          0.018,  // F27: Pointillism/Divisionism
-          0.025,  // F28: Wet-on-Wet/Alla Prima
-          // Artistic Voice (F29-F33)
-          0.043,  // F29: Uniqueness/Originality
-          0.049,  // F30: Creativity/Innovation
-          0.043,  // F31: Mood/Atmosphere
-          0.037,  // F32: Viewer Engagement
-          0.043   // F33: Emotional Resonance
-        ];
-        
-        let weightedSum = 0;
-        let totalWeight = 0;
-        
-        for (let i = 0; i < 33; i++) {
-          if (aiResponse.factor_scores[i] !== 0) { // Skip NA factors
-            weightedSum += aiResponse.factor_scores[i] * factorWeights[i];
-            totalWeight += factorWeights[i];
-          }
-        }
-        
-        const recalculatedSMI = weightedSum / totalWeight;
-        const originalSMI = aiResponse.smi;
-        aiResponse.smi = recalculatedSMI.toFixed(2);
-        
-        console.log(`✓ SMI recalculated: ${originalSMI} → ${aiResponse.smi} (corrected from AI calculation)`);
-      }
-    }
-    // ============================================================================
+    // Add Step 2 prompt to conversation (image still accessible in messages[0])
+    messages.push({
+      role: "user",
+      content: step2Prompt
+    });
 
-    // Validate the NEW JSON structure (33-factor system)
-    if (!aiResponse.category_summaries) {
-      console.log("Missing category_summaries in AI response");
+    console.log("STEP 2: Calling AI for decimal refinement...");
+
+    let step2Response;
+    try {
+      step2Response = await callAI(
+        messages,
+        1000,
+        systemContent,
+        true,  // useJSON = true
+        temperature
+      );
+    } catch (error) {
+      console.error("Step 2 AI call failed:", error.message);
       return res.status(500).json({
-        error: {
-          message: "Invalid AI response: missing category_summaries"
-        }
+        error: { message: "Step 2 evaluation failed: " + error.message }
       });
     }
 
-    if (!aiResponse.smi) {
-      console.log("Missing SMI value in AI response");
+    console.log("STEP 2: Response received");
+
+    // Validate Step 2 response structure
+    if (step2Response.decimal_position === undefined || !step2Response.reasoning) {
+      console.error("Invalid Step 2 response structure:", step2Response);
       return res.status(500).json({
-        error: {
-          message: "Invalid AI response: missing smi value"
-        }
+        error: { message: "Invalid Step 2 response: missing decimal_position or reasoning" }
       });
     }
 
-    // Validate category_summaries structure
-    const requiredSummaries = [
-      "core_elements",
-      "design_principles",
-      "techniques",
-      "artistic_voice"
-    ];
-    const categorySummaries = aiResponse.category_summaries;
+    const decimalPosition = step2Response.decimal_position;
+    const step2Reasoning = step2Response.reasoning;
 
-    for (const category of requiredSummaries) {
-      if (
-        !categorySummaries[category] ||
-        typeof categorySummaries[category] !== "string"
-      ) {
-        console.log(`Missing or invalid summary for: ${category}`);
-        return res.status(500).json({
-          error: {
-            message: `Missing or invalid summary for category: ${category}`
-          }
-        });
-      }
-    }
-
-    // NEW: Validate factor scores if requested
-    if (returnFactorScores) {
-      if (!aiResponse.factor_scores || !Array.isArray(aiResponse.factor_scores)) {
-        console.log("Missing or invalid factor_scores array in AI response");
-        return res.status(500).json({
-          error: {
-            message: "Invalid AI response: missing or invalid factor_scores array"
-          }
-        });
-      }
-      
-      if (aiResponse.factor_scores.length !== 33) {
-        console.log(`Expected 33 factor scores, got ${aiResponse.factor_scores.length}`);
-        return res.status(500).json({
-          error: {
-            message: `Invalid AI response: expected 33 factor scores, got ${aiResponse.factor_scores.length}`
-          }
-        });
-      }
-      
-      // Validate each score is 0, 1, 3, or 5 (after normalization)
-      for (let i = 0; i < aiResponse.factor_scores.length; i++) {
-        const score = aiResponse.factor_scores[i];
-        if (![0, 1, 3, 5].includes(score)) {
-          console.log(`Invalid factor score at position ${i + 1}: ${score}`);
-          return res.status(500).json({
-            error: {
-              message: `Invalid factor score at position ${i + 1}: ${score}. Must be 0, 1, 3, or 5.`
-            }
-          });
-        }
-      }
-      
-      console.log("✓ Factor scores validated: 33 scores received");
-    }
-
-    // Validate SMI value
-    const smiValue = parseFloat(aiResponse.smi);
-    if (isNaN(smiValue) || smiValue < 1.0 || smiValue > 5.0) {
-      console.log(`Invalid SMI value: ${aiResponse.smi}`);
+    // Validate decimal position is one of: 0.0, 0.2, 0.4, 0.6, 0.8
+    const validDecimals = [0.0, 0.2, 0.4, 0.6, 0.8];
+    if (!validDecimals.includes(decimalPosition)) {
+      console.error(`Invalid decimal position returned: ${decimalPosition}`);
       return res.status(500).json({
-        error: {
-          message: `Invalid SMI value: ${aiResponse.smi}. Must be between 1.0 and 5.0`
-        }
+        error: { message: `Invalid decimal position: ${decimalPosition}. Must be 0.0, 0.2, 0.4, 0.6, or 0.8.` }
       });
     }
 
-    // Ensure SMI is formatted to 2 decimal places
-    const formattedSMI = smiValue.toFixed(2);
-    console.log(`SMI Value: ${formattedSMI}`);
-    console.log("All category summaries validated successfully");
+    console.log(`STEP 2 RESULT: Decimal ${decimalPosition}`);
+    console.log(`STEP 2 REASONING: ${step2Reasoning}`);
 
-    // Prepare final response
-const finalResponse = {
-      title: "Analysis: 33 Essential Factors",
-      artTitle: artTitle,
-      artistName: artistName,
-      subjectPhrase: subjectPhrase,
-      overview: parsedAnalysis.overview,
-      // Trim to exact requirements for the report
-      strengths: (parsedAnalysis.strengths || []).slice(0, 2),
-      opportunities: (parsedAnalysis.opportunities || []).slice(0, 3),
-      recommendedStudy: (parsedAnalysis.recommendedStudy || []).slice(0, 3),
-      timestamp: new Date().toISOString()
+    // ================================================================================
+    // COMBINE RESULTS
+    // ================================================================================
+    
+    const finalSMI = level + decimalPosition;
+    console.log(`FINAL SMI: ${finalSMI.toFixed(1)}`);
+
+    // Combine reasoning from both steps
+    const combinedAnalysis = `${step1Reasoning}\n\n${step2Reasoning}`;
+
+    const finalResponse = {
+      smi: finalSMI.toFixed(1),
+      analysis: combinedAnalysis
     };
-
-    // NEW: Include factor scores if requested
-    if (returnFactorScores && aiResponse.factor_scores) {
-      finalResponse.factor_scores = aiResponse.factor_scores;
-      console.log("✓ Including factor scores in response");
-    }
 
     console.log("Sending final SMI response to client");
     res.json(finalResponse);
@@ -1386,9 +1247,7 @@ const finalResponse = {
   } catch (error) {
     console.error("Unexpected error in SMI analysis:", error);
     res.status(500).json({
-      error: {
-        message: "Internal server error during analysis"
-      }
+      error: { message: "Internal server error during analysis" }
     });
   }
 });
@@ -1819,7 +1678,7 @@ app.get("/api/stats", (req, res) => {
   }
 });
 
-app.patch("/api/records/:id/image", (req, res) => {
+app.patch("/api/records/:id/image", async (req, res) => {
     console.log(`PATCH /api/records/${req.params.id}/image called`);
     try {
         const recordId = parseInt(req.params.id);
@@ -1837,10 +1696,38 @@ app.patch("/api/records/:id/image", (req, res) => {
         }
         const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,/);
         const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
-        record.imageBase64 = imageBase64;
-        record.imageMimeType = mimeType;
-        writeDatabase(data);
-        res.json({ success: true, recordId: record.id, mimeType });
+		
+		
+try {
+            const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+            const imageBuffer = Buffer.from(base64Data, 'base64');
+            
+            // Save full image to disk
+            const imagePath = path.join("/mnt/data/images", `record_${recordId}.jpg`);
+            await sharp(imageBuffer).jpeg({ quality: 90 }).toFile(imagePath);
+            console.log(`Full image saved: ${imagePath}`);
+            
+            // Generate thumbnail and store on record
+            const thumbnailBuffer = await sharp(imageBuffer)
+                .resize(120, 120, { fit: 'inside' })
+                .jpeg({ quality: 70 })
+                .toBuffer();
+            record.thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
+            record.imageMimeType = mimeType;
+            console.log(`Thumbnail generated for record ${recordId}`);
+            
+            // Remove full base64 from database record (it's on disk now)
+            delete record.imageBase64;
+            
+            writeDatabase(data);
+            res.json({ success: true, recordId: record.id, mimeType });
+        } catch (imgError) {
+            console.error('Image processing failed:', imgError.message);
+            res.status(500).json({ error: 'Image processing failed: ' + imgError.message });
+        }
+		
+		
+		
     } catch (error) {
         console.error("Error patching imageBase64:", error);
         res.status(500).json({ error: error.message });
@@ -2477,7 +2364,7 @@ if (newRecord.imageBase64) {
 });
 
 // Updated PUT /api/records/:id
-app.put("/api/records/:id", (req, res) => {
+app.put("/api/records/:id", async (req, res) => {
     try {
         const recordId = parseInt(req.params.id);
         if (isNaN(recordId)) {
@@ -2551,6 +2438,34 @@ app.put("/api/records/:id", (req, res) => {
         // Remove imagePath – now using embedded Base64 images
         delete updatedRecord.imagePath;
         
+		
+		// Process image if a new one was provided
+if (req.body.imageBase64) {
+    try {
+        const base64Data = updatedRecord.imageBase64.replace(/^data:image\/\w+;base64,/, '');
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+        
+        // Save full image to disk
+        const imagePath = path.join("/mnt/data/images", `record_${recordId}.jpg`);
+        await sharp(imageBuffer).jpeg({ quality: 90 }).toFile(imagePath);
+        console.log(`Full image saved: ${imagePath}`);
+        
+        // Generate thumbnail and store on record
+        const thumbnailBuffer = await sharp(imageBuffer)
+            .resize(120, 120, { fit: 'inside' })
+            .jpeg({ quality: 70 })
+            .toBuffer();
+        updatedRecord.thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
+        console.log(`Thumbnail generated for record ${recordId}`);
+        
+        // Remove full base64 from database record (it's on disk now)
+        delete updatedRecord.imageBase64;
+    } catch (imgError) {
+        console.error('Image processing failed:', imgError.message);
+    }
+}
+		
+		
         data.records[index] = updatedRecord;
         writeDatabase(data);
         
