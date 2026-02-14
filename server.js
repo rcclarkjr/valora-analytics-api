@@ -1115,6 +1115,9 @@ ${step1Prompt}`;
     }
 
     console.log("STEP 1: Response received");
+	console.log("=== STEP 1 RAW RESPONSE ===");
+    console.log(JSON.stringify(step1Response, null, 2));
+    console.log("===========================");
 
     // Validate Step 1 response structure
     if (!step1Response.level || !step1Response.reasoning) {
@@ -1206,6 +1209,9 @@ try {
     }
 
     console.log("STEP 2: Response received");
+	console.log("=== STEP 2 RAW RESPONSE ===");
+    console.log(JSON.stringify(step2Response, null, 2));
+    console.log("===========================");
 
     // Validate Step 2 response structure
     if (step2Response.decimal_position === undefined || !step2Response.reasoning) {
