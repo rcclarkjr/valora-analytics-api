@@ -95,6 +95,27 @@ This is a pattern-matching exercise, not a calculation. Which description fits m
 
 ---
 
+## CRITICAL: What Value to Return
+
+You have determined this work is at Level [X]. That decision is LOCKED.
+
+Your ONLY task now is to determine the DECIMAL portion (0.0, 0.2, 0.4, 0.6, or 0.8).
+
+**Examples of CORRECT responses:**
+- If you match the [X].0 profile → return `"decimal_position": 0.0`
+- If you match the [X].2 profile → return `"decimal_position": 0.2`
+- If you match the [X].4 profile → return `"decimal_position": 0.4`
+- If you match the [X].6 profile → return `"decimal_position": 0.6`
+- If you match the [X].8 profile → return `"decimal_position": 0.8`
+
+**Examples of WRONG responses:**
+- ❌ `"decimal_position": [X].2` ← This is the full score, not the decimal
+- ❌ `"decimal_position": [X]` ← This is the level, not the decimal
+- ❌ `"decimal_position": 0.3` ← Not a valid decimal value
+
+**Remember:** Return ONLY the decimal portion (0.0, 0.2, 0.4, 0.6, or 0.8). The backend will add this to the level.
+---
+
 ## Required Output Format
 
 Return your response as a JSON object:
