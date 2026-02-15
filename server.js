@@ -96,7 +96,7 @@ const DEFAULT_TEMPERATURE = 0.0;
 // MODEL CONFIGURATION
 // ====================
 
-const VALID_AI_MODELS = ["gpt-4o", "gpt-4.1", "gpt-4.1-mini", "claude-3-5-sonnet-20241022"];
+const VALID_AI_MODELS = ["gpt-4o", "gpt-4.1", "gpt-4.1-mini", "claude-sonnet-4-5-20250929"];
 const MODEL_CONFIG_PATH = '/mnt/data/model_config.json';
 
 function readModelConfig() {
