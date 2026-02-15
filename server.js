@@ -448,6 +448,8 @@ return responseText;
 
 
 
+
+
 // ====================
 // TEMPORARY IMAGE STORAGE ENDPOINTS
 // Add these to your server.js file
@@ -1260,6 +1262,13 @@ ${step1Prompt}`;
       role: "assistant",
       content: JSON.stringify(step1Response)
     });
+	
+	// After Step 1 completes
+	console.log("=== STEP 1 COMPLETE ===");
+	console.log(`Assigned Level: ${level}`);
+	console.log(`Step 1 Reasoning Length: ${step1Reasoning.length} characters`);
+	console.log("======================");
+	
 
     // ================================================================================
     // HANDLE LEVEL 5 (No Step 2 needed)
@@ -1304,6 +1313,13 @@ try {
       content: step2Prompt
     });
 
+
+	// After loading Step 2 prompt
+	const step2PromptFile = `smi_step2_level${level}.txt`;
+	console.log("=== STEP 2 STARTING ===");
+	console.log(`Loading prompt file: ${step2PromptFile}`);
+	console.log("=======================");
+
     console.log("STEP 2: Calling AI for decimal refinement...");
 
     let step2Response;
@@ -1340,12 +1356,23 @@ try {
 
     // Validate decimal position is one of: 0.0, 0.2, 0.4, 0.6, 0.8
     const validDecimals = [0.0, 0.2, 0.4, 0.6, 0.8];
-    if (!validDecimals.includes(decimalPosition)) {
-      console.error(`Invalid decimal position returned: ${decimalPosition}`);
-      return res.status(500).json({
-        error: { message: `Invalid decimal position: ${decimalPosition}. Must be 0.0, 0.2, 0.4, 0.6, or 0.8.` }
-      });
-    }
+if (!validDecimals.includes(decimalPosition)) {
+  console.log("=== VALIDATION FAILURE ===");
+  console.log(`Invalid decimal returned: ${decimalPosition}`);
+  console.log(`Type of value: ${typeof decimalPosition}`);
+  console.log(`Expected one of: ${validDecimals.join(', ')}`);
+  console.log(`Step 2 Reasoning: ${step2Response.reasoning}`);
+  console.log("==========================");
+  
+  return res.status(500).json({
+    error: { message: `Invalid decimal position: ${decimalPosition}. Must be 0.0, 0.2, 0.4, 0.6, or 0.8.` }
+  });
+}
+
+
+
+
+
 
     console.log(`STEP 2 RESULT: Decimal ${decimalPosition}`);
     console.log(`STEP 2 REASONING: ${step2Reasoning}`);
