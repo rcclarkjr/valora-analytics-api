@@ -1,0 +1,126 @@
+# SKILL MASTERY INDEX (SMI) - STEP 2 EVALUATION
+## Decimal Refinement for LEVEL 2 Work
+
+You have determined this work is **LEVEL 2: Apprentice**.
+
+**This decision is LOCKED. Do not reconsider the integer level.**
+
+Your task now is to determine WHERE within Level 2 this work falls by selecting which of the 5 profiles below best describes the work.
+
+---
+
+## The 5 Dimensions (Reference Framework)
+
+As you read each profile, consider these aspects:
+
+1. **Technical Control** - How clean and intentional is the execution?
+2. **Compositional Intelligence** - How effectively does the structure serve the work?
+3. **Color/Value Architecture** - How sophisticated is the color and value system?
+4. **Surface Quality** - How refined or intentional is the physical handling?
+5. **Expressive Voice** - How distinctive and emotionally coherent is the work?
+
+---
+
+## Level 2 Dimensional Profiles
+
+### **2.0 - Just Entered Apprentice**
+
+- **Technical Control:** Can copy references with basic accuracy, but significant proportion/perspective errors remain; some areas are tight, others are loose and unfinished
+- **Compositional Intelligence:** Attempts rule-based compositions (rule of thirds, centered subjects) but execution feels awkward or unbalanced; formulas don't quite work
+- **Color/Value Architecture:** Uses local color from reference; color harmony is accidental rather than planned; values create some form but inconsistently
+- **Surface Quality:** Inconsistent mark-making; some areas show control and confidence, others are hesitant, muddy, or overworked
+- **Expressive Voice:** Still heavily imitative; tries to replicate specific styles or artists; could be anyone learning the same reference method
+
+**Key indicator:** Just graduated from tool-struggle phase but results vary wildly between attempts; "beginner following tutorials"
+
+---
+
+### **2.2 - Early Apprentice**
+
+- **Technical Control:** Growing accuracy in replication; most proportions work, perspective has only minor issues; anatomy is recognizable but may lack refinement
+- **Compositional Intelligence:** Successfully applies basic compositional rules (rule of thirds, focal points, balance) but formulaically; compositions feel "textbook"
+- **Color/Value Architecture:** Beginning to understand color temperature and complementary relationships; can create basic harmony schemes deliberately
+- **Surface Quality:** More consistent stroke quality throughout; beginning to differentiate textures intentionally; fewer muddy areas or overworked passages
+- **Expressive Voice:** Recognizable as competent student work; follows established styles and methods reliably; quality is becoming consistent piece-to-piece
+
+**Key indicator:** Rules are being learned and applied with growing success; "good student following instructions well"
+
+---
+
+### **2.4 - Mid Apprentice**
+
+- **Technical Control:** Reliable accuracy in most areas; anatomy/perspective are mostly correct; can execute complex subjects if working from good references
+- **Compositional Intelligence:** Confidently applies composition formulas; results are balanced, readable, and pleasant; understands why rules exist
+- **Color/Value Architecture:** Uses color theory deliberately (warm/cool contrast, complementary schemes, analogous harmonies) to create basic depth and interest
+- **Surface Quality:** Controlled and even handling throughout; can replicate different textures from reference; surface quality supports rather than distracts
+- **Expressive Voice:** Solid, consistent student work; demonstrates technical competency reliably; still generic but no longer uncertain
+
+**Key indicator:** Fundamentals are reliable; could produce "good student work" consistently on demand; "solid B+ student"
+
+---
+
+### **2.6 - Late Apprentice**
+
+- **Technical Control:** Very few fundamental errors; execution is clean and confident; handles challenging subjects (foreshortening, complex lighting) competently
+- **Compositional Intelligence:** Experiments beyond basic formulas with some success; compositions feel more natural and less rigid; understands when to break rules
+- **Color/Value Architecture:** Sophisticated use of color harmony and temperature; personal palette preferences emerging; can push saturation or value for effect
+- **Surface Quality:** Refined handling; achieves desired surface effects consistently; mark-making is becoming more economical and purposeful
+- **Expressive Voice:** Small personal touches emerging (favorite color ranges, preferred subjects, characteristic handling); beginning to look less generic
+
+**Key indicator:** Mastery of the rules is near-complete; hints of moving beyond them; "top student approaching graduation"
+
+---
+
+### **2.8 - Approaching Journeyman**
+
+- **Technical Control:** Excellent accuracy and consistency; can execute very complex subjects without major errors; technique is reliable and efficient
+- **Compositional Intelligence:** Breaks rules occasionally and successfully; compositions feel intentional and authored rather than formulaic; shows creative problem-solving
+- **Color/Value Architecture:** Confident color mixing and temperature control; distinctive palette forming; uses color expressively, not just descriptively
+- **Surface Quality:** Very refined and consistent; can achieve any desired surface effect; economical mark-making that suggests rather than overworks
+- **Expressive Voice:** Recognizable personal preferences forming; work is beginning to have a signature look; less interchangeable with other competent work
+
+**Key indicator:** Could almost pass for early Level 3; just needs more consistency in working independently without reference; shows emerging voice
+
+---
+
+## Your Task
+
+**Read all 5 profiles above.**
+
+**Select which profile BEST describes the work you evaluated.**
+
+This is a pattern-matching exercise, not a calculation. Which description fits most closely?
+
+**Do not reconsider whether this is Level 2.** You are only determining: Is it 2.0, 2.2, 2.4, 2.6, or 2.8?
+
+---
+
+## CRITICAL: What Value to Return
+
+You have determined this work is at Level [X]. That decision is LOCKED.
+
+Your ONLY task now is to determine the DECIMAL portion (0.0, 0.2, 0.4, 0.6, or 0.8).
+
+**Examples of CORRECT responses:**
+- If you match the [X].0 profile → return `"decimal_position": 0.0`
+- If you match the [X].2 profile → return `"decimal_position": 0.2`
+- If you match the [X].4 profile → return `"decimal_position": 0.4`
+- If you match the [X].6 profile → return `"decimal_position": 0.6`
+- If you match the [X].8 profile → return `"decimal_position": 0.8`
+
+**Examples of WRONG responses:**
+- ❌ `"decimal_position": [X].2` ← This is the full score, not the decimal
+- ❌ `"decimal_position": [X]` ← This is the level, not the decimal
+- ❌ `"decimal_position": 0.3` ← Not a valid decimal value
+
+**Remember:** Return ONLY the decimal portion (0.0, 0.2, 0.4, 0.6, or 0.8). The backend will add this to the level.
+---
+
+## Required Output Format
+
+Return your response as a JSON object:
+
+{
+  "decimal_position": [0.0, 0.2, 0.4, 0.6, or 0.8],
+  "reasoning": "[2-3 sentences explaining which profile best fit and why]"
+}
