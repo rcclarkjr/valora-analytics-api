@@ -421,17 +421,27 @@ async function callClaude(messages, maxTokens, systemContent, useJSON, temperatu
     throw error;
   }
   
-  const responseText = response.data.content[0]?.text || "";
-  
-  if (useJSON) {
-    try {
-      return JSON.parse(responseText);
-    } catch (parseError) {
-      throw new Error(`Claude returned invalid JSON: ${responseText}`);
+const responseText = response.data.content[0]?.text || "";
+
+if (useJSON) {
+  try {
+    // Claude often wraps JSON in markdown code fences - strip them
+    let cleanedJSON = responseText.trim();
+    
+    // Remove markdown code fences if present
+    if (cleanedJSON.startsWith('```json')) {
+      cleanedJSON = cleanedJSON.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (cleanedJSON.startsWith('```')) {
+      cleanedJSON = cleanedJSON.replace(/^```\s*/, '').replace(/\s*```$/, '');
     }
+    
+    return JSON.parse(cleanedJSON.trim());
+  } catch (parseError) {
+    throw new Error(`Claude returned invalid JSON: ${responseText}`);
   }
-  
-  return responseText;
+}
+
+return responseText;
 }
 
 
