@@ -347,8 +347,42 @@ async function callClaude(messages, maxTokens, systemContent, useJSON, temperatu
     throw new Error("Anthropic API key not found");
   }
   
-  // Anthropic uses system parameter separately, not in messages array
-  const claudeMessages = messages.filter(msg => msg.role !== 'system');
+  // Convert OpenAI message format to Anthropic format
+  const claudeMessages = messages
+    .filter(msg => msg.role !== 'system')
+    .map(msg => {
+      // If message has content array (with text and/or images)
+      if (Array.isArray(msg.content)) {
+        const convertedContent = msg.content.map(item => {
+          // Convert OpenAI image_url format to Anthropic image format
+          if (item.type === 'image_url') {
+            const imageUrl = item.image_url.url;
+            // Extract base64 data from "data:image/jpeg;base64,ABC123..."
+            const match = imageUrl.match(/^data:image\/(jpeg|png|gif|webp);base64,(.+)$/);
+            if (match) {
+              return {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: `image/${match[1]}`,
+                  data: match[2]  // just the base64 string, no prefix
+                }
+              };
+            }
+          }
+          // Text content stays the same
+          return item;
+        });
+        
+        return {
+          role: msg.role,
+          content: convertedContent
+        };
+      }
+      
+      // Simple text message
+      return msg;
+    });
   
   const requestBody = {
     model: activeModel,
