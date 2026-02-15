@@ -84,7 +84,7 @@ app.use(
 
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 
 
@@ -96,7 +96,7 @@ const DEFAULT_TEMPERATURE = 0.0;
 // MODEL CONFIGURATION
 // ====================
 
-const VALID_OPENAI_MODELS = ["gpt-4o", "gpt-4.1", "gpt-4.1-mini"];
+const VALID_AI_MODELS = ["gpt-4o", "gpt-4.1", "gpt-4.1-mini", "claude-sonnet-4-20250929"];
 const MODEL_CONFIG_PATH = '/mnt/data/model_config.json';
 
 function readModelConfig() {
@@ -249,10 +249,10 @@ function roundSMIUp(value) {
 
 
 
+
 // ====================
 // AI CALLER FUNCTION
 // ====================
-
 async function callAI(
   messages,
   maxTokens = 1000,
@@ -260,38 +260,48 @@ async function callAI(
   useJSON = false,
   temperature = DEFAULT_TEMPERATURE
 ) {
-  if (!OPENAI_API_KEY) {
-    throw new Error("OpenAI API key not found");
-  }
-
-  // Read the active model from persistent config
   const modelConfig = readModelConfig();
   
   if (!modelConfig || !modelConfig.activeModel) {
-    throw new Error("NO_MODEL_CONFIGURED: Admin must select an OpenAI model in Admin Menu before any apps can function");
+    throw new Error("NO_MODEL_CONFIGURED: Admin must select an AI model in Admin Menu before any apps can function");
   }
-  
   
   const activeModel = modelConfig.activeModel;
   console.log(`Using AI model: ${activeModel}`);
+  
+  // Detect if this is Claude or OpenAI
+  const isClaude = activeModel.startsWith('claude-');
+  
+  if (isClaude) {
+    return await callClaude(messages, maxTokens, systemContent, useJSON, temperature, activeModel);
+  } else {
+    return await callOpenAI(messages, maxTokens, systemContent, useJSON, temperature, activeModel);
+  }
+}
 
-
-  // Add system message if provided
+// ====================
+// OPENAI API CALLER
+// ====================
+async function callOpenAI(messages, maxTokens, systemContent, useJSON, temperature, activeModel) {
+  if (!OPENAI_API_KEY) {
+    throw new Error("OpenAI API key not found");
+  }
+  
   const finalMessages = systemContent
     ? [{ role: "system", content: systemContent }, ...messages]
     : messages;
-
+    
   const requestBody = {
     model: activeModel,
     messages: finalMessages,
     max_tokens: maxTokens,
     temperature
   };
-
+  
   if (useJSON) {
     requestBody.response_format = { type: "json_object" };
   }
-
+  
   let response;
   try {
     response = await axios.post(
@@ -315,10 +325,9 @@ async function callAI(
     });
     throw error;
   }
-
+  
   const responseText = response.data.choices[0]?.message?.content || "";
-
-  // Handle JSON responses
+  
   if (useJSON) {
     try {
       return JSON.parse(responseText);
@@ -326,7 +335,68 @@ async function callAI(
       throw new Error(`OpenAI returned invalid JSON: ${responseText}`);
     }
   }
+  
+  return responseText;
+}
 
+// ====================
+// ANTHROPIC API CALLER
+// ====================
+async function callClaude(messages, maxTokens, systemContent, useJSON, temperature, activeModel) {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error("Anthropic API key not found");
+  }
+  
+  // Anthropic uses system parameter separately, not in messages array
+  const claudeMessages = messages.filter(msg => msg.role !== 'system');
+  
+  const requestBody = {
+    model: activeModel,
+    messages: claudeMessages,
+    max_tokens: maxTokens,
+    temperature
+  };
+  
+  // Add system content if provided
+  if (systemContent) {
+    requestBody.system = systemContent;
+  }
+  
+  let response;
+  try {
+    response = await axios.post(
+      "https://api.anthropic.com/v1/messages",
+      requestBody,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01"
+        }
+      }
+    );
+  } catch (error) {
+    console.error("Anthropic API Error Details:", {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      errorData: error.response?.data,
+      requestedModel: activeModel,
+      messageCount: claudeMessages.length,
+      hasImages: JSON.stringify(requestBody).includes('image')
+    });
+    throw error;
+  }
+  
+  const responseText = response.data.content[0]?.text || "";
+  
+  if (useJSON) {
+    try {
+      return JSON.parse(responseText);
+    } catch (parseError) {
+      throw new Error(`Claude returned invalid JSON: ${responseText}`);
+    }
+  }
+  
   return responseText;
 }
 
@@ -664,9 +734,9 @@ app.post('/api/model-switch', (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    if (!VALID_OPENAI_MODELS.includes(model)) {
+if (!VALID_AI_MODELS.includes(model)) {
       console.log(`❌ Invalid model requested: ${model}`);
-      return res.status(400).json({ error: `Invalid model. Must be one of: ${VALID_OPENAI_MODELS.join(', ')}` });
+      return res.status(400).json({ error: `Invalid model. Must be one of: ${VALID_AI_MODELS.join(', ')}` });
     }
 
     const success = writeModelConfig(model);
