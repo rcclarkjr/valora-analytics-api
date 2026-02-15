@@ -1,0 +1,126 @@
+# SKILL MASTERY INDEX (SMI) - STEP 2 EVALUATION
+## Decimal Refinement for LEVEL 1 Work
+
+You have determined this work is **LEVEL 1: Novice**.
+
+**This decision is LOCKED. Do not reconsider the integer level.**
+
+Your task now is to determine WHERE within Level 1 this work falls by selecting which of the 5 profiles below best describes the work.
+
+---
+
+## The 5 Dimensions (Reference Framework)
+
+As you read each profile, consider these aspects:
+
+1. **Technical Control** - How clean and intentional is the execution?
+2. **Compositional Intelligence** - How effectively does the structure serve the work?
+3. **Color/Value Architecture** - How sophisticated is the color and value system?
+4. **Surface Quality** - How refined or intentional is the physical handling?
+5. **Expressive Voice** - How distinctive and emotionally coherent is the work?
+
+---
+
+## Level 1 Dimensional Profiles
+
+### **1.0 - Initial Exploration**
+
+- **Technical Control:** Extreme difficulty with basic tool manipulation; cannot create intended shapes or lines consistently; marks are accidental rather than controlled
+- **Compositional Intelligence:** No apparent compositional awareness; elements placed randomly with no sense of balance, spacing, or visual hierarchy
+- **Color/Value Architecture:** Colors are muddy from over-mixing or garish from lack of understanding; no awareness of value structure or temperature
+- **Surface Quality:** Chaotic or accidental surface; unintended smudges, tears, or material buildup; shows frustration with the medium
+- **Expressive Voice:** Pure experimentation; discovering what happens when tools touch surface; no recognizable intent beyond exploration
+
+**Key indicator:** Very first attempts with a medium; learning what the tool does at the most basic level
+
+---
+
+### **1.2 - Early Tool Discovery**
+
+- **Technical Control:** Can create basic marks intentionally but with extreme wobble and inconsistency; shapes are recognizable but severely distorted
+- **Compositional Intelligence:** Beginning awareness of "ground and sky" or basic spatial zones; elements placed with some thought but no sophisticated organization
+- **Color/Value Architecture:** Uses colors "straight from container" without mixing; may achieve some local color but relationships are arbitrary
+- **Surface Quality:** Beginning to control material flow; still many accidental marks but fewer unintended consequences
+- **Expressive Voice:** Can identify subject matter intent (this is a tree, this is a person) but execution is highly simplified or symbolic
+
+**Key indicator:** Can name what they're trying to create; beginning representational intent emerges
+
+---
+
+### **1.4 - Developing Basic Control**
+
+- **Technical Control:** Growing consistency in mark-making; can create circles, rectangles, and lines with reasonable intention; proportions are often wrong but shapes are identifiable
+- **Compositional Intelligence:** Uses basic spatial organization (sky at top, ground at bottom); may show horizon line or size differentiation for depth
+- **Color/Value Architecture:** Beginning to mix colors but results are unpredictable; shows awareness that colors should relate to subject (blue for sky, green for grass)
+- **Surface Quality:** More deliberate application; can distinguish between areas that should be filled vs. outlined; fewer truly accidental marks
+- **Expressive Voice:** Clear subject matter with personal choices (favorite colors, repeated motifs); work reflects enthusiasms even if execution is limited
+
+**Key indicator:** Consistent effort to represent reality or ideas; some planning evident before execution
+
+---
+
+### **1.6 - Late Novice Development**
+
+- **Technical Control:** Reliable basic shapes and lines; can copy simple geometric forms with reasonable accuracy; beginning to control gradations and transitions
+- **Compositional Intelligence:** Shows intentional balance or symmetry; may use simple repetition for pattern; aware of focal points even if execution is clumsy
+- **Color/Value Architecture:** Can mix secondary colors intentionally; beginning awareness of light vs. dark for simple shading; attempts color harmony
+- **Surface Quality:** Controlled, even application in most areas; differentiates textures intentionally (smooth vs. rough); minimal unintended marks
+- **Expressive Voice:** Shows emerging preferences in subject matter and treatment; work has personality despite technical limitations; may reference learned styles
+
+**Key indicator:** Clear evidence of practice and improvement; some areas show surprising competence while others lag
+
+---
+
+### **1.8 - Approaching Apprentice**
+
+- **Technical Control:** Can execute most basic techniques reliably; proportions are much improved; perspective attempts are present even if flawed; marks are confident
+- **Compositional Intelligence:** Uses learned compositional devices (rule of thirds, symmetry, leading lines) with some success; plans composition before executing
+- **Color/Value Architecture:** Understands basic color relationships; can create simple value scales; attempts to show light source with consistent shadow direction
+- **Surface Quality:** Refined handling for this level; consistent stroke quality; intentional variation in texture or finish; work appears "finished" rather than abandoned
+- **Expressive Voice:** Beginning to develop consistent approach or style; work is no longer purely exploratory; shows influence of studied artists or methods
+
+**Key indicator:** Fundamental tool struggles are largely overcome; ready to focus on learning formal rules and techniques
+
+---
+
+## Your Task
+
+**Read all 5 profiles above.**
+
+**Select which profile BEST describes the work you evaluated.**
+
+This is a pattern-matching exercise, not a calculation. Which description fits most closely?
+
+**Do not reconsider whether this is Level 1.** You are only determining: Is it 1.0, 1.2, 1.4, 1.6, or 1.8?
+
+---
+
+## CRITICAL: What Value to Return
+
+You have determined this work is at Level [X]. That decision is LOCKED.
+
+Your ONLY task now is to determine the DECIMAL portion (0.0, 0.2, 0.4, 0.6, or 0.8).
+
+**Examples of CORRECT responses:**
+- If you match the [X].0 profile → return `"decimal_position": 0.0`
+- If you match the [X].2 profile → return `"decimal_position": 0.2`
+- If you match the [X].4 profile → return `"decimal_position": 0.4`
+- If you match the [X].6 profile → return `"decimal_position": 0.6`
+- If you match the [X].8 profile → return `"decimal_position": 0.8`
+
+**Examples of WRONG responses:**
+- ❌ `"decimal_position": [X].2` ← This is the full score, not the decimal
+- ❌ `"decimal_position": [X]` ← This is the level, not the decimal
+- ❌ `"decimal_position": 0.3` ← Not a valid decimal value
+
+**Remember:** Return ONLY the decimal portion (0.0, 0.2, 0.4, 0.6, or 0.8). The backend will add this to the level.
+---
+
+## Required Output Format
+
+Return your response as a JSON object:
+
+{
+  "decimal_position": [0.0, 0.2, 0.4, 0.6, or 0.8],
+  "reasoning": "[2-3 sentences explaining which profile best fit and why]"
+}
