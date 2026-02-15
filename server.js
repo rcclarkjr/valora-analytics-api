@@ -1126,14 +1126,15 @@ app.post("/analyze-smi", async (req, res) => {
   try {
     console.log("Received SMI analysis request (Two-Step Process)");
     
-    const {
-      image,
-      artTitle,
-      artistName,
-      subjectPhrase,
-      medium,
-      temperature: requestedTemp
-    } = req.body;
+const {
+  image,
+  imageType, 
+  artTitle,
+  artistName,
+  subjectPhrase,
+  medium,
+  temperature: requestedTemp
+} = req.body;
 
     const temperature = typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
 
