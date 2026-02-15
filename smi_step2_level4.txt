@@ -1,0 +1,126 @@
+# SKILL MASTERY INDEX (SMI) - STEP 2 EVALUATION
+## Decimal Refinement for LEVEL 4 Work
+
+You have determined this work is **LEVEL 4: Expert**.
+
+**This decision is LOCKED. Do not reconsider the integer level.**
+
+Your task now is to determine WHERE within Level 4 this work falls by selecting which of the 5 profiles below best describes the work.
+
+---
+
+## The 5 Dimensions (Reference Framework)
+
+As you read each profile, consider these aspects:
+
+1. **Technical Control** - How clean and intentional is the execution?
+2. **Compositional Intelligence** - How effectively does the structure serve the work?
+3. **Color/Value Architecture** - How sophisticated is the color and value system?
+4. **Surface Quality** - How refined or intentional is the physical handling?
+5. **Expressive Voice** - How distinctive and emotionally coherent is the work?
+
+---
+
+## Level 4 Dimensional Profiles
+
+### **4.0 - Just Entered Expert**
+
+- **Technical Control:** Excellent technical execution that confidently serves creative intent; any rule-breaking is clearly deliberate; technique is assured
+- **Compositional Intelligence:** Original compositions with strong visual impact; sophisticated use of space, rhythm, and hierarchy; compositions feel authored
+- **Color/Value Architecture:** Distinctive color sensibility that's recognizable; uses color expressively and symbolically, not just descriptively; strong palette identity
+- **Surface Quality:** Characteristic handling that's part of the aesthetic identity; surface treatment is intentional and consistent; recognizable mark-making
+- **Expressive Voice:** Clear, consistent personal style; work is immediately recognizable as by this creator; distinct aesthetic system in place
+
+**Key indicator:** Signature style is established; work has strong personality and creative authority; "you'd recognize other works by this artist"
+
+---
+
+### **4.2 - Early Expert**
+
+- **Technical Control:** Complete technical mastery with personal flair; technique is expressive rather than just accurate; execution has confidence and economy
+- **Compositional Intelligence:** Compelling, memorable compositions that challenge conventions successfully; sophisticated visual storytelling and pacing
+- **Color/Value Architecture:** Highly sophisticated color relationships; color operates on multiple levels (descriptive, emotional, symbolic); masterful use of temperature and intensity
+- **Surface Quality:** Refined, distinctive surface treatment that enhances the work's meaning; material handling is part of the content; virtuosic but purposeful
+- **Expressive Voice:** Strong, coherent artistic voice with consistent themes or preoccupations; work explores specific aesthetic or conceptual territory deeply
+
+**Key indicator:** Not just recognizable style, but meaningful creative exploration; work has depth beyond surface aesthetics; "mature artistic voice"
+
+---
+
+### **4.4 - Mid Expert**
+
+- **Technical Control:** Virtuosic control that appears effortless; technique is completely transparent; viewer focuses on meaning/emotion rather than execution
+- **Compositional Intelligence:** Exceptional compositional intelligence; every element serves multiple purposes; nothing is arbitrary or decorative
+- **Color/Value Architecture:** Masterful color architecture where color relationships create psychological/spatial/narrative impact simultaneously; color is a primary language
+- **Surface Quality:** Surface quality is integral to meaning; material handling shows restraint and purpose; economy of means with maximum impact
+- **Expressive Voice:** Fully mature artistic voice; work explores distinctive conceptual or aesthetic territory; creates complete, coherent artistic world
+
+**Key indicator:** Work operates on multiple levels simultaneously; technique, composition, and concept are inseparable; "complete artistic maturity"
+
+---
+
+### **4.6 - Late Expert**
+
+- **Technical Control:** Absolute technical fluency; can work in any mode or medium; technique serves vision so perfectly it becomes invisible
+- **Compositional Intelligence:** Exceptional structural intelligence; compositions achieve inevitability—cannot imagine them any other way; masterful economy
+- **Color/Value Architecture:** Transcendent color use; color creates meaning beyond description; relationships feel necessary rather than chosen; profound restraint
+- **Surface Quality:** Perfect marriage of material and meaning; surface quality enhances content; shows what to include and what to eliminate
+- **Expressive Voice:** Profound artistic voice; work has timeless quality; aesthetic and conceptual depth create lasting resonance; influences others
+
+**Key indicator:** Work achieves depth that goes beyond style into universal territory; "approaching timeless quality"
+
+---
+
+### **4.8 - Approaching Master**
+
+- **Technical Control:** Complete command where technique disappears entirely; execution is so assured it's unremarkable; all attention goes to meaning/emotion
+- **Compositional Intelligence:** Perfect structural inevitability; every decision feels necessary; maximum impact with minimum elements; profound compositional intelligence
+- **Color/Value Architecture:** Color and value relationships achieve psychological truth; palette feels inevitable rather than chosen; creates meaning through relationships alone
+- **Surface Quality:** Complete economy; nothing excessive, nothing missing; surface quality reveals rather than decorates; restraint shows mastery
+- **Expressive Voice:** Work transcends personal style to achieve universal resonance; emotional/conceptual depth that connects to fundamental human experience
+
+**Key indicator:** Work approaches timelessness; technique is invisible; emotional or conceptual inevitability; "this could be a masterwork"
+
+---
+
+## Your Task
+
+**Read all 5 profiles above.**
+
+**Select which profile BEST describes the work you evaluated.**
+
+This is a pattern-matching exercise, not a calculation. Which description fits most closely?
+
+**Do not reconsider whether this is Level 4.** You are only determining: Is it 4.0, 4.2, 4.4, 4.6, or 4.8?
+
+---
+
+## CRITICAL: What Value to Return
+
+You have determined this work is at Level [X]. That decision is LOCKED.
+
+Your ONLY task now is to determine the DECIMAL portion (0.0, 0.2, 0.4, 0.6, or 0.8).
+
+**Examples of CORRECT responses:**
+- If you match the [X].0 profile → return `"decimal_position": 0.0`
+- If you match the [X].2 profile → return `"decimal_position": 0.2`
+- If you match the [X].4 profile → return `"decimal_position": 0.4`
+- If you match the [X].6 profile → return `"decimal_position": 0.6`
+- If you match the [X].8 profile → return `"decimal_position": 0.8`
+
+**Examples of WRONG responses:**
+- ❌ `"decimal_position": [X].2` ← This is the full score, not the decimal
+- ❌ `"decimal_position": [X]` ← This is the level, not the decimal
+- ❌ `"decimal_position": 0.3` ← Not a valid decimal value
+
+**Remember:** Return ONLY the decimal portion (0.0, 0.2, 0.4, 0.6, or 0.8). The backend will add this to the level.
+---
+
+## Required Output Format
+
+Return your response as a JSON object:
+
+{
+  "decimal_position": [0.0, 0.2, 0.4, 0.6, or 0.8],
+  "reasoning": "[2-3 sentences explaining which profile best fit and why]"
+}
