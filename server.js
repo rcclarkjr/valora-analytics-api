@@ -1174,24 +1174,10 @@ try {
   });
 }
 
-    // Build conversation context with artwork info
-    let artworkContext = `Title: "${artTitle}"
-Artist: "${artistName}"`;
 
-    if (subjectPhrase && subjectPhrase.trim().length > 0) {
-      artworkContext += `
-Subject/Intent: "${subjectPhrase.trim()}"
-(This describes what the artwork depicts and the artist's intent. Consider this context when evaluating.)`;
-    }
-
-    if (medium && medium.trim().length > 0) {
-      artworkContext += `
-Medium: "${medium.trim()}"`;
-    }
-
-    const step1FullPrompt = `${artworkContext}
-
-${step1Prompt}`;
+// Use Step 1 prompt directly - no metadata prepended
+// (Artist name and title are kept for report display only)
+const step1FullPrompt = step1Prompt;
 
     // Initialize messages array with image + Step 1 prompt
     const messages = [
