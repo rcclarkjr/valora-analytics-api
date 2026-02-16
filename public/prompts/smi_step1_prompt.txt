@@ -42,13 +42,13 @@ Evaluate as if you have no knowledge of who created it, when it was created, or 
 
 **Observable markers:**
 - **Limited technical range:** Demonstrates competence in a narrow set of fundamental skills (typically 2-4 basic techniques such as clean application, simple shapes, basic color, straightforward composition) but shows little breadth beyond these
+- **Isolated skills, not integrated:** Can execute individual techniques competently (clean edges, flat color, simple forms) but struggles when multiple skills must work together simultaneously—cannot coordinate diverse technical demands into coherent solutions
 - **Competent replication from reference,** but with visible errors in proportion, perspective, or lighting logic when attempting skills outside the limited repertoire
-- **"By the book" decisions throughout:** Rule of thirds composition, complementary color schemes, standard lighting setups—learned formulas applied to simple tasks
-- **Inconsistent quality within the piece:** Some areas well-executed (using familiar skills), others weak (attempting unfamiliar skills); suggests growing but unreliable and narrow skill set
-- **Isolated skills, not integrated:** Can handle simple, straightforward tasks but struggles when multiple techniques must work together
+- **"By the book" decisions throughout:** Rule of thirds composition, complementary color schemes, standard lighting setups—learned formulas applied to simple, straightforward tasks
+- **Inconsistent quality within the piece:** Some areas well-executed (using familiar, isolated skills), others weak (attempting unfamiliar skills or coordination); suggests growing but unreliable and narrow skill set
 - **Generic aesthetic:** Looks like standard student work in an established style; no distinguishing characteristics beyond subject matter
 
-**Key differentiator:** Can execute a limited set of fundamentals when focused, but quality drops when complexity increases or multiple skills must coordinate; follows recipes rather than making creative choices; limited technical vocabulary
+**Key differentiator:** Can execute a limited set of fundamentals reliably in isolation, but quality drops when complexity increases or when multiple skills must coordinate; follows recipes rather than making creative choices; limited technical vocabulary with little integration
 
 ---
 
@@ -57,13 +57,13 @@ Evaluate as if you have no knowledge of who created it, when it was created, or 
 
 **Observable markers:**
 - **Broad technical proficiency:** Demonstrates reliable mastery across multiple coordinated skills (typically 6+ techniques working together: perspective, atmospheric effects, color relationships, texture, spatial depth, value structure, composition, etc.)
-- **No major fundamental errors:** Anatomy, perspective, color relationships, lighting, and composition all function correctly across this broad range
-- **Clean, controlled execution:** Consistent mark quality, deliberate edge control, intentional color mixing—technical reliability across diverse challenges
-- **Integrated skills working together:** Successfully coordinates multiple techniques into coherent wholes; handles complex, multi-faceted tasks competently
+- **Integrated skills working together:** Successfully coordinates multiple techniques into coherent wholes—not just executing individual skills well, but combining them to solve complex, multi-dimensional challenges where different elements must support each other
+- **No major fundamental errors:** Anatomy, perspective, color relationships, lighting, and composition all function correctly across this broad range, working in harmony
+- **Clean, controlled execution:** Consistent mark quality, deliberate edge control, intentional color mixing—technical reliability maintained even when juggling diverse technical demands simultaneously
 - **Safe, conventional choices:** Balanced composition, harmonious colors, proper focal point—everything "works" across all dimensions but nothing surprises
-- **Anonymous competence:** Remove any signature and this could be by any skilled practitioner; lacks distinctive voice despite comprehensive technical capability
+- **Anonymous competence:** Remove any signature and this could be by any skilled practitioner; lacks distinctive voice despite comprehensive technical capability and successful integration
 
-**Key differentiator:** Broad, integrated technical mastery—successfully coordinates multiple complex skills into coherent execution—but remains creatively generic; everything is correct across multiple dimensions, nothing is memorable; "professional stock art" quality with extensive skill deployment
+**Key differentiator:** Broad, integrated technical mastery—successfully coordinates multiple complex skills working together into coherent execution—but remains creatively generic; handles multi-faceted technical challenges where diverse elements must harmonize, yet produces nothing memorable; "professional stock art" quality with extensive, integrated skill deployment
 
 ---
 
