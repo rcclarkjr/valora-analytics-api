@@ -38,28 +38,32 @@ Evaluate as if you have no knowledge of who created it, when it was created, or 
 ---
 
 ### **Level 2: Apprentice**
-**Primary Diagnostic:** Does this work show rule-following with uneven execution quality?
+**Primary Diagnostic:** Does this work show rule-following with limited technical range and uneven execution quality?
 
 **Observable markers:**
-- **Competent replication from reference,** but with visible errors in proportion, perspective, or lighting logic
-- **"By the book" decisions throughout:** Rule of thirds composition, complementary color schemes, standard lighting setups, learned formulas
-- **Inconsistent quality within the piece:** Some areas well-executed, others weak; suggests growing but unreliable skill
+- **Limited technical range:** Demonstrates competence in a narrow set of fundamental skills (typically 2-4 basic techniques such as clean application, simple shapes, basic color, straightforward composition) but shows little breadth beyond these
+- **Competent replication from reference,** but with visible errors in proportion, perspective, or lighting logic when attempting skills outside the limited repertoire
+- **"By the book" decisions throughout:** Rule of thirds composition, complementary color schemes, standard lighting setups—learned formulas applied to simple tasks
+- **Inconsistent quality within the piece:** Some areas well-executed (using familiar skills), others weak (attempting unfamiliar skills); suggests growing but unreliable and narrow skill set
+- **Isolated skills, not integrated:** Can handle simple, straightforward tasks but struggles when multiple techniques must work together
 - **Generic aesthetic:** Looks like standard student work in an established style; no distinguishing characteristics beyond subject matter
 
-**Key differentiator:** Can execute fundamentals when focused, but quality drops when complexity increases; follows recipes rather than making creative choices
+**Key differentiator:** Can execute a limited set of fundamentals when focused, but quality drops when complexity increases or multiple skills must coordinate; follows recipes rather than making creative choices; limited technical vocabulary
 
 ---
 
 ### **Level 3: Journeyman**
-**Primary Diagnostic:** Is this work technically sound but aesthetically predictable?
+**Primary Diagnostic:** Is this work technically sound across multiple skill dimensions but aesthetically predictable?
 
 **Observable markers:**
-- **No major fundamental errors:** Anatomy, perspective, color relationships, lighting, and composition all function correctly
-- **Clean, controlled execution:** Consistent mark quality, deliberate edge control, intentional color mixing
-- **Safe, conventional choices:** Balanced composition, harmonious colors, proper focal point—everything "works" but nothing surprises
-- **Anonymous competence:** Remove any signature and this could be by any skilled practitioner; lacks distinctive voice
+- **Broad technical proficiency:** Demonstrates reliable mastery across multiple coordinated skills (typically 6+ techniques working together: perspective, atmospheric effects, color relationships, texture, spatial depth, value structure, composition, etc.)
+- **No major fundamental errors:** Anatomy, perspective, color relationships, lighting, and composition all function correctly across this broad range
+- **Clean, controlled execution:** Consistent mark quality, deliberate edge control, intentional color mixing—technical reliability across diverse challenges
+- **Integrated skills working together:** Successfully coordinates multiple techniques into coherent wholes; handles complex, multi-faceted tasks competently
+- **Safe, conventional choices:** Balanced composition, harmonious colors, proper focal point—everything "works" across all dimensions but nothing surprises
+- **Anonymous competence:** Remove any signature and this could be by any skilled practitioner; lacks distinctive voice despite comprehensive technical capability
 
-**Key differentiator:** Everything is correct, nothing is memorable; technically proficient but creatively generic; "professional stock art" quality
+**Key differentiator:** Broad, integrated technical mastery—successfully coordinates multiple complex skills into coherent execution—but remains creatively generic; everything is correct across multiple dimensions, nothing is memorable; "professional stock art" quality with extensive skill deployment
 
 ---
 
