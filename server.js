@@ -1126,19 +1126,18 @@ app.post("/analyze-smi", async (req, res) => {
   try {
     console.log("Received SMI analysis request (Two-Step Process)");
     
-const {
-  image,
-  imageType, 
-  artTitle,
-  artistName,
-  subjectPhrase,
-  medium,
-  temperature: requestedTemp
-} = req.body;
+    const {
+      image,
+      imageType, 
+      artTitle,
+      artistName,
+      subjectPhrase,
+      medium,
+      temperature: requestedTemp
+    } = req.body;
 
     const temperature = typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
-
-	const validImageType = imageType || "image/jpeg";
+    const validImageType = imageType || "image/jpeg";
 
     // Validate required fields
     if (!image) {
@@ -1156,8 +1155,50 @@ const {
     }
 
     console.log(`Processing SMI for: "${artTitle}" by ${artistName}`);
+    console.log(`Medium: ${medium}`);
     if (subjectPhrase) {
-      console.log(`Subject/Intent: "${subjectPhrase}"`);
+      console.log(`Subject phrase (raw): "${subjectPhrase}"`);
+    }
+
+    // ================================================================================
+    // CURATE SUBJECT DESCRIPTION (Strip emotional language, keep factual only)
+    // ================================================================================
+    
+    let curatedSubject = '';
+    
+    if (subjectPhrase && 
+        subjectPhrase.trim() && 
+        subjectPhrase.trim().toLowerCase() !== 'x') {
+      
+      console.log("Curating subject description to factual-only...");
+      
+      const curationPrompt = `Rewrite this artwork description using ONLY factual, observable nouns and verbs. Remove all emotional adjectives, subjective assessments, and value judgments. Keep only what can be objectively seen. Maximum 15 words.
+
+User description: "${subjectPhrase}"
+
+Factual version:`;
+
+      try {
+        const curationResponse = await callAI(
+          [{ role: "user", content: curationPrompt }],
+          100,
+          "You are a text editor that removes emotional language and keeps only factual descriptions.",
+          false,  // useJSON = false for text response
+          0.0     // temperature = 0 for consistency
+        );
+        
+        // Extract text from response
+        curatedSubject = typeof curationResponse === 'string' 
+          ? curationResponse.trim() 
+          : (curationResponse.text || curationResponse.content || '').trim();
+        
+        console.log(`Subject curated: "${curatedSubject}"`);
+      } catch (error) {
+        console.error('Subject curation failed, using original:', error.message);
+        curatedSubject = subjectPhrase.trim(); // Fallback to original
+      }
+    } else {
+      console.log("No subject description provided (or placeholder 'x' detected)");
     }
 
     // ================================================================================
@@ -1166,24 +1207,30 @@ const {
     
     console.log("STEP 1: Loading integer classification prompt...");
     
-let step1Prompt;
-try {
-  const promptResponse = await axios.get('https://valora-analytics-api.onrender.com/prompts/smi_step1_prompt');
-  step1Prompt = promptResponse.data;
-} catch (fileError) {
-  console.error("Failed to load Step 1 prompt:", fileError.message);
-  return res.status(500).json({
-    error: { message: "Server configuration error: Missing Step 1 prompt file" }
-  });
-}
+    let step1Prompt;
+    try {
+      const promptResponse = await axios.get('https://valora-analytics-api.onrender.com/prompts/smi_step1_prompt');
+      step1Prompt = promptResponse.data;
+    } catch (fileError) {
+      console.error("Failed to load Step 1 prompt:", fileError.message);
+      return res.status(500).json({
+        error: { message: "Server configuration error: Missing Step 1 prompt file" }
+      });
+    }
 
-
-const step1FullPrompt = `Medium: ${medium}
+    // Build Step 1 prompt with medium and optional subject
+    const step1FullPrompt = `Medium: ${medium}
+${curatedSubject ? `Subject: ${curatedSubject}` : ''}
 (Note: Evaluate the level of mastery demonstrated considering what was achieved with this medium. Some mediums make certain techniques easier or harder—achieving sophisticated effects in challenging mediums may demonstrate additional mastery. However, assess whether the work achieves transcendent, timeless qualities regardless of which medium facilitated those effects. A masterwork is a masterwork whether executed in oil, acrylic, or any other medium.)
 
 ${step1Prompt}`;
 
-
+    console.log("=== STEP 1 FULL CONTEXT ===");
+    console.log(`Medium: ${medium}`);
+    if (curatedSubject) {
+      console.log(`Subject: ${curatedSubject}`);
+    }
+    console.log("===========================");
 
     // Initialize messages array with image + Step 1 prompt
     const messages = [
@@ -1223,7 +1270,7 @@ ${step1Prompt}`;
     }
 
     console.log("STEP 1: Response received");
-	console.log("=== STEP 1 RAW RESPONSE ===");
+    console.log("=== STEP 1 RAW RESPONSE ===");
     console.log(JSON.stringify(step1Response, null, 2));
     console.log("===========================");
 
@@ -1254,13 +1301,12 @@ ${step1Prompt}`;
       role: "assistant",
       content: JSON.stringify(step1Response)
     });
-	
-	// After Step 1 completes
-	console.log("=== STEP 1 COMPLETE ===");
-	console.log(`Assigned Level: ${level}`);
-	console.log(`Step 1 Reasoning Length: ${step1Reasoning.length} characters`);
-	console.log("======================");
-	
+    
+    // After Step 1 completes
+    console.log("=== STEP 1 COMPLETE ===");
+    console.log(`Assigned Level: ${level}`);
+    console.log(`Step 1 Reasoning Length: ${step1Reasoning.length} characters`);
+    console.log("======================");
 
     // ================================================================================
     // HANDLE LEVEL 5 (No Step 2 needed)
@@ -1284,20 +1330,18 @@ ${step1Prompt}`;
     
     console.log(`STEP 2: Loading decimal refinement prompt for Level ${level}...`);
 
+    const step2PromptName = `smi_step2_level${level}`;
+    let step2Prompt;
 
-const step2PromptName = `smi_step2_level${level}`;
-let step2Prompt;
-
-try {
-  const promptResponse = await axios.get(`https://valora-analytics-api.onrender.com/prompts/${step2PromptName}`);
-  step2Prompt = promptResponse.data;
-} catch (fileError) {
-  console.error(`Failed to load Step 2 prompt: ${step2PromptName}`, fileError.message);
-  return res.status(500).json({
-    error: { message: `Server configuration error: Missing Step 2 prompt for level ${level}` }
-  });
-}
-
+    try {
+      const promptResponse = await axios.get(`https://valora-analytics-api.onrender.com/prompts/${step2PromptName}`);
+      step2Prompt = promptResponse.data;
+    } catch (fileError) {
+      console.error(`Failed to load Step 2 prompt: ${step2PromptName}`, fileError.message);
+      return res.status(500).json({
+        error: { message: `Server configuration error: Missing Step 2 prompt for level ${level}` }
+      });
+    }
 
     // Add Step 2 prompt to conversation (image still accessible in messages[0])
     messages.push({
@@ -1305,12 +1349,11 @@ try {
       content: step2Prompt
     });
 
-
-	// After loading Step 2 prompt
-	const step2PromptFile = `smi_step2_level${level}.txt`;
-	console.log("=== STEP 2 STARTING ===");
-	console.log(`Loading prompt file: ${step2PromptFile}`);
-	console.log("=======================");
+    // After loading Step 2 prompt
+    const step2PromptFile = `smi_step2_level${level}.txt`;
+    console.log("=== STEP 2 STARTING ===");
+    console.log(`Loading prompt file: ${step2PromptFile}`);
+    console.log("=======================");
 
     console.log("STEP 2: Calling AI for decimal refinement...");
 
@@ -1331,7 +1374,7 @@ try {
     }
 
     console.log("STEP 2: Response received");
-	console.log("=== STEP 2 RAW RESPONSE ===");
+    console.log("=== STEP 2 RAW RESPONSE ===");
     console.log(JSON.stringify(step2Response, null, 2));
     console.log("===========================");
 
@@ -1348,23 +1391,18 @@ try {
 
     // Validate decimal position is one of: 0.0, 0.2, 0.4, 0.6, 0.8
     const validDecimals = [0.0, 0.2, 0.4, 0.6, 0.8];
-if (!validDecimals.includes(decimalPosition)) {
-  console.log("=== VALIDATION FAILURE ===");
-  console.log(`Invalid decimal returned: ${decimalPosition}`);
-  console.log(`Type of value: ${typeof decimalPosition}`);
-  console.log(`Expected one of: ${validDecimals.join(', ')}`);
-  console.log(`Step 2 Reasoning: ${step2Response.reasoning}`);
-  console.log("==========================");
-  
-  return res.status(500).json({
-    error: { message: `Invalid decimal position: ${decimalPosition}. Must be 0.0, 0.2, 0.4, 0.6, or 0.8.` }
-  });
-}
-
-
-
-
-
+    if (!validDecimals.includes(decimalPosition)) {
+      console.log("=== VALIDATION FAILURE ===");
+      console.log(`Invalid decimal returned: ${decimalPosition}`);
+      console.log(`Type of value: ${typeof decimalPosition}`);
+      console.log(`Expected one of: ${validDecimals.join(', ')}`);
+      console.log(`Step 2 Reasoning: ${step2Response.reasoning}`);
+      console.log("==========================");
+      
+      return res.status(500).json({
+        error: { message: `Invalid decimal position: ${decimalPosition}. Must be 0.0, 0.2, 0.4, 0.6, or 0.8.` }
+      });
+    }
 
     console.log(`STEP 2 RESULT: Decimal ${decimalPosition}`);
     console.log(`STEP 2 REASONING: ${step2Reasoning}`);
