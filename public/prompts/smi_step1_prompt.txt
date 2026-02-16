@@ -59,17 +59,17 @@ Evaluate as if you have no knowledge of who created it, when it was created, or 
 - **No major fundamental errors:** Anatomy, perspective, color relationships, lighting, and composition all function correctly across these complex demands
 - **Clean, controlled execution:** Consistent mark quality, deliberate edge control, intentional color mixing maintained even when juggling multiple technical challenges
 - **Safe, conventional choices:** Balanced composition, harmonious colors, proper focal point—everything "works" but nothing surprises
-- **Anonymous competence:** Remove any signature and this could be by any skilled practitioner; lacks distinctive voice
+- **Important distinction from Level 4:** If the work shows distinctive creative voice—recognizable handling, personal color choices, unique compositional approaches, or mark-making that feels authored and memorable—it belongs at Level 4 even when handling complex tasks. Level 3 is specifically for work that is technically accomplished but creatively conventional and interchangeable with other skilled practitioners. Ask: "Could I identify other works by this artist from style alone?" If yes, classify as Level 4.
 
 **Key differentiator:** Handles complex, multi-faceted technical challenges competently—demonstrates broad technical proficiency when facing sophisticated demands—but remains creatively generic; "professional stock art" quality
 
 ---
 
 ### **Level 4: Expert**
-**Primary Diagnostic:** Does this work demonstrate a distinctive, coherent aesthetic vision?
+**Primary Diagnostic:** Does this work demonstrate distinctive creative voice and recognizable personal handling that transcend mere technical competence?
 
 **Observable markers:**
-- **Confident execution serving creative intent:** Any rule-breaking is clearly deliberate and effective (unusual cropping, unexpected color relationships, distinctive mark-making)
+- ** Can you recognize this artist's distinctive approach? Look for: unique color sensibility (not just correct color), personal mark-making (not just clean execution), memorable compositional choices (not just balanced), or treatment of light/atmosphere that feels authored. If the handling is distinctive enough to be recognizable across works, it's Level 4 regardless of subject matter.
 - **Strong point of view throughout:** Every element reinforces a specific mood, style, or message; choices feel authored, not default
 - **Recognizable handling:** Color palette, compositional approach, or technical treatment is distinctive enough to be memorable
 - **Stylistic coherence:** All decisions work together as a unified aesthetic system; nothing feels arbitrary or out of place
