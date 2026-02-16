@@ -1138,6 +1138,8 @@ const {
 
     const temperature = typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
 
+	const validImageType = imageType || "image/jpeg";
+
     // Validate required fields
     if (!image) {
       console.log("Missing image in request");
@@ -1187,7 +1189,7 @@ const step1FullPrompt = step1Prompt;
         content: [
           {
             type: "image_url",
-            image_url: { url: `data:image/jpeg;base64,${image}` }
+            image_url: { url: `data:${validImageType};base64,${image}` } 
           },
           {
             type: "text",
