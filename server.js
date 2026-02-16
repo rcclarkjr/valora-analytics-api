@@ -1178,9 +1178,13 @@ try {
 }
 
 
-// Use Step 1 prompt directly - no metadata prepended
-// (Artist name and title are kept for report display only)
-const step1FullPrompt = step1Prompt;
+// Add medium context with neutral framing
+const step1FullPrompt = `Medium: ${medium}
+(Note: Evaluate the level of mastery demonstrated regardless of medium.)
+
+${step1Prompt}`;
+
+
 
     // Initialize messages array with image + Step 1 prompt
     const messages = [
