@@ -1178,9 +1178,8 @@ try {
 }
 
 
-// Add medium context with neutral framing
 const step1FullPrompt = `Medium: ${medium}
-(Note: Evaluate the level of mastery demonstrated regardless of medium.)
+(Note: Evaluate the level of mastery demonstrated considering what was achieved with this medium. Some mediums make certain techniques easier or harder—achieving sophisticated effects in challenging mediums may demonstrate additional mastery. However, assess whether the work achieves transcendent, timeless qualities regardless of which medium facilitated those effects. A masterwork is a masterwork whether executed in oil, acrylic, or any other medium.)
 
 ${step1Prompt}`;
 
