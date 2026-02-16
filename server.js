@@ -1160,46 +1160,47 @@ app.post("/analyze-smi", async (req, res) => {
       console.log(`Subject phrase (raw): "${subjectPhrase}"`);
     }
 
-    // ================================================================================
-    // CURATE SUBJECT DESCRIPTION (Strip emotional language, keep factual only)
-    // ================================================================================
-    
-    let curatedSubject = '';
-    
-    if (subjectPhrase && 
-        subjectPhrase.trim() && 
-        subjectPhrase.trim().toLowerCase() !== 'x') {
-      
-      console.log("Curating subject description to factual-only...");
-      
-      const curationPrompt = `Rewrite this artwork description using ONLY factual, observable nouns and verbs. Remove all emotional adjectives, subjective assessments, and value judgments. Keep only what can be objectively seen. Maximum 15 words.
+// Curate subject description (Remove emotional language only)
+let curatedSubject = '';
+
+if (subjectPhrase && 
+    subjectPhrase.trim() && 
+    subjectPhrase.trim().toLowerCase() !== 'x') {
+  
+  console.log("Curating subject description (removing emotional language only)...");
+  
+  const curationPrompt = `Remove ONLY emotional adjectives and subjective value judgments from this description. Preserve all technical terms, conceptual language, and factual descriptions exactly as written. Do not rewrite or simplify.
+
+Emotional words to remove: beautiful, stunning, amazing, powerful, dramatic, breathtaking, tender, loving, masterful, brilliant, incredible, gorgeous, wonderful, precious, etc.
+
+Keep everything else unchanged, including: technical terms (dual imagery, transitional planes, overlay, integration), conceptual language (metaphysical, dimensional, realm, imply, suggest), and all factual descriptions.
 
 User description: "${subjectPhrase}"
 
-Factual version:`;
+Edited version (remove only emotional words, keep everything else exactly as written):`;
 
-      try {
-        const curationResponse = await callAI(
-          [{ role: "user", content: curationPrompt }],
-          100,
-          "You are a text editor that removes emotional language and keeps only factual descriptions.",
-          false,  // useJSON = false for text response
-          0.0     // temperature = 0 for consistency
-        );
-        
-        // Extract text from response
-        curatedSubject = typeof curationResponse === 'string' 
-          ? curationResponse.trim() 
-          : (curationResponse.text || curationResponse.content || '').trim();
-        
-        console.log(`Subject curated: "${curatedSubject}"`);
-      } catch (error) {
-        console.error('Subject curation failed, using original:', error.message);
-        curatedSubject = subjectPhrase.trim(); // Fallback to original
-      }
-    } else {
-      console.log("No subject description provided (or placeholder 'x' detected)");
-    }
+  try {
+    const curationResponse = await callAI(
+      [{ role: "user", content: curationPrompt }],
+      100,
+      "You are a text editor that removes only emotional adjectives while preserving all technical and conceptual language exactly as written.",
+      false,
+      0.0
+    );
+    
+    curatedSubject = typeof curationResponse === 'string' 
+      ? curationResponse.trim() 
+      : (curationResponse.text || curationResponse.content || '').trim();
+    
+    console.log(`Original: "${subjectPhrase}"`);
+    console.log(`Curated: "${curatedSubject}"`);
+  } catch (error) {
+    console.error('Subject curation failed, using original:', error.message);
+    curatedSubject = subjectPhrase.trim();
+  }
+} else {
+  console.log("No subject description provided (or placeholder 'x' detected)");
+}
 
     // ================================================================================
     // STEP 1: INTEGER CLASSIFICATION (1-5)
