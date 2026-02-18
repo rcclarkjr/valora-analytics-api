@@ -1131,7 +1131,6 @@ app.post("/analyze-smi", async (req, res) => {
       imageType, 
       artTitle,
       artistName,
-      subjectPhrase,
       medium,
       temperature: requestedTemp
     } = req.body;
@@ -1156,51 +1155,6 @@ app.post("/analyze-smi", async (req, res) => {
 
     console.log(`Processing SMI for: "${artTitle}" by ${artistName}`);
     console.log(`Medium: ${medium}`);
-    if (subjectPhrase) {
-      console.log(`Subject phrase (raw): "${subjectPhrase}"`);
-    }
-
-// Curate subject description (Remove emotional language only)
-let curatedSubject = '';
-
-if (subjectPhrase && 
-    subjectPhrase.trim() && 
-    subjectPhrase.trim().toLowerCase() !== 'x') {
-  
-  console.log("Curating subject description (removing emotional language only)...");
-  
-  const curationPrompt = `Remove ONLY emotional adjectives and subjective value judgments from this description. Preserve all technical terms, conceptual language, and factual descriptions exactly as written. Do not rewrite or simplify.
-
-Emotional words to remove: beautiful, stunning, amazing, powerful, dramatic, breathtaking, tender, loving, masterful, brilliant, incredible, gorgeous, wonderful, precious, etc.
-
-Keep everything else unchanged, including: technical terms (dual imagery, transitional planes, overlay, integration), conceptual language (metaphysical, dimensional, realm, imply, suggest), and all factual descriptions.
-
-User description: "${subjectPhrase}"
-
-Edited version (remove only emotional words, keep everything else exactly as written):`;
-
-  try {
-    const curationResponse = await callAI(
-      [{ role: "user", content: curationPrompt }],
-      100,
-      "You are a text editor that removes only emotional adjectives while preserving all technical and conceptual language exactly as written.",
-      false,
-      0.0
-    );
-    
-    curatedSubject = typeof curationResponse === 'string' 
-      ? curationResponse.trim() 
-      : (curationResponse.text || curationResponse.content || '').trim();
-    
-    console.log(`Original: "${subjectPhrase}"`);
-    console.log(`Curated: "${curatedSubject}"`);
-  } catch (error) {
-    console.error('Subject curation failed, using original:', error.message);
-    curatedSubject = subjectPhrase.trim();
-  }
-} else {
-  console.log("No subject description provided (or placeholder 'x' detected)");
-}
 
     // ================================================================================
     // STEP 1: INTEGER CLASSIFICATION (1-5)
@@ -1219,18 +1173,14 @@ Edited version (remove only emotional words, keep everything else exactly as wri
       });
     }
 
-    // Build Step 1 prompt with medium and optional subject
+    // Build Step 1 prompt with medium
     const step1FullPrompt = `Medium: ${medium}
-${curatedSubject ? `Subject: ${curatedSubject}` : ''}
 (Note: Evaluate the level of mastery demonstrated considering what was achieved with this medium. Some mediums make certain techniques easier or harder—achieving sophisticated effects in challenging mediums may demonstrate additional mastery. However, assess whether the work achieves transcendent, timeless qualities regardless of which medium facilitated those effects. A masterwork is a masterwork whether executed in oil, acrylic, or any other medium.)
 
 ${step1Prompt}`;
 
     console.log("=== STEP 1 FULL CONTEXT ===");
     console.log(`Medium: ${medium}`);
-    if (curatedSubject) {
-      console.log(`Subject: ${curatedSubject}`);
-    }
     console.log("===========================");
 
     // Initialize messages array with image + Step 1 prompt
