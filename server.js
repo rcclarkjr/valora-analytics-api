@@ -1124,7 +1124,7 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
 // ====================================================================================
 app.post("/analyze-smi", async (req, res) => {
   try {
-    console.log("Received SMI analysis request (Two-Step Process)");
+    console.log("Received SMI analysis request (Single-Call New Architecture)");
     
     const {
       image,
@@ -1146,227 +1146,120 @@ app.post("/analyze-smi", async (req, res) => {
       });
     }
 
-    if (!OPENAI_API_KEY) {
-      console.log("Missing API key");
-      return res.status(500).json({
-        error: { message: "Server configuration error: Missing API key" }
-      });
-    }
-
     console.log(`Processing SMI for: "${artTitle}" by ${artistName}`);
     console.log(`Medium: ${medium}`);
 
     // ================================================================================
-    // STEP 1: INTEGER CLASSIFICATION (1-5)
+    // LOAD PROMPT
     // ================================================================================
-    
-    console.log("STEP 1: Loading integer classification prompt...");
-    
-    let step1Prompt;
+
+    console.log("Loading smi_prompt...");
+
+    let smiPrompt;
     try {
-      const promptResponse = await axios.get('https://valora-analytics-api.onrender.com/prompts/smi_step1_prompt');
-      step1Prompt = promptResponse.data;
+      const promptResponse = await axios.get('https://valora-analytics-api.onrender.com/prompts/smi_prompt');
+      smiPrompt = promptResponse.data;
     } catch (fileError) {
-      console.error("Failed to load Step 1 prompt:", fileError.message);
+      console.error("Failed to load smi_prompt:", fileError.message);
       return res.status(500).json({
-        error: { message: "Server configuration error: Missing Step 1 prompt file" }
+        error: { message: "Server configuration error: Missing smi_prompt file" }
       });
     }
 
-    // Build Step 1 prompt with medium
-    const step1FullPrompt = `Medium: ${medium}
-(Note: Evaluate the level of mastery demonstrated considering what was achieved with this medium. Some mediums make certain techniques easier or harder—achieving sophisticated effects in challenging mediums may demonstrate additional mastery. However, assess whether the work achieves transcendent, timeless qualities regardless of which medium facilitated those effects. A masterwork is a masterwork whether executed in oil, acrylic, or any other medium.)
+    // Build full prompt with medium context prepended
+    const fullPrompt = `Medium: ${medium}
+(Note: Evaluate the level of mastery demonstrated considering what was achieved with this medium. Some mediums make certain techniques easier or harder — achieving sophisticated effects in challenging mediums may demonstrate additional mastery. A masterwork is a masterwork whether executed in oil, acrylic, or any other medium.)
 
-${step1Prompt}`;
+${smiPrompt}`;
 
-    console.log("=== STEP 1 FULL CONTEXT ===");
-    console.log(`Medium: ${medium}`);
-    console.log("===========================");
+    // ================================================================================
+    // SINGLE AI CALL
+    // ================================================================================
 
-    // Initialize messages array with image + Step 1 prompt
+    const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Analyze the artwork and return your evaluation in valid JSON format only.";
+
     const messages = [
       {
         role: "user",
         content: [
           {
             type: "image_url",
-            image_url: { url: `data:${validImageType};base64,${image}` } 
+            image_url: { url: `data:${validImageType};base64,${image}` }
           },
           {
             type: "text",
-            text: step1FullPrompt
+            text: fullPrompt
           }
         ]
       }
     ];
 
-    console.log("STEP 1: Calling AI for integer classification...");
+    console.log("Calling AI for SMI evaluation...");
 
-    const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Analyze the artwork and return your evaluation in valid JSON format only.";
-
-    let step1Response;
+    let aiResponse;
     try {
-      step1Response = await callAI(
+      aiResponse = await callAI(
         messages,
         1000,
         systemContent,
-        true,  // useJSON = true for JSON response
+        true,   // useJSON = true
         temperature
       );
     } catch (error) {
-      console.error("Step 1 AI call failed:", error.message);
+      console.error("AI call failed:", error.message);
       return res.status(500).json({
-        error: { message: "Step 1 evaluation failed: " + error.message }
+        error: { message: "SMI evaluation failed: " + error.message }
       });
-    }
-
-
-    // Validate Step 1 response structure
-    if (!step1Response.level || !step1Response.reasoning) {
-      console.error("Invalid Step 1 response structure:", step1Response);
-      return res.status(500).json({
-        error: { message: "Invalid Step 1 response: missing level or reasoning" }
-      });
-    }
-
-    const level = step1Response.level;
-    const step1Reasoning = step1Response.reasoning;
-
-    // Validate level is 1-5
-    if (!Number.isInteger(level) || level < 1 || level > 5) {
-      console.error(`Invalid level returned: ${level}`);
-      return res.status(500).json({
-        error: { message: `Invalid level classification: ${level}. Must be integer 1-5.` }
-      });
-    }
-
-    console.log(`STEP 1 RESULT: Level ${level}`);
-    console.log(`STEP 1 REASONING: ${step1Reasoning}`);
-
-    // Add Step 1 assistant response to conversation history
-    messages.push({
-      role: "assistant",
-      content: JSON.stringify(step1Response)
-    });
-    
-    // After Step 1 completes
-    console.log("=== STEP 1 COMPLETE ===");
-    console.log(`Assigned Level: ${level}`);
-    console.log(`Step 1 Reasoning Length: ${step1Reasoning.length} characters`);
-    console.log("======================");
-
-    // ================================================================================
-    // HANDLE LEVEL 5 (No Step 2 needed)
-    // ================================================================================
-    
-    if (level === 5) {
-      console.log("Level 5 detected - skipping Step 2 (masterwork = 5.0)");
-      
-      const finalResponse = {
-        smi: "5.0",
-        analysis: `${step1Reasoning}\n\nLevel 5 works receive a final score of 5.0 without decimal refinement, as they represent complete mastery.`
-      };
-
-      console.log("Sending Level 5 response to client");
-      return res.json(finalResponse);
     }
 
     // ================================================================================
-    // STEP 2: DECIMAL REFINEMENT (for levels 1-4)
+    // VALIDATE RESPONSE
     // ================================================================================
-    
-    console.log(`STEP 2: Loading decimal refinement prompt for Level ${level}...`);
 
-    const step2PromptName = `smi_step2_level${level}`;
-    let step2Prompt;
+    const { integer, integer_reasoning, decimal, decimal_reasoning, smi } = aiResponse;
 
-    try {
-      const promptResponse = await axios.get(`https://valora-analytics-api.onrender.com/prompts/${step2PromptName}`);
-      step2Prompt = promptResponse.data;
-    } catch (fileError) {
-      console.error(`Failed to load Step 2 prompt: ${step2PromptName}`, fileError.message);
+    // Validate integer
+    if (!Number.isInteger(integer) || integer < 1 || integer > 5) {
+      console.error(`Invalid integer returned: ${integer}`);
       return res.status(500).json({
-        error: { message: `Server configuration error: Missing Step 2 prompt for level ${level}` }
+        error: { message: `Invalid integer level: ${integer}. Must be 1-5.` }
       });
     }
 
-    // Add Step 2 prompt to conversation (image still accessible in messages[0])
-    messages.push({
-      role: "user",
-      content: step2Prompt
-    });
-
-    // After loading Step 2 prompt
-    const step2PromptFile = `smi_step2_level${level}.txt`;
-    console.log("=== STEP 2 STARTING ===");
-    console.log(`Loading prompt file: ${step2PromptFile}`);
-    console.log("=======================");
-
-    console.log("STEP 2: Calling AI for decimal refinement...");
-
-    let step2Response;
-    try {
-      step2Response = await callAI(
-        messages,
-        1000,
-        systemContent,
-        true,  // useJSON = true
-        temperature
-      );
-    } catch (error) {
-      console.error("Step 2 AI call failed:", error.message);
+    // Validate decimal
+    const validDecimals = [0.00, 0.25, 0.50, 0.75];
+    if (!validDecimals.includes(decimal)) {
+      console.error(`Invalid decimal returned: ${decimal}`);
       return res.status(500).json({
-        error: { message: "Step 2 evaluation failed: " + error.message }
+        error: { message: `Invalid decimal: ${decimal}. Must be 0.00, 0.25, 0.50, or 0.75.` }
       });
     }
 
-
-    // Validate Step 2 response structure
-    if (step2Response.decimal_position === undefined || !step2Response.reasoning) {
-      console.error("Invalid Step 2 response structure:", step2Response);
-      return res.status(500).json({
-        error: { message: "Invalid Step 2 response: missing decimal_position or reasoning" }
-      });
+    // Validate smi matches
+    const expectedSMI = parseFloat((integer + decimal).toFixed(2));
+    const returnedSMI = parseFloat(smi);
+    if (Math.abs(returnedSMI - expectedSMI) > 0.001) {
+      console.warn(`SMI mismatch — recalculating. AI returned ${smi}, expected ${expectedSMI}`);
     }
 
-    const decimalPosition = step2Response.decimal_position;
-    const step2Reasoning = step2Response.reasoning;
+    const finalSMI = expectedSMI.toFixed(2);
 
-    // Validate decimal position is one of: 0.0, 0.2, 0.4, 0.6, 0.8
-    const validDecimals = [0.0, 0.2, 0.4, 0.6, 0.8];
-    if (!validDecimals.includes(decimalPosition)) {
-      console.log("=== VALIDATION FAILURE ===");
-      console.log(`Invalid decimal returned: ${decimalPosition}`);
-      console.log(`Type of value: ${typeof decimalPosition}`);
-      console.log(`Expected one of: ${validDecimals.join(', ')}`);
-      console.log(`Step 2 Reasoning: ${step2Response.reasoning}`);
-      console.log("==========================");
-      
-      return res.status(500).json({
-        error: { message: `Invalid decimal position: ${decimalPosition}. Must be 0.0, 0.2, 0.4, 0.6, or 0.8.` }
-      });
-    }
-
-    console.log(`STEP 2 RESULT: Decimal ${decimalPosition}`);
-    console.log(`STEP 2 REASONING: ${step2Reasoning}`);
+    console.log(`INTEGER: ${integer}`);
+    console.log(`INTEGER REASONING: ${integer_reasoning}`);
+    console.log(`DECIMAL: ${decimal}`);
+    console.log(`DECIMAL REASONING: ${decimal_reasoning}`);
+    console.log(`FINAL SMI: ${finalSMI}`);
 
     // ================================================================================
-    // COMBINE RESULTS
+    // RETURN RESPONSE
     // ================================================================================
-    
-    const finalSMI = level + decimalPosition;
-    console.log(`FINAL SMI: ${finalSMI.toFixed(1)}`);
 
-    // Combine reasoning from both steps
-    const combinedAnalysis = `${step1Reasoning}\n\n${step2Reasoning}`;
+    const combinedAnalysis = `${integer_reasoning}\n\n${decimal_reasoning}`;
 
-    const finalResponse = {
-      smi: finalSMI.toFixed(1),
+    res.json({
+      smi: finalSMI,
       analysis: combinedAnalysis
-    };
-
-    console.log("Sending final SMI response to client");
-    res.json(finalResponse);
+    });
 
   } catch (error) {
     console.error("Unexpected error in SMI analysis:", error);
