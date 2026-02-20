@@ -1153,16 +1153,16 @@ app.post("/analyze-smi", async (req, res) => {
     // LOAD PROMPT
     // ================================================================================
 
-    console.log("Loading smi_prompt...");
+    console.log("Loading SMI_prompt...");
 
     let smiPrompt;
     try {
-      const promptResponse = await axios.get('https://valora-analytics-api.onrender.com/prompts/smi_prompt');
+      const promptResponse = await axios.get('https://valora-analytics-api.onrender.com/prompts/SMI_prompt');
       smiPrompt = promptResponse.data;
     } catch (fileError) {
-      console.error("Failed to load smi_prompt:", fileError.message);
+      console.error("Failed to load SMI_prompt:", fileError.message);
       return res.status(500).json({
-        error: { message: "Server configuration error: Missing smi_prompt file" }
+        error: { message: "Server configuration error: Missing SMI_prompt file" }
       });
     }
 
