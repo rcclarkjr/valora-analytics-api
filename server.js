@@ -1216,7 +1216,7 @@ ${smiPrompt}`;
     // VALIDATE RESPONSE
     // ================================================================================
 
-    const { integer, integer_reasoning, decimal, decimal_reasoning, smi } = aiResponse;
+    const { integer, integer_reasoning, decimal, decimal_reasoning, smi, yes_count } = aiResponse;
 
     // Validate integer
     if (!Number.isInteger(integer) || integer < 1 || integer > 5) {
@@ -1249,6 +1249,7 @@ ${smiPrompt}`;
     console.log(`DECIMAL: ${decimal}`);
     console.log(`DECIMAL REASONING: ${decimal_reasoning}`);
     console.log(`FINAL SMI: ${finalSMI}`);
+    console.log(`YES COUNT: ${yes_count}`);
 
     // ================================================================================
     // RETURN RESPONSE
@@ -1258,7 +1259,8 @@ ${smiPrompt}`;
 
     res.json({
       smi: finalSMI,
-      analysis: combinedAnalysis
+      analysis: combinedAnalysis,
+      yes_count: typeof yes_count === 'number' ? yes_count : null
     });
 
   } catch (error) {
