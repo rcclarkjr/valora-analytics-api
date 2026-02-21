@@ -25,33 +25,101 @@ The work achieves transcendence. Technical mastery is total and invisible — te
 
 ---
 
-PART 2 — DETERMINE THE DECIMAL USING SIX BINARY QUESTIONS
+PART 2 — EVALUATE THE 20 COMPLEXITY FACTORS
 
-Answer each of the six questions below with YES or NO only. Base your answers strictly on what is visible in the artwork. Each answer must be independently defensible.
+For each factor below, you are given the name and definition. Answer YES if the factor is well deployed in this artwork. Answer NO otherwise. Base each answer strictly on what is visible in the artwork. Each answer must be independently defensible.
 
-QUESTION 1 — TECHNICAL CONTROL
-Does this work demonstrate consistent, intentional control of the medium across the entire artwork, with no significant areas of unresolved struggle or accidental marks that undermine the overall quality?
+CORE ELEMENTS
 
-QUESTION 2 — COMPOSITIONAL EFFECTIVENESS
-Does the composition actively guide the viewer's eye through the work in a way that feels intentional and effective, rather than being merely adequate or coincidentally arranged?
+FACTOR 1 — LINE
+Line: A mark with length and direction which can be continuous, broken, implied, thick, thin, or varied in weight and texture. Lines can guide the viewer's eye, define shapes, create textures, and convey emotions and movement.
+Is this factor well deployed in this artwork? YES or NO.
 
-QUESTION 3 — COLOR AND VALUE MASTERY
-Does the color and value system demonstrate clear artistic decision-making — showing either a sophisticated understanding of color relationships, or a deliberate and effective use of a limited or restrained palette — rather than appearing arbitrary or unresolved?
+FACTOR 2 — SPACE
+Space: The area around or between components of a piece which conveys depth and perspective.
+Is this factor well deployed in this artwork? YES or NO.
 
-QUESTION 4 — SURFACE QUALITY AND MARK-MAKING
-Does the physical handling of the medium — brushwork, texture, edges, surface quality — demonstrate intentionality and consistency, with mark-making choices that feel like decisions rather than defaults?
+FACTOR 3 — COLOR/HUE
+Color/Hue: The aspect of things caused by differing qualities of light they reflect or emit.
+Is this factor well deployed in this artwork? YES or NO.
 
-QUESTION 5 — EXPRESSIVE VOICE
-Does the work demonstrate a visible personal aesthetic — evidence that an individual with a distinct point of view made this — rather than appearing generic, anonymous, or purely imitative?
+FACTOR 4 — TEXTURE
+Texture: The surface quality or feel of an object, its smoothness, roughness, softness, etc.
+Is this factor well deployed in this artwork? YES or NO.
 
-QUESTION 6 — UNIFIED VISION
-Do all elements of the work — technical execution, composition, color, surface, and expression — work together as a coherent whole, creating a unified artistic statement rather than a collection of separately adequate parts?
+FACTOR 5 — TONE/VALUE
+Tone/Value: The lightness or darkness of a color.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 6 — SATURATION
+Saturation: The intensity or purity of color, which is reduced by adding gray, black, or white.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 7 — COMPOSITION
+Composition: The arrangement of visual elements within a work of art to guide the viewer's eye and convey the intended message or emotion.
+Is this factor well deployed in this artwork? YES or NO.
+
+DESIGN PRINCIPLES
+
+FACTOR 8 — BALANCE
+Balance: The distribution of visual weight in a work.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 9 — CONTRAST
+Contrast: The degree of difference in value, arranged to make objects distinguishable.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 10 — EMPHASIS
+Emphasis: The part of the design that catches the viewer's attention.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 11 — MOVEMENT
+Movement: The path the viewer's eye takes through the artwork.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 12 — RHYTHM
+Rhythm: The repetition of visual elements to create a sense of movement.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 13 — VARIETY
+Variety: The use of different elements to create interest.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 14 — PROPORTION
+Proportion: The relationship between the sizes of different parts of a work.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 15 — HARMONY
+Harmony: The arrangement of elements in a manner where no single element overwhelms.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 16 — COHESIVENESS
+Cohesiveness: The logical and consistent arrangement of parts of the artwork so they support each other in a unified way to convey an overall theme or message.
+Is this factor well deployed in this artwork? YES or NO.
+
+TECHNIQUES
+
+FACTOR 17 — BRUSHWORK
+Brushwork: The way an artist applies paint with their brush.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 18 — CHIAROSCURO
+Chiaroscuro: The use of strong contrasts between light and dark.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 19 — IMPASTO
+Impasto: Applying paint thickly so that brush or palette knife marks are visible.
+Is this factor well deployed in this artwork? YES or NO.
+
+FACTOR 20 — POINTILLISM
+Pointillism: Painting with small, distinct dots of pure color in proximity for a vibrant, luminous effect.
+Is this factor well deployed in this artwork? YES or NO.
 
 ---
 
 PART 3 — CALCULATE THE DECIMAL FROM THE THRESHOLD TABLE
 
-Count your YES answers from Part 2. Then use the threshold table for the integer level you assigned in Part 1 to determine the decimal.
+Count your YES answers from Part 2. This is a mechanical lookup — do not use judgment or override the table. Find your integer level and your yes_count in the table below and read off the decimal directly.
 
 THRESHOLD TABLE — YES COUNTS TO DECIMAL
 
@@ -61,6 +129,15 @@ Level 2:   0-8       9-11      12-14     15-20
 Level 3:   0-10      11-13     14-15     16-20
 Level 4:   0-15      16        17        18-20
 Level 5:   0-20      —         —         —
+
+Examples of correct table lookup:
+- Integer=3, yes_count=14 → decimal=0.50, SMI=3.50
+- Integer=3, yes_count=16 → decimal=0.75, SMI=3.75
+- Integer=4, yes_count=16 → decimal=0.25, SMI=4.25
+- Integer=4, yes_count=17 → decimal=0.50, SMI=4.50
+- Integer=4, yes_count=6  → decimal=0.00, SMI=4.00
+
+The decimal comes only from this table. Do not adjust it based on your qualitative assessment.
 
 Final SMI = integer + decimal
 
