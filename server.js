@@ -1216,7 +1216,7 @@ ${smiPrompt}`;
     // VALIDATE RESPONSE
     // ================================================================================
 
-    const { integer, integer_reasoning, decimal, decimal_reasoning, smi, yes_count } = aiResponse;
+    const { integer, integer_reasoning, decimal, decimal_reasoning, smi, yes_count, second_look_bonus } = aiResponse;
 
     // Validate integer
     if (!Number.isInteger(integer) || integer < 1 || integer > 5) {
@@ -1236,7 +1236,8 @@ ${smiPrompt}`;
     }
 
     // Validate smi matches
-    const expectedSMI = parseFloat((integer + decimal).toFixed(2));
+    const bonus = typeof second_look_bonus === 'number' ? second_look_bonus : 0;
+    const expectedSMI = parseFloat(Math.min(5.00, integer + decimal + bonus).toFixed(2));
     const returnedSMI = parseFloat(smi);
     if (Math.abs(returnedSMI - expectedSMI) > 0.001) {
       console.warn(`SMI mismatch — recalculating. AI returned ${smi}, expected ${expectedSMI}`);
@@ -1250,6 +1251,7 @@ ${smiPrompt}`;
     console.log(`DECIMAL REASONING: ${decimal_reasoning}`);
     console.log(`FINAL SMI: ${finalSMI}`);
     console.log(`YES COUNT: ${yes_count}`);
+    console.log(`SECOND LOOK BONUS: ${bonus}`);
 
     // ================================================================================
     // RETURN RESPONSE
@@ -1260,7 +1262,8 @@ ${smiPrompt}`;
     res.json({
       smi: finalSMI,
       analysis: combinedAnalysis,
-      yes_count: typeof yes_count === 'number' ? yes_count : null
+      yes_count: typeof yes_count === 'number' ? yes_count : null,
+      second_look_bonus: bonus
     });
 
   } catch (error) {
