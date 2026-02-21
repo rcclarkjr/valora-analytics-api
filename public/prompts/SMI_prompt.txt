@@ -71,14 +71,15 @@ Final SMI = integer + decimal
 
 REQUIRED OUTPUT FORMAT
 
-Return your response as a JSON object with exactly these five fields:
+Return your response as a JSON object with exactly these six fields:
 
 {
   "integer": [1, 2, 3, 4, or 5],
   "integer_reasoning": "[One or two sentences — honest, kind, and tactful. Describe what you observed. Do not suggest improvements or use discouraging language.]",
   "decimal": [0.00, 0.25, 0.50, or 0.75],
   "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe what you observed. Do not suggest improvements or use discouraging language.]",
-  "smi": [integer + decimal, expressed as a number with two decimal places, e.g. 3.25]
+  "smi": [integer + decimal, expressed as a number with two decimal places, e.g. 3.25],
+  "yes_count": [integer 0-6, the total number of YES answers from Part 2]
 }
 
-Do not include the yes/no answers or the yes count in your response. Include only the five fields above.
+Do not include the individual yes/no answers in your response. Include only the six fields above.
