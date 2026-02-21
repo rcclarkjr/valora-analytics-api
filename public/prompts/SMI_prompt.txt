@@ -4,7 +4,7 @@ You are an expert fine art analyst evaluating artistic skill mastery. Your task 
 
 PART 1 — ASSIGN THE INTEGER LEVEL (1 through 5)
 
-Read the five level descriptions below. Then decide which single level best describes the overall mastery demonstrated in this artwork. Lock your integer before proceeding to Part 2.
+Read the five level descriptions below. Then decide which single level best describes the overall mastery demonstrated in this artwork.
 
 LEVEL 1 — NOVICE
 The work shows the artist is in the earliest stage of learning. Tool control is inconsistent and often unpredictable. Marks, lines, or forms are shaky, accidental, or difficult to control. Basic fundamentals such as proportion, perspective, and value are not yet understood or are applied incorrectly. Composition appears random or unplanned. Color choices are arbitrary. The work has the quality of someone discovering what the medium does rather than directing it. Effort and exploration are visible, but technical command is not yet present.
@@ -20,6 +20,12 @@ The artist demonstrates mastery that goes beyond correct execution. Technical sk
 
 LEVEL 5 — MASTER
 The work achieves transcendence. Technical mastery is total and invisible — technique serves vision so completely that craft disappears and only expression remains. The work has inevitability: every element feels exactly right, as if it could not be otherwise. There is profound conceptual or emotional depth. The work stands in conversation with the history of art. It pushes boundaries, reveals new possibilities, or captures something universal about human experience. Works at this level are rare and unmistakable.
+
+SECOND-LOOK SAFETY CHECK
+
+If your integer is 1, 2, or 5, your integer is now locked; skip the rest of this section and go to Part 2.
+
+If your integer is 3 or 4, look at the artwork a second time with fresh attention. Are there elements — figures, faces, animals, landscapes, objects, or narrative suggestions — that were not immediately obvious in your first reading but become visible or meaningful upon closer examination? This includes forms emerging from abstraction, imagery embedded within texture or gestural marks, superimposed transparencies, or dual narratives occupying the same visual space. Taking everything discovered on this second look together, does the additional complexity and layered richness substantially increase the interest of the artwork as a viewing experience? If yes, and if your initial integer assessment did not account for this layered complexity, elevate your integer by one level. Maximum elevation is one level.
 
 [YOUR INTEGER IS NOW LOCKED. Do not change it.]
 
@@ -127,14 +133,15 @@ THRESHOLD TABLE — YES COUNTS TO DECIMAL
 Level 1:   0-4       5-8       9-11      12-20
 Level 2:   0-8       9-11      12-14     15-20
 Level 3:   0-10      11-13     14-15     16-20
-Level 4:   0-15      16        17        18-20
+Level 4:   0-13      14-15     16-17     18-20
 Level 5:   0-20      —         —         —
 
 Examples of correct table lookup:
 - Integer=3, yes_count=14 → decimal=0.50, SMI=3.50
 - Integer=3, yes_count=16 → decimal=0.75, SMI=3.75
-- Integer=4, yes_count=16 → decimal=0.25, SMI=4.25
-- Integer=4, yes_count=17 → decimal=0.50, SMI=4.50
+- Integer=4, yes_count=14 → decimal=0.25, SMI=4.25
+- Integer=4, yes_count=16 → decimal=0.50, SMI=4.50
+- Integer=4, yes_count=18 → decimal=0.75, SMI=4.75
 - Integer=4, yes_count=6  → decimal=0.00, SMI=4.00
 
 The decimal comes only from this table. Do not adjust it based on your qualitative assessment.
