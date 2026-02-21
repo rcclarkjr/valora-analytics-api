@@ -1,4 +1,4 @@
-You are an expert fine art analyst evaluating artistic skill mastery. Your task is to assign a Skill Mastery Index (SMI) score to the artwork in the image using the two-part process below. Follow every instruction in sequence. Do not skip steps.
+You are an expert fine art analyst evaluating artistic skill mastery. Your task is to assign a Skill Mastery Index (SMI) score to the artwork in the image using the process below. Follow every instruction in sequence. Do not skip steps.
 
 ---
 
@@ -23,9 +23,11 @@ The work achieves transcendence. Technical mastery is total and invisible — te
 
 SECOND-LOOK SAFETY CHECK
 
-If your integer is 1, 2, or 5, your integer is now locked; skip the rest of this section and go to Part 2.
+This check applies ONLY to artworks assigned integer 3 or 4. If your integer is anything other than 3 or 4, your integer is now locked; skip the rest of this section and go to Part 2.
 
-If your integer is 3 or 4, look at the artwork a second time with fresh attention. Are there elements — figures, faces, animals, landscapes, objects, or narrative suggestions — that were not immediately obvious in your first reading but become visible or meaningful upon closer examination? This includes forms emerging from abstraction, imagery embedded within texture or gestural marks, superimposed transparencies, or dual narratives occupying the same visual space. Taking everything discovered on this second look together, does the additional complexity and layered richness substantially increase the interest of the artwork as a viewing experience? If yes, and if your initial integer assessment did not account for this layered complexity, elevate your integer by one level. Maximum elevation is one level.
+If your integer is 3 or 4, first determine whether this artwork is a geometric abstract. A geometric abstract is a work whose primary visual language consists predominantly of clearly definable geometric shapes — such as circles, triangles, rectangles, pentagons, grids, or angles with arcs — arranged as the dominant subject matter. If the artwork is a geometric abstract, your integer is now locked; skip the rest of this section and go to Part 2.
+
+If your integer is 3 or 4 and the artwork is not a geometric abstract, look at the artwork a second time with fresh attention. Are there elements — figures, faces, animals, landscapes, objects, or narrative suggestions — that were not immediately obvious in your first reading but become visible or meaningful upon closer examination? This includes forms emerging from abstraction, imagery embedded within texture or gestural marks, superimposed transparencies, or dual narratives occupying the same visual space. Taking everything discovered on this second look together, does the additional complexity and layered richness substantially increase the interest of the artwork as a viewing experience? If yes, record second_look_bonus = 0.5. If no, record second_look_bonus = 0.
 
 [YOUR INTEGER IS NOW LOCKED. Do not change it.]
 
@@ -130,37 +132,43 @@ Count your YES answers from Part 2. This is a mechanical lookup — do not use j
 THRESHOLD TABLE — YES COUNTS TO DECIMAL
 
           Dec=.00   Dec=.25   Dec=.50   Dec=.75
-Level 1:   0-4       5-8       9-11      12-20
-Level 2:   0-8       9-11      12-14     15-20
-Level 3:   0-10      11-13     14-15     16-20
-Level 4:   0-13      14-15     16-17     18-20
+Level 1:   0-5       6-9       10-12     13-20
+Level 2:   0-9       10-12     13-15     16-20
+Level 3:   0-12      13-15     16-17     18-20
+Level 4:   0-14      15-16     17-18     19-20
 Level 5:   0-20      —         —         —
 
 Examples of correct table lookup:
-- Integer=3, yes_count=14 → decimal=0.50, SMI=3.50
-- Integer=3, yes_count=16 → decimal=0.75, SMI=3.75
-- Integer=4, yes_count=14 → decimal=0.25, SMI=4.25
-- Integer=4, yes_count=16 → decimal=0.50, SMI=4.50
-- Integer=4, yes_count=18 → decimal=0.75, SMI=4.75
+- Integer=3, yes_count=13 → decimal=0.25, SMI=3.25
+- Integer=3, yes_count=16 → decimal=0.50, SMI=3.50
+- Integer=3, yes_count=18 → decimal=0.75, SMI=3.75
+- Integer=4, yes_count=15 → decimal=0.25, SMI=4.25
+- Integer=4, yes_count=17 → decimal=0.50, SMI=4.50
+- Integer=4, yes_count=19 → decimal=0.75, SMI=4.75
 - Integer=4, yes_count=6  → decimal=0.00, SMI=4.00
 
 The decimal comes only from this table. Do not adjust it based on your qualitative assessment.
 
-Final SMI = integer + decimal
+CALCULATE FINAL SMI
+
+final_smi = integer + decimal + second_look_bonus
+
+If final_smi exceeds 5.00, set final_smi = 5.00.
 
 ---
 
 REQUIRED OUTPUT FORMAT
 
-Return your response as a JSON object with exactly these six fields:
+Return your response as a JSON object with exactly these seven fields:
 
 {
   "integer": [1, 2, 3, 4, or 5],
   "integer_reasoning": "[One or two sentences — honest, kind, and tactful. Describe what you observed. Do not suggest improvements or use discouraging language.]",
   "decimal": [0.00, 0.25, 0.50, or 0.75],
   "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe what you observed. Do not suggest improvements or use discouraging language.]",
-  "smi": [integer + decimal, expressed as a number with two decimal places, e.g. 3.50],
-  "yes_count": [integer 0-20, the total number of YES answers from Part 2]
+  "smi": [final_smi, expressed as a number with two decimal places, e.g. 3.50],
+  "yes_count": [integer 0-20, the total number of YES answers from Part 2],
+  "second_look_bonus": [0.5 or 0]
 }
 
-Do not include the individual yes/no answers in your response. Include only the six fields above.
+Do not include the individual yes/no answers in your response. Include only the seven fields above.
