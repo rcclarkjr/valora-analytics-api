@@ -1120,11 +1120,11 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
 
 
 // ====================================================================================
-// ENDPOINT: SKILL MASTERY INDEX (SMI) - TWO-STEP EVALUATION PROCESS
+// ENDPOINT: SKILL MASTERY INDEX (SMI) - HOLISTIC EVALUATION
 // ====================================================================================
 app.post("/analyze-smi", async (req, res) => {
   try {
-    console.log("Received SMI analysis request (Single-Call New Architecture)");
+    console.log("Received SMI analysis request");
     
     const {
       image,
@@ -1216,7 +1216,7 @@ ${smiPrompt}`;
     // VALIDATE RESPONSE
     // ================================================================================
 
-    const { integer, integer_reasoning, decimal, decimal_reasoning, smi, yes_count, second_look_bonus } = aiResponse;
+    const { integer, integer_reasoning, decimal, decimal_reasoning, smi } = aiResponse;
 
     // Validate integer
     if (!Number.isInteger(integer) || integer < 1 || integer > 5) {
@@ -1226,18 +1226,27 @@ ${smiPrompt}`;
       });
     }
 
-    // Validate decimal
-    const validDecimals = [0.00, 0.25, 0.50, 0.75];
-    if (!validDecimals.includes(decimal)) {
-      console.error(`Invalid decimal returned: ${decimal}`);
+    // Validate decimal against the level-specific valid set
+    const validDecimalsByLevel = {
+      1: [0.30, 0.70],
+      2: [0.10, 0.35, 0.60, 0.85],
+      3: [0.10, 0.35, 0.60, 0.85],
+      4: [0.10, 0.35, 0.60, 0.85],
+      5: [0.00]
+    };
+
+    const validDecimals = validDecimalsByLevel[integer];
+    const decimalRounded = parseFloat(parseFloat(decimal).toFixed(2));
+
+    if (!validDecimals.includes(decimalRounded)) {
+      console.error(`Invalid decimal ${decimal} for integer level ${integer}. Valid values: ${validDecimals.join(', ')}`);
       return res.status(500).json({
-        error: { message: `Invalid decimal: ${decimal}. Must be 0.00, 0.25, 0.50, or 0.75.` }
+        error: { message: `Invalid decimal ${decimal} for level ${integer}. Valid values: ${validDecimals.join(', ')}` }
       });
     }
 
-    // Validate smi matches
-    const bonus = typeof second_look_bonus === 'number' ? second_look_bonus : 0;
-    const expectedSMI = parseFloat(Math.min(5.00, integer + decimal + bonus).toFixed(2));
+    // Validate and recalculate SMI from integer + decimal
+    const expectedSMI = parseFloat(Math.min(5.00, integer + decimalRounded).toFixed(2));
     const returnedSMI = parseFloat(smi);
     if (Math.abs(returnedSMI - expectedSMI) > 0.001) {
       console.warn(`SMI mismatch — recalculating. AI returned ${smi}, expected ${expectedSMI}`);
@@ -1247,11 +1256,9 @@ ${smiPrompt}`;
 
     console.log(`INTEGER: ${integer}`);
     console.log(`INTEGER REASONING: ${integer_reasoning}`);
-    console.log(`DECIMAL: ${decimal}`);
+    console.log(`DECIMAL: ${decimalRounded}`);
     console.log(`DECIMAL REASONING: ${decimal_reasoning}`);
     console.log(`FINAL SMI: ${finalSMI}`);
-    console.log(`YES COUNT: ${yes_count}`);
-    console.log(`SECOND LOOK BONUS: ${bonus}`);
 
     // ================================================================================
     // RETURN RESPONSE
@@ -1261,9 +1268,7 @@ ${smiPrompt}`;
 
     res.json({
       smi: finalSMI,
-      analysis: combinedAnalysis,
-      yes_count: typeof yes_count === 'number' ? yes_count : null,
-      second_look_bonus: bonus
+      analysis: combinedAnalysis
     });
 
   } catch (error) {
