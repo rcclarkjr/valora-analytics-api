@@ -124,10 +124,10 @@ Return your response as a JSON object with exactly these five fields:
 
 {
   "integer": [1, 2, 3, 4, or 5],
-  "integer_reasoning": "[One or two sentences — honest, kind, and tactful. Describe what you observed in the work that places it at this level. Do not mention scoring, levels by number, or the evaluation process itself.]",
+  "integer_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention scoring, levels by number, or the evaluation process itself.]",
   "decimal": [0.30 or 0.70 for Level 1 | 0.10, 0.35, 0.60, or 0.85 for Levels 2-4 | 0.00 for Level 5],
-  "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe what you observed in the work that places it at this position within the level. Do not mention scoring, decimal values, or the evaluation process itself.]",
+  "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention scoring, decimal values, or the evaluation process itself.]",
   "smi": [final_smi, expressed as a number with two decimal places, e.g. 3.60]
 }
 
-Do not include any fields other than these five. Do not mention the evaluation process, the rubric, or the scoring system in the reasoning fields. Describe only what you observe in the artwork.
+Do not include any fields other than these five. Describe only what you observe in this artwork. Each work is evaluated entirely on its own — no prior works, no historical context, no recognition of artist identity or fame may enter the reasoning.
