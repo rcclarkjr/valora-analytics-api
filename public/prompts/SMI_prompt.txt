@@ -15,143 +15,104 @@ The artist demonstrates basic technical competence. Fundamental skills such as p
 LEVEL 3 — JOURNEYMAN
 The artist demonstrates solid, reliable technical competence across the fundamental skills of their medium. Proportion, perspective, value structure, and color relationships are handled correctly and consistently. Compositions are planned and effective. The work looks professional and finished. At the lower end of this level, work is technically correct but generic — it could have been made by many competent professionals. At the upper end, hints of personal aesthetic preferences begin to appear in color choices, compositional decisions, or surface handling, though these are subtle and not yet defining.
 
+Before locking in a Level 3 assignment, take a second, deeper look at the artwork. Some works carry sophistication that is not immediately apparent — figures, faces, animals, landscapes, or narrative suggestions that emerge from abstraction; imagery embedded within texture or gestural marks; superimposed transparencies; or dual narratives occupying the same visual space. If such layered complexity is present and substantially enriches the viewing experience, ensure your Level 3 assignment reflects that richness and has not been falsely downgraded by a surface reading. However, if this artwork is a geometric abstract — a work whose primary visual language consists predominantly of clearly definable geometric shapes such as circles, triangles, rectangles, pentagons, grids, or angles with arcs arranged as the dominant subject matter — do not apply this deeper look as a reason to assign a higher integer. Geometric abstracts should be evaluated strictly on the visible execution of their geometric language.
+
 LEVEL 4 — EXPERT
 The artist demonstrates mastery that goes beyond correct execution. Technical skills are employed in service of a distinct personal vision. The work has a recognizable aesthetic voice — palette choices, mark-making, compositional approach, and surface quality work together as a unified system. The viewer can sense who made this. Compositions are fresh and inventive while remaining effective. Color is used expressively, not just descriptively. At the upper end of this level, the work has an authority and conceptual depth that elevates it above personal style into something approaching a statement.
 
+Before locking in a Level 4 assignment, take a second, deeper look at the artwork. Some works carry sophistication that is not immediately apparent — figures, faces, animals, landscapes, or narrative suggestions that emerge from abstraction; imagery embedded within texture or gestural marks; superimposed transparencies; or dual narratives occupying the same visual space. If such layered complexity is present and substantially enriches the viewing experience, ensure your Level 4 assignment reflects that richness and has not been falsely downgraded by a surface reading. However, if this artwork is a geometric abstract — a work whose primary visual language consists predominantly of clearly definable geometric shapes such as circles, triangles, rectangles, pentagons, grids, or angles with arcs arranged as the dominant subject matter — do not apply this deeper look as a reason to assign a higher integer. Geometric abstracts should be evaluated strictly on the visible execution of their geometric language.
+
 LEVEL 5 — MASTER
 The work achieves transcendence. Technical mastery is total and invisible — technique serves vision so completely that craft disappears and only expression remains. The work has inevitability: every element feels exactly right, as if it could not be otherwise. There is profound conceptual or emotional depth. The work stands in conversation with the history of art. It pushes boundaries, reveals new possibilities, or captures something universal about human experience. Works at this level are rare and unmistakable.
-
-SECOND-LOOK SAFETY CHECK
-
-This check applies ONLY to artworks assigned integer 3 or 4. If your integer is anything other than 3 or 4, your integer is now locked; skip the rest of this section and go to Part 2.
-
-If your integer is 3 or 4, first determine whether this artwork is a geometric abstract. A geometric abstract is a work whose primary visual language consists predominantly of clearly definable geometric shapes — such as circles, triangles, rectangles, pentagons, grids, or angles with arcs — arranged as the dominant subject matter. If the artwork is a geometric abstract, your integer is now locked; skip the rest of this section and go to Part 2.
-
-If your integer is 3 or 4 and the artwork is not a geometric abstract, look at the artwork a second time with fresh attention. Are there elements — figures, faces, animals, landscapes, objects, or narrative suggestions — that were not immediately obvious in your first reading but become visible or meaningful upon closer examination? This includes forms emerging from abstraction, imagery embedded within texture or gestural marks, superimposed transparencies, or dual narratives occupying the same visual space. Taking everything discovered on this second look together, does the additional complexity and layered richness substantially increase the interest of the artwork as a viewing experience? If yes, record second_look_bonus = 0.4. If no, record second_look_bonus = 0.
 
 [YOUR INTEGER IS NOW LOCKED. Do not change it.]
 
 ---
 
-PART 2 — EVALUATE THE 20 COMPLEXITY FACTORS
+PART 2 — ASSIGN THE DECIMAL
 
-For each factor below, you are given the name and definition. Answer YES if the factor is well deployed in this artwork. Answer NO otherwise. Base each answer strictly on what is visible in the artwork. Each answer must be independently defensible.
+The decimal describes where this artwork sits on the arc within the integer level you have already locked. The integer question is closed. Do not re-examine it. Your task now is solely to determine position within the level.
 
-CORE ELEMENTS
-
-FACTOR 1 — LINE
-Line: A mark with length and direction which can be continuous, broken, implied, thick, thin, or varied in weight and texture. Lines can guide the viewer's eye, define shapes, create textures, and convey emotions and movement.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 2 — SPACE
-Space: The area around or between components of a piece which conveys depth and perspective.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 3 — COLOR/HUE
-Color/Hue: The aspect of things caused by differing qualities of light they reflect or emit.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 4 — TEXTURE
-Texture: The surface quality or feel of an object, its smoothness, roughness, softness, etc.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 5 — TONE/VALUE
-Tone/Value: The lightness or darkness of a color.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 6 — SATURATION
-Saturation: The intensity or purity of color, which is reduced by adding gray, black, or white.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 7 — COMPOSITION
-Composition: The arrangement of visual elements within a work of art to guide the viewer's eye and convey the intended message or emotion.
-Is this factor well deployed in this artwork? YES or NO.
-
-DESIGN PRINCIPLES
-
-FACTOR 8 — BALANCE
-Balance: The distribution of visual weight in a work.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 9 — CONTRAST
-Contrast: The degree of difference in value, arranged to make objects distinguishable.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 10 — EMPHASIS
-Emphasis: The part of the design that catches the viewer's attention.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 11 — MOVEMENT
-Movement: The path the viewer's eye takes through the artwork.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 12 — RHYTHM
-Rhythm: The repetition of visual elements to create a sense of movement.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 13 — VARIETY
-Variety: The use of different elements to create interest.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 14 — PROPORTION
-Proportion: The relationship between the sizes of different parts of a work.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 15 — HARMONY
-Harmony: The arrangement of elements in a manner where no single element overwhelms.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 16 — COHESIVENESS
-Cohesiveness: The logical and consistent arrangement of parts of the artwork so they support each other in a unified way to convey an overall theme or message.
-Is this factor well deployed in this artwork? YES or NO.
-
-TECHNIQUES
-
-FACTOR 17 — BRUSHWORK
-Brushwork: The way an artist applies paint with their brush.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 18 — CHIAROSCURO
-Chiaroscuro: The use of strong contrasts between light and dark.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 19 — IMPASTO
-Impasto: Applying paint thickly so that brush or palette knife marks are visible.
-Is this factor well deployed in this artwork? YES or NO.
-
-FACTOR 20 — POINTILLISM
-Pointillism: Painting with small, distinct dots of pure color in proximity for a vibrant, luminous effect.
-Is this factor well deployed in this artwork? YES or NO.
+The decimal is determined by holistic qualitative judgment using the level-specific rubric below. Read only the rubric section that corresponds to your locked integer. Evaluate what you observe in the artwork against the anchors provided. Select the single anchor that best describes the work. Do not average or interpolate — choose the closest match.
 
 ---
 
-PART 3 — CALCULATE THE DECIMAL FROM THE THRESHOLD TABLE
+IF INTEGER = 1, use this rubric:
 
-Count your YES answers from Part 2. This is a mechanical lookup — do not use judgment or override the table. Find your integer level and your yes_count in the table below and read off the decimal directly.
+Evaluate two dimensions: CONTROL (how reliably marks land where intended — whether results are mostly accidental or whether directed intention is beginning to appear) and OBSERVATION (whether the artist is genuinely looking at a subject rather than constructing the work from symbol and assumption). Consider both dimensions together when selecting the decimal.
 
-THRESHOLD TABLE — YES COUNTS TO DECIMAL
+DECIMAL = 0.30
+Control is largely accidental throughout the work. Marks occasionally suggest a directed intention but results are mostly unpredictable. There is little evidence of sustained observation — the work is constructed primarily from assumption or symbol rather than from looking. This is the earliest stage of discovery.
 
-          Dec=.00   Dec=.25   Dec=.50   Dec=.75
-Level 1:   0-5       6-9       10-12     13-20
-Level 2:   0-9       10-12     13-15     16-20
-Level 3:   0-12      13-15     16-17     18-20
-Level 4:   0-14      15-16     17-18     19-20
-Level 5:   0-20      —         —         —
+DECIMAL = 0.70
+Directed intention is visible and present throughout most of the work. Marks land with recognizable purpose more often than not, even if execution remains limited. There is genuine evidence of observation — the artist is looking at something rather than inventing it entirely. The gap between intention and execution is real but the intention itself is now clearly present.
 
-Examples of correct table lookup:
-- Integer=3, yes_count=13 → decimal=0.25, SMI=3.25
-- Integer=3, yes_count=16 → decimal=0.50, SMI=3.50
-- Integer=3, yes_count=18 → decimal=0.75, SMI=3.75
-- Integer=4, yes_count=15 → decimal=0.25, SMI=4.25
-- Integer=4, yes_count=17 → decimal=0.50, SMI=4.50
-- Integer=4, yes_count=19 → decimal=0.75, SMI=4.75
-- Integer=4, yes_count=6  → decimal=0.00, SMI=4.00
+---
 
-The decimal comes only from this table. Do not adjust it based on your qualitative assessment.
+IF INTEGER = 2, use this rubric:
 
-CALCULATE FINAL SMI
+Evaluate three dimensions: BREADTH (how many of the core fundamentals — proportion, value, perspective, color relationships — are being engaged across the work), CONSISTENCY (how reliably those fundamentals are applied throughout — not just in isolated passages but across the work as a whole), and EFFORT VISIBILITY (how much the work announces the deliberateness of its execution — does it feel labored throughout, or is fluency beginning to appear in any dimension). Consider all three dimensions together when selecting the decimal.
 
-final_smi = integer + decimal + second_look_bonus
+DECIMAL = 0.10
+The work has just crossed into Level 2 territory. One or two fundamentals are present but applied narrowly and inconsistently — visible in some passages, absent in others. The range of what is being attempted is limited. The work feels effortful throughout with no passages of emerging fluency. This is the earliest stage of deliberate study.
+
+DECIMAL = 0.35
+Several fundamentals are being engaged but with uneven application. The artist is working across a broader range of skills than at 0.10, and some passages demonstrate real competence, but inconsistency across the work as a whole is still the defining characteristic. Effort is visible throughout most of the work.
+
+DECIMAL = 0.60
+Most fundamentals are present and applied with reasonable consistency across the work. The range of what is being handled competently has broadened noticeably. Effort is beginning to recede in the stronger passages, suggesting some internalization is underway, though the work as a whole still reads as deliberate and studied.
+
+DECIMAL = 0.85
+The fundamentals are broadly engaged and applied with good consistency, but some unevenness remains — the artist has not yet achieved the full reliability that defines Level 3. Visible effort has diminished significantly but has not fully disappeared. The work is at the fullest expression of deliberate study: wide-ranging, increasingly consistent, and beginning to feel less labored — but true fluency has not yet arrived.
+
+---
+
+IF INTEGER = 3, use this rubric:
+
+Evaluate four dimensions: PALETTE AS PREFERENCE (whether color choices are purely descriptive and correct, or beginning to assert something personal beyond what the subject strictly requires), MARK-MAKING CHARACTER (whether the handling of the medium is generic and interchangeable with any competent professional, or beginning to develop a consistent personal quality), COMPOSITIONAL DECISION-MAKING (whether arrangements are safe and formulaic, or showing occasional choices that a generic competent painter would not have made), and SIGNAL COHERENCE (whether any emerging personal signals across these dimensions feel independent and accidental, or are beginning to point in the same direction across multiple dimensions simultaneously). Consider all four dimensions together when selecting the decimal.
+
+DECIMAL = 0.10
+The work demonstrates reliable technical competence sufficient to confirm Level 3 has been entered — the fundamentals are handled correctly and consistently enough to read as professional. However, the work is entirely generic. No personal signals are present in any dimension. Color is purely descriptive, mark-making is interchangeable with any competent professional, and composition follows safe familiar formulas. The work could have been made by many skilled artists.
+
+DECIMAL = 0.35
+Faint personal signals are beginning to appear in one dimension — a color choice that slightly exceeds what the subject demands, a compositional decision that is slightly fresher than formula, a quality in the mark-making that appears in one or two passages. These signals are intermittent and have not yet appeared consistently or across multiple dimensions. The work is primarily generic but something personal is beginning to stir.
+
+DECIMAL = 0.60
+Personal signals are present in two or more dimensions with growing consistency. The palette shows recurring choices that feel like preference rather than pure accuracy. The mark-making has a quality that appears reliably enough to feel like the beginning of a characteristic approach. Compositional decisions show a personal sensibility more than once. The signals are real and becoming consistent, but they do not yet cohere into a unified direction — they feel like separate developing tendencies rather than a single emerging voice.
+
+DECIMAL = 0.85
+Clear personal signals are present across most dimensions and are beginning to cohere. The palette, mark-making character, and compositional sensibility are all showing consistent personal qualities that feel connected to each other — as if a single aesthetic logic is beginning to govern multiple decisions simultaneously. The work demonstrates a coherent and recognizable personal direction across most of its dimensions.
+
+---
+
+IF INTEGER = 4, use this rubric:
+
+Evaluate four dimensions: VOICE CLARITY (how unmistakably the work belongs to one artist — whether a knowledgeable viewer could identify the maker from palette and mark-making alone), PALETTE AS EXPRESSION (whether color is working expressively and characteristically in service of a personal vision, beyond merely being distinctive), COMPOSITIONAL AUTHORITY (whether compositions are fresh and inventive while remaining effective, showing genuine personal aesthetic risk-taking that pays off), and SYSTEM COHERENCE (whether palette, mark-making, and composition function together as a fully unified aesthetic system, or operate as strong but somewhat independent personal elements). Consider all four dimensions together when selecting the decimal.
+
+Approach this rubric as a journey. The artist is in one of four stages of discovering, developing, establishing, or fully inhabiting their personal voice. Select the stage that most accurately describes what you observe.
+
+DECIMAL = 0.10 — DISCOVERING VOICE
+The artist has just crossed the threshold from Level 3. Something genuinely and consistently personal is present — enough to confirm this is no longer Level 3 work — but the voice is newly arrived and not yet fully understood even by the artist. Personal color choices appear with some consistency but are not yet deeply expressive. Mark-making has a developing personal character that is recognizable but tentative. Compositions show personal sensibility beginning to assert itself beyond formula. The personal dimensions are present but operating somewhat independently — the artist is in the process of discovering what their voice is rather than deploying it with intention.
+
+DECIMAL = 0.35 — DEVELOPING VOICE
+The artist is actively building and testing their voice. The personal dimensions are more consistently present and the artist is beginning to trust them. Palette is moving from characteristic toward genuinely expressive — color is beginning to serve vision rather than merely identifying the artist. Mark-making character is reliably present across the work. Compositional choices are more deliberately personal and show growing confidence. The dimensions are beginning to reinforce each other, but the unified system is still under construction rather than fully operational.
+
+DECIMAL = 0.60 — ESTABLISHING VOICE
+The voice is established and the artist commands it. Palette, mark-making, and composition are all operating personally and consistently. The unified system is coherent and recognizable — a knowledgeable viewer can identify this artist from the work alone. The artist is deploying their voice with confidence and authority. This is the stable, assured center of Level 4: no longer discovering, no longer building, but fully operating within a personal aesthetic that is clearly and completely their own.
+
+DECIMAL = 0.85 — INHABITING VOICE
+The voice is fully inhabited and operating at its most authoritative. Every dimension is expressive, consistent, and deeply personal. The unified system functions with complete integration — palette, mark-making, and composition feel inseparable from each other and from the artist's vision, as if they could not have been otherwise. Conceptual depth has arrived: the work makes a statement rather than simply expressing a sensibility. The artist is at the fullest realization of what Level 4 can be — the richest and most complete expression of a fully inhabited personal vision.
+
+---
+
+IF INTEGER = 5:
+The decimal is always 0.00. The SMI is always 5.00. Do not evaluate dimensions. Proceed directly to the output.
+
+---
+
+PART 3 — CALCULATE THE FINAL SMI
+
+final_smi = integer + decimal
 
 If final_smi exceeds 5.00, set final_smi = 5.00.
 
@@ -159,16 +120,14 @@ If final_smi exceeds 5.00, set final_smi = 5.00.
 
 REQUIRED OUTPUT FORMAT
 
-Return your response as a JSON object with exactly these seven fields:
+Return your response as a JSON object with exactly these five fields:
 
 {
   "integer": [1, 2, 3, 4, or 5],
-  "integer_reasoning": "[One or two sentences — honest, kind, and tactful. Describe what you observed. Do not suggest improvements or use discouraging language.]",
-  "decimal": [0.00, 0.25, 0.50, or 0.75],
-  "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe what you observed. Do not suggest improvements or use discouraging language.]",
-  "smi": [final_smi, expressed as a number with two decimal places, e.g. 3.50],
-  "yes_count": [integer 0-20, the total number of YES answers from Part 2],
-  "second_look_bonus": [0.4 or 0]
+  "integer_reasoning": "[One or two sentences — honest, kind, and tactful. Describe what you observed in the work that places it at this level. Do not mention scoring, levels by number, or the evaluation process itself.]",
+  "decimal": [0.30 or 0.70 for Level 1 | 0.10, 0.35, 0.60, or 0.85 for Levels 2-4 | 0.00 for Level 5],
+  "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe what you observed in the work that places it at this position within the level. Do not mention scoring, decimal values, or the evaluation process itself.]",
+  "smi": [final_smi, expressed as a number with two decimal places, e.g. 3.60]
 }
 
-Do not include the individual yes/no answers in your response. Include only the seven fields above.
+Do not include any fields other than these five. Do not mention the evaluation process, the rubric, or the scoring system in the reasoning fields. Describe only what you observe in the artwork.
