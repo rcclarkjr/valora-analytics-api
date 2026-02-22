@@ -1212,7 +1212,7 @@ app.post("/analyze-smi", async (req, res) => {
 
     // Build full prompt with medium context prepended
     const fullPrompt = `Medium: ${medium}
-(Note: Evaluate the level of mastery demonstrated considering what was achieved with this medium. Some mediums make certain techniques easier or harder — achieving sophisticated effects in challenging mediums may demonstrate additional mastery. A masterwork is a masterwork whether executed in oil, acrylic, or any other medium.)
+(Note: Evaluate the level of mastery demonstrated considering what was achieved with this medium. Some mediums make certain techniques easier or harder — achieving sophisticated effects in challenging mediums may demonstrate additional mastery. A masterwork is a masterwork whether executed in oil, acrylic, or any other medium. The quality of what was achieved in the image is the only measure — the prestige or historical associations of the submitted medium play no role in the evaluation.)
 
 ${smiPrompt}`;
 
