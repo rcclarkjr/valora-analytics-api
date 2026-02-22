@@ -1119,41 +1119,30 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
 
 
 
-// ====================
-// ANALYZE-SMI ENDPOINT
-// Single-call SMI evaluation using combined SMI_prompt.txt
-// Replaces the existing two-step /analyze-smi endpoint in server.js
-// ====================
+// ====================================================================================
+// ENDPOINT: SKILL MASTERY INDEX (SMI) - TWO-STEP EVALUATION PROCESS
+// ====================================================================================
 app.post("/analyze-smi", async (req, res) => {
   try {
-    console.log("=== /analyze-smi endpoint called (single-call combined prompt) ===");
-
+    console.log("Received SMI analysis request (Single-Call New Architecture)");
+    
     const {
       image,
-      imageType,
+      imageType, 
       artTitle,
       artistName,
       medium,
       temperature: requestedTemp
     } = req.body;
 
-    const temperature =
-      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
+    const temperature = typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
     const validImageType = imageType || "image/jpeg";
 
-    // ================================================================================
-    // VALIDATE INPUT
-    // ================================================================================
+    // Validate required fields
     if (!image) {
       console.log("Missing image in request");
-      return res.status(400).json({
-        error: { message: "Image is required" }
-      });
-    }
-
-    if (!OPENAI_API_KEY) {
-      return res.status(500).json({
-        error: { message: "Server configuration error: Missing API key" }
+      return res.status(400).json({ 
+        error: { message: "Image is required" } 
       });
     }
 
@@ -1161,28 +1150,34 @@ app.post("/analyze-smi", async (req, res) => {
     console.log(`Medium: ${medium}`);
 
     // ================================================================================
-    // LOAD COMBINED SMI PROMPT
-    // Route /prompts/SMI resolves to public/prompts/SMI_prompt.txt
+    // LOAD PROMPT
     // ================================================================================
-    console.log("Loading SMI prompt...");
+
+    console.log("Loading SMI_prompt...");
+
     let smiPrompt;
     try {
-      const promptResponse = await axios.get(
-        "https://valora-analytics-api.onrender.com/prompts/SMI"
-      );
+      const promptResponse = await axios.get('https://valora-analytics-api.onrender.com/prompts/SMI_prompt');
       smiPrompt = promptResponse.data;
-    } catch (promptError) {
-      console.error("Failed to load SMI prompt:", promptError.message);
+    } catch (fileError) {
+      console.error("Failed to load SMI_prompt:", fileError.message);
       return res.status(500).json({
-        error: { message: "Server configuration error: Missing SMI prompt file" }
+        error: { message: "Server configuration error: Missing SMI_prompt file" }
       });
     }
 
-    console.log("SMI prompt loaded successfully");
+    // Build full prompt with medium context prepended
+    const fullPrompt = `Medium: ${medium}
+(Note: Evaluate the level of mastery demonstrated considering what was achieved with this medium. Some mediums make certain techniques easier or harder — achieving sophisticated effects in challenging mediums may demonstrate additional mastery. A masterwork is a masterwork whether executed in oil, acrylic, or any other medium.)
+
+${smiPrompt}`;
 
     // ================================================================================
-    // BUILD MESSAGES FOR AI CALL
+    // SINGLE AI CALL
     // ================================================================================
+
+    const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Analyze the artwork and return your evaluation in valid JSON format only.";
+
     const messages = [
       {
         role: "user",
@@ -1193,19 +1188,13 @@ app.post("/analyze-smi", async (req, res) => {
           },
           {
             type: "text",
-            text: `Medium: ${medium}\nTitle: ${artTitle}\nArtist: ${artistName}\n\n${smiPrompt}`
+            text: fullPrompt
           }
         ]
       }
     ];
 
-    const systemContent =
-      "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Analyze the artwork and return your evaluation in valid JSON format only.";
-
-    // ================================================================================
-    // SINGLE AI CALL — COMBINED STEP 1 + STEP 2
-    // ================================================================================
-    console.log("Calling AI for combined SMI evaluation (single call)...");
+    console.log("Calling AI for SMI evaluation...");
 
     let aiResponse;
     try {
@@ -1213,91 +1202,77 @@ app.post("/analyze-smi", async (req, res) => {
         messages,
         1000,
         systemContent,
-        true,  // useJSON = true
+        true,   // useJSON = true
         temperature
       );
-    } catch (aiError) {
-      console.error("AI call failed:", aiError.message);
+    } catch (error) {
+      console.error("AI call failed:", error.message);
       return res.status(500).json({
-        error: { message: "AI evaluation failed: " + aiError.message }
+        error: { message: "SMI evaluation failed: " + error.message }
       });
     }
-
-    console.log("AI response received");
 
     // ================================================================================
     // VALIDATE RESPONSE
     // ================================================================================
-    const integer = aiResponse.integer;
-    const decimal = parseFloat(aiResponse.decimal);
-    const integerReasoning = aiResponse.integer_reasoning;
-    const decimalReasoning = aiResponse.decimal_reasoning;
-    const yesCount = aiResponse.yes_count;
+
+    const { integer, integer_reasoning, decimal, decimal_reasoning, smi, yes_count, second_look_bonus } = aiResponse;
 
     // Validate integer
     if (!Number.isInteger(integer) || integer < 1 || integer > 5) {
       console.error(`Invalid integer returned: ${integer}`);
       return res.status(500).json({
-        error: {
-          message: `Invalid integer classification: ${integer}. Must be 1-5.`
-        }
+        error: { message: `Invalid integer level: ${integer}. Must be 1-5.` }
       });
     }
 
-    // Validate decimal — must be .00, .25, .50, or .75
-    const validDecimals = [0.0, 0.25, 0.5, 0.75];
-    const decimalRounded = Math.round(decimal * 100) / 100;
-    if (!validDecimals.includes(decimalRounded)) {
+    // Validate decimal
+    const validDecimals = [0.00, 0.25, 0.50, 0.75];
+    if (!validDecimals.includes(decimal)) {
       console.error(`Invalid decimal returned: ${decimal}`);
       return res.status(500).json({
-        error: {
-          message: `Invalid decimal value: ${decimal}. Must be .00, .25, .50, or .75.`
-        }
+        error: { message: `Invalid decimal: ${decimal}. Must be 0.00, 0.25, 0.50, or 0.75.` }
       });
     }
 
-    const finalSMI = parseFloat((integer + decimalRounded).toFixed(2));
+    // Validate smi matches
+    const bonus = typeof second_look_bonus === 'number' ? second_look_bonus : 0;
+    const expectedSMI = parseFloat(Math.min(5.00, integer + decimal + bonus).toFixed(2));
+    const returnedSMI = parseFloat(smi);
+    if (Math.abs(returnedSMI - expectedSMI) > 0.001) {
+      console.warn(`SMI mismatch — recalculating. AI returned ${smi}, expected ${expectedSMI}`);
+    }
+
+    const finalSMI = expectedSMI.toFixed(2);
+
+    console.log(`INTEGER: ${integer}`);
+    console.log(`INTEGER REASONING: ${integer_reasoning}`);
+    console.log(`DECIMAL: ${decimal}`);
+    console.log(`DECIMAL REASONING: ${decimal_reasoning}`);
+    console.log(`FINAL SMI: ${finalSMI}`);
+    console.log(`YES COUNT: ${yes_count}`);
+    console.log(`SECOND LOOK BONUS: ${bonus}`);
 
     // ================================================================================
-    // RENDER LOG — DIAGNOSTIC OUTPUT
-    // yes_count and full table stay in log only, not in JSON response
+    // RETURN RESPONSE
     // ================================================================================
-    console.log("=== SMI EVALUATION RESULTS ===");
-    console.log(`Title: ${artTitle}`);
-    console.log(`Artist: ${artistName}`);
-    console.log(`Medium: ${medium}`);
-    console.log(`Integer: ${integer}`);
-    console.log(`Integer Reasoning: ${integerReasoning}`);
-    console.log(`Yes Count (6 binary questions): ${yesCount}`);
-    console.log(`Decimal: ${decimalRounded}`);
-    console.log(`Decimal Reasoning: ${decimalReasoning}`);
-    console.log(`Final SMI: ${finalSMI}`);
-    console.log("==============================");
 
-    // ================================================================================
-    // RETURN RESPONSE TO FRONTEND
-    // Keeps backward-compatible 'analysis' field for any existing consumers
-    // ================================================================================
-    const finalResponse = {
-      smi: finalSMI.toFixed(2),
-      integer: integer,
-      decimal: decimalRounded,
-      integer_reasoning: integerReasoning,
-      decimal_reasoning: decimalReasoning,
-      analysis: `${integerReasoning}\n\n${decimalReasoning}`
-    };
+    const combinedAnalysis = `${integer_reasoning}\n\n${decimal_reasoning}`;
 
-    console.log("Sending SMI response to client");
-    res.json(finalResponse);
+    res.json({
+      smi: finalSMI,
+      analysis: combinedAnalysis,
+      yes_count: typeof yes_count === 'number' ? yes_count : null,
+      second_look_bonus: bonus
+    });
 
   } catch (error) {
-    console.error("Unexpected error in analyze-smi:", error);
+    console.error("Unexpected error in SMI analysis:", error);
     res.status(500).json({
-      error: { message: "Internal server error during SMI analysis" }
+      error: { message: "Internal server error during analysis" }
     });
   }
 });
-
 
 
 
