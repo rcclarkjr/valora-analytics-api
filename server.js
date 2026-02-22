@@ -1125,10 +1125,10 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
 app.post("/analyze-smi", async (req, res) => {
   try {
     console.log("Received SMI analysis request");
-    
+
     const {
       image,
-      imageType, 
+      imageType,
       artTitle,
       artistName,
       medium,
@@ -1141,13 +1141,57 @@ app.post("/analyze-smi", async (req, res) => {
     // Validate required fields
     if (!image) {
       console.log("Missing image in request");
-      return res.status(400).json({ 
-        error: { message: "Image is required" } 
+      return res.status(400).json({
+        error: { message: "Image is required" }
       });
     }
 
     console.log(`Processing SMI for: "${artTitle}" by ${artistName}`);
     console.log(`Medium: ${medium}`);
+
+    // ================================================================================
+    // IMAGE PREPROCESSING — resize to safe API limits before sending to AI
+    // Anthropic API hard limits: 5MB per image, 8000px max dimension
+    // Claude internally downscales to ~1568px anyway — no quality benefit above that
+    // Target: max 1600px long side, JPEG quality 90, guaranteed under 5MB
+    // ================================================================================
+
+    let processedImageBase64 = image;
+    let processedImageType = validImageType;
+
+    try {
+      const sharp = require('sharp');
+      const inputBuffer = Buffer.from(image, 'base64');
+
+      console.log(`Original image buffer size: ${(inputBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+
+      const resized = await sharp(inputBuffer)
+        .resize(1600, 1600, {
+          fit: 'inside',        // preserve aspect ratio, neither dimension exceeds 1600px
+          withoutEnlargement: true  // never upscale a small image
+        })
+        .jpeg({ quality: 90 })
+        .toBuffer();
+
+      console.log(`Processed image buffer size: ${(resized.length / 1024 / 1024).toFixed(2)} MB`);
+
+      // Safety check — if still somehow over 4.5MB, compress further
+      if (resized.length > 4.5 * 1024 * 1024) {
+        const recompressed = await sharp(resized)
+          .jpeg({ quality: 75 })
+          .toBuffer();
+        processedImageBase64 = recompressed.toString('base64');
+        console.log(`Recompressed image buffer size: ${(recompressed.length / 1024 / 1024).toFixed(2)} MB`);
+      } else {
+        processedImageBase64 = resized.toString('base64');
+      }
+
+      processedImageType = 'image/jpeg';
+
+    } catch (sharpError) {
+      console.warn("Sharp preprocessing failed — proceeding with original image:", sharpError.message);
+      // Fall through with original image; API call may fail if image is too large
+    }
 
     // ================================================================================
     // LOAD PROMPT
@@ -1176,7 +1220,13 @@ ${smiPrompt}`;
     // SINGLE AI CALL
     // ================================================================================
 
-    const systemContent = "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Analyze the artwork and return your evaluation in valid JSON format only.";
+    const systemContent = `You are an expert fine art analyst specializing in evaluating artistic skill mastery. Analyze the artwork and return your evaluation in valid JSON format only.
+
+CRITICAL EVALUATION RULES:
+1. Evaluate only what you observe in this image. Every artwork is assessed entirely on its own merits.
+2. If you recognize this artwork or its artist, set that recognition aside completely. The historical reputation, critical standing, fame, or importance of the artist or work must play no role whatsoever in your evaluation or your reasoning. Evaluate what you see, not what you know.
+3. Do not reference any other works by this artist, their broader practice, or their development over time. You have no information about any other works. This image is the only thing being evaluated.
+4. The title and artist name provided are for identification only. Do not use them to infer anything about the work's significance or the artist's stature.`;
 
     const messages = [
       {
@@ -1184,7 +1234,7 @@ ${smiPrompt}`;
         content: [
           {
             type: "image_url",
-            image_url: { url: `data:${validImageType};base64,${image}` }
+            image_url: { url: `data:${processedImageType};base64,${processedImageBase64}` }
           },
           {
             type: "text",
