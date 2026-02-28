@@ -31,88 +31,56 @@ The work achieves transcendence. Technical mastery is total and invisible — te
 
 ---
 
-PART 2 — ASSIGN THE DECIMAL
+PART 2 — DETERMINE THE DECIMAL
 
-The decimal describes where this artwork sits on the arc within the integer level you have already locked. The integer question is closed. Do not re-examine it. Your task now is solely to determine position within the level.
+Your integer is locked. Do not reconsider it. Your only task in this part is to answer the following 16 questions by observing the artwork carefully. Answer each question YES or NO only. Do not explain your answers.
 
-The decimal is determined by holistic qualitative judgment using the level-specific rubric below. Read only the rubric section that corresponds to your locked integer. Evaluate what you observe in the artwork against the anchors provided. Select the single anchor that best describes the work. Do not average or interpolate — choose the closest match.
+1.  Does the color palette depart from the naturalistic colors of the subject?
+2.  Is there a value structure that organizes the composition?
+3.  Does the work contain at least one area that is intentionally left unresolved?
+4.  Does the work use contrast to direct the viewer's eye toward a specific area?
+5.  Is there a clear focal point?
+6.  Does the level of detail vary across the surface?
+7.  Is the mark-making consistent across the work?
+8.  Does the surface texture vary intentionally across the work?
+9.  Do all centers of interest in the work appear finished?
+10. Does the work demonstrate control of color temperature — with warm and cool tones used in relationship to each other?
+11. Is saturation varied across the surface?
+12. Does the composition guide the viewer's eye through the work?
+13. Is negative space used as a compositional element?
+14. Does the work contain at least one decision that departs from the most conventional approach to this subject?
+15. Does the work convey a discernible mood?
+16. Does the work reveal additional detail, complexity, or meaning upon longer looking?
 
----
-
-IF INTEGER = 1, use this rubric:
-
-Evaluate two dimensions: CONTROL (how reliably marks land where intended — whether results are mostly accidental or whether directed intention is beginning to appear) and OBSERVATION (whether the artist is genuinely looking at a subject rather than constructing the work from symbol and assumption). Consider both dimensions together when selecting the decimal.
-
-DECIMAL = 0.30
-Control is largely accidental throughout the work. Marks occasionally suggest a directed intention but results are mostly unpredictable. There is little evidence of sustained observation — the work is constructed primarily from assumption or symbol rather than from looking. This is the earliest stage of discovery.
-
-DECIMAL = 0.70
-Directed intention is visible and present throughout most of the work. Marks land with recognizable purpose more often than not, even if execution remains limited. There is genuine evidence of observation — the artist is looking at something rather than inventing it entirely. The gap between intention and execution is real but the intention itself is now clearly present. Note: symbolic construction with clear compositional intent also qualifies here — if the artist has deliberately placed recognizable subjects within an organized scene (sky, ground, figures, objects), that deliberateness reflects directed intention even when the imagery is built from symbol rather than direct observation.
-
----
-
-IF INTEGER = 2, use this rubric:
-
-Evaluate three dimensions: BREADTH (how many of the core fundamentals — proportion, value, perspective, color relationships — are being engaged across the work), CONSISTENCY (how reliably those fundamentals are applied throughout — not just in isolated passages but across the work as a whole), and EFFORT VISIBILITY (how much the work announces the deliberateness of its execution — does it feel labored throughout, or is fluency beginning to appear in any dimension). Consider all three dimensions together when selecting the decimal.
-
-DECIMAL = 0.10
-The work has just crossed into Level 2 territory. One or two fundamentals are present but applied narrowly and inconsistently — visible in some passages, absent in others. The range of what is being attempted is limited. The work feels effortful throughout with no passages of emerging fluency. This is the earliest stage of deliberate study.
-
-DECIMAL = 0.35
-Several fundamentals are being engaged but with uneven application. The artist is working across a broader range of skills than at 0.10, and some passages demonstrate real competence, but inconsistency across the work as a whole is still the defining characteristic. Effort is visible throughout most of the work.
-
-DECIMAL = 0.60
-Most fundamentals are present and applied with reasonable consistency across the work. The range of what is being handled competently has broadened noticeably. Effort is beginning to recede in the stronger passages, suggesting some internalization is underway, though the work as a whole still reads as deliberate and studied.
-
-DECIMAL = 0.85
-The fundamentals are broadly engaged and applied with good consistency, but some unevenness remains — the artist has not yet achieved the full reliability that defines Level 3. Visible effort has diminished significantly but has not fully disappeared. The work is at the fullest expression of deliberate study: wide-ranging, increasingly consistent, and beginning to feel less labored — but true fluency has not yet arrived.
+Count your YES answers. This is your yes_count.
 
 ---
 
-IF INTEGER = 3, use this rubric:
+PART 3 — CALCULATE THE DECIMAL FROM THE THRESHOLD TABLE
 
-Evaluate four dimensions: PALETTE AS PREFERENCE (whether color choices are purely descriptive and correct, or beginning to assert something personal beyond what the subject strictly requires), MARK-MAKING CHARACTER (whether the handling of the medium is generic and interchangeable with any competent professional, or beginning to develop a consistent personal quality), COMPOSITIONAL DECISION-MAKING (whether arrangements are safe and formulaic, or showing occasional choices that a generic competent painter would not have made), and SIGNAL COHERENCE (whether any emerging personal signals across these dimensions feel independent and accidental, or are beginning to point in the same direction across multiple dimensions simultaneously). Consider all four dimensions together when selecting the decimal.
+This is a mechanical lookup. Do not use judgment or override the table. Find your integer level and your yes_count in the table below and read off the decimal directly.
 
-DECIMAL = 0.10
-The work demonstrates reliable technical competence sufficient to confirm this level has been entered. The fundamentals are handled correctly and consistently enough to read as professional. The work is entirely generic — no personal signals are present in any dimension. Color is purely descriptive, mark-making is interchangeable with any competent professional, and composition follows safe familiar formulas. There is nothing in this work that points toward one specific artist.
+THRESHOLD TABLE
 
-DECIMAL = 0.35
-Faint personal signals are beginning to appear in one dimension — a color choice that slightly exceeds what the subject demands, a compositional decision that is slightly fresher than formula, a quality in the mark-making that appears in one or two passages. These signals are intermittent and have not yet appeared consistently or across multiple dimensions. The work remains primarily generic. Something personal is beginning to stir but a knowledgeable viewer could not yet attribute this to a specific artist.
+          Dec=0.00  Dec=0.25  Dec=0.50  Dec=0.75
+Level 1:   0-2       3-4       5-6       7-16
+Level 2:   0-5       6-8       9-11      12-16
+Level 3:   0-9       10-11     12-13     14-16
+Level 4:   0-11      12-13     14-15     16
+Level 5:   always 0.00 — do not evaluate questions for Level 5
 
-DECIMAL = 0.60
-Personal signals are present in two or more dimensions with growing consistency. The palette shows recurring choices that feel like preference rather than pure accuracy. The mark-making has a developing characteristic quality. Compositional decisions show a personal sensibility more than once. The signals are real and becoming consistent, but they do not yet cohere into a unified direction. A knowledgeable viewer might sense that something personal is present but could not reliably identify who made this.
+Examples of correct table lookup:
+- Integer=1, yes_count=4  → decimal=0.25, SMI=1.25
+- Integer=2, yes_count=8  → decimal=0.25, SMI=2.25
+- Integer=2, yes_count=11 → decimal=0.50, SMI=2.50
+- Integer=3, yes_count=10 → decimal=0.25, SMI=3.25
+- Integer=3, yes_count=13 → decimal=0.50, SMI=3.50
+- Integer=3, yes_count=15 → decimal=0.75, SMI=3.75
+- Integer=4, yes_count=12 → decimal=0.25, SMI=4.25
+- Integer=4, yes_count=14 → decimal=0.50, SMI=4.50
+- Integer=4, yes_count=16 → decimal=0.75, SMI=4.75
 
-DECIMAL = 0.85
-Clear personal signals are present across most dimensions and are beginning to cohere — palette, mark-making, and compositional sensibility all showing consistent personal qualities that feel connected to each other. The work is approaching the threshold of attributability: a knowledgeable viewer familiar with this artist's work might begin to recognize it, but the voice is not yet fully formed or consistent enough to be unmistakable to a stranger.
-
----
-
-IF INTEGER = 4, use this rubric:
-
-Evaluate four dimensions: VOICE CLARITY (how unmistakably the work belongs to one artist — whether a knowledgeable viewer could identify the maker from palette and mark-making alone), PALETTE AS EXPRESSION (whether color is working expressively and characteristically in service of a personal vision, beyond merely being distinctive), COMPOSITIONAL AUTHORITY (whether compositions are fresh and inventive while remaining effective, showing genuine personal aesthetic risk-taking that pays off), and SYSTEM COHERENCE (whether palette, mark-making, and composition function together as a fully unified aesthetic system, or operate as strong but somewhat independent personal elements). Consider all four dimensions together when selecting the decimal.
-
-Approach this rubric as a journey. The artist is in one of four stages of discovering, developing, establishing, or fully inhabiting their personal voice. Select the stage that most accurately describes what you observe.
-
-DECIMAL = 0.10 — ARTIST MINIMALLY IDENTIFIABLE
-The work has just crossed the threshold. A knowledgeable viewer encountering this for the first time could identify it as the work of one specific artist — the signature is present and real. But the voice is newly arrived. The artist knows what their voice is but has not yet fully settled into it. The personal dimensions are present and consistent enough to be recognizable, but they are operating with some tentativeness — as if the artist is still learning to trust what they have found.
-
-DECIMAL = 0.35 — ARTIST CONFIDENTLY PRESENT
-The artist's identity is clearly and confidently present in the work. The signature is no longer tentative — palette, mark-making, and composition are all operating personally and consistently, and a viewer encountering this work would have no difficulty attributing it. The unified system is fully operational. The artist is deploying their voice with authority and intention. This is the assured, stable center of this level.
-
-DECIMAL = 0.60 — ARTIST DEEPLY INHABITED
-The artist's voice has stopped feeling like a choice and started feeling like a native language. The work is not just identifiable — it feels inevitable for this artist. Every dimension operates with complete integration and expressive depth. Conceptual depth is present: the work makes a statement rather than simply expressing a sensibility. The personal vision is at its fullest and most authoritative realization.
-
-DECIMAL = 0.85 — ARTIST DISSOLVING
-The artist's personal voice has become so completely inhabited that it is beginning to transcend the personal. Evidence of dissolving is present — the work reaches toward something beyond individual expression even while remaining identifiable as this one person's. The distance between the maker and the made is closing. The artist has not yet disappeared, but the direction is unmistakable.
-
----
-
-IF INTEGER = 5:
-The decimal is always 0.00. The SMI is always 5.00. Do not evaluate dimensions. Proceed directly to the output.
-
----
-
-PART 3 — CALCULATE THE FINAL SMI
+The decimal comes only from this table. Do not adjust it based on qualitative assessment.
 
 final_smi = integer + decimal
 
@@ -122,14 +90,15 @@ If final_smi exceeds 5.00, set final_smi = 5.00.
 
 REQUIRED OUTPUT FORMAT
 
-Return your response as a JSON object with exactly these five fields:
+Return your response as a JSON object with exactly these six fields:
 
 {
   "integer": [1, 2, 3, 4, or 5],
   "integer_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention scoring, levels by number, or the evaluation process itself.]",
-  "decimal": [0.30 or 0.70 for Level 1 | 0.10, 0.35, 0.60, or 0.85 for Levels 2-4 | 0.00 for Level 5],
-  "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention scoring, decimal values, or the evaluation process itself.]",
-  "smi": [final_smi, expressed as a number with two decimal places, e.g. 3.60]
+  "decimal": [0.00, 0.25, 0.50, or 0.75],
+  "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention decimal values, yes counts, or the evaluation process itself.]",
+  "smi": [final_smi, expressed as a number with two decimal places, e.g. 3.50],
+  "yes_count": [integer 0-16, the total number of YES answers from Part 2]
 }
 
-Do not include any fields other than these five. Describe only what you observe in this artwork. Each work is evaluated entirely on its own — no prior works, no historical context, no recognition of artist identity or fame may enter the reasoning.
+Do not include any fields other than these six. Describe only what you observe in this artwork. Each work is evaluated entirely on its own — no prior works, no historical context, no recognition of artist identity or fame may enter the reasoning.
