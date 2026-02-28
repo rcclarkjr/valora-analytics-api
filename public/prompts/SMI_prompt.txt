@@ -71,24 +71,25 @@ Set yes_count_8 = null.
 
 IF INTEGER = 4:
 
-Answer the following 8 questions by observing the artwork carefully. Answer each question YES or NO only. Do not explain your answers.
+Read the four descriptions below carefully. Select the single description that best fits the artwork you are evaluating. Do not average or blend descriptions — choose the one closest match. Set yes_count_8 = null.
 
-1.  Does the work read well as a thumbnail — retaining its visual impact at small scale?
-2.  Is the color palette one that works harmoniously in a contemporary interior?
-3.  Does the title add meaning or depth to the work rather than simply stating the subject?
-4.  Does the work have the scale and presence of a painting made to hang in a significant space?
-5.  Does the work show evidence of belonging to a developed series or sustained body of work rather than being a one-off piece?
-6.  Does the subject matter carry cultural weight or timeless appeal rather than feeling trend-driven or novelty-based?
-7.  Is this work unlikely to have been made by any other artist — does it feel genuinely irreplaceable as the product of one specific sensibility?
-8.  Does the work contain at least one element that feels load-bearing and irreplaceable — a passage, a color relationship, or a compositional risk — that could not be removed or swapped without losing what makes the work succeed?
+CHOICE A — Decimal = 0.75
+The work is emotionally inviting and visually immersive. The color palette is sophisticated and harmonious — neither jarring nor timid — and would integrate naturally into a refined living or working environment. The subject matter has broad, timeless appeal: landscape, figure, urban life, or nature rendered through a personal lens that transcends the specific subject. The mood draws the viewer in rather than challenging or unsettling them. The work rewards prolonged daily living-with — new details, relationships, or qualities emerge the longer you spend time with it. The artist's personal voice is fully formed and immediately recognizable, but the voice serves the emotional experience of the viewer rather than demanding that the viewer meet the artist on difficult or narrow conceptual ground. The work would appeal to a wide range of serious, sophisticated buyers. It has the feeling of a painting that belongs in a significant space and would anchor a room. The surface quality, scale, and finish all suggest a work made with full intentionality and confidence.
 
-Count your YES answers. This is your yes_count_8. Look up the decimal in this table:
+CHOICE B — Decimal = 0.50
+The work has a strong, clearly formed personal voice and is visually striking. It is marketable and would appeal to many serious buyers, but it has at least one quality that narrows its audience relative to the most broadly desirable work. The color palette may be bold or demanding in ways that limit where it can live — highly saturated, graphically flat, or dominant in ways that require the right environment. Or the subject matter, while handled with personal vision, is more niche or decorative in its emotional register — it delights and impresses but does not deeply move or immerse. The work is more likely to be admired than lived with. A sophisticated buyer would recognize its quality immediately, but the purchase decision requires more specific taste alignment than the most universally appealing work. The artist's signature is clear and consistent. The work is finished with confidence and skill.
 
-  yes_count_8   Decimal   SMI
-  0-1           0.00      4.00
-  2-4           0.25      4.25
-  5-6           0.50      4.50
-  7-8           0.75      4.75
+CHOICE C — Decimal = 0.25
+The work demonstrates a fully formed personal voice and genuine artistic accomplishment, but it has meaningful limiting factors that reduce its commercial breadth. It may be conceptually challenging — requiring the viewer to engage with difficult, unsettling, or intellectually demanding content that limits its appeal to a narrower audience. Or the emotional register may be confrontational, dark, or psychologically complex in ways that most buyers would not want to live with daily. Or the subject matter is highly specific — culturally, conceptually, or formally — in a way that creates a smaller pool of motivated buyers. Or the surface quality, while skillful, does not reward prolonged living-with in the way that the highest-value work does. The artist's voice is present and recognizable, but the work asks something of the viewer rather than offering something to them. It would find its audience, but that audience is smaller and more specific.
+
+CHOICE D — Decimal = 0.00
+The work has a personal voice that meets the threshold for this level, but it feels limited in one or more fundamental ways that affect its market value. It may feel minor — small in ambition, decorative without emotional depth, or technically accomplished without a strong sense of why this particular work needed to exist. Or the execution, while showing personal voice, does not fully deliver on the potential of the concept — the ambition and the result are mismatched. Or the work feels like an early or peripheral entry in the artist's development of their voice rather than a full expression of it. Or the subject matter and treatment together create a work whose appeal is genuinely narrow — not because it is challenging, but because it is slight. A buyer would recognize the artist's hand but would not feel compelled to own this particular work.
+
+Your selected choice determines the decimal:
+CHOICE A = 0.75
+CHOICE B = 0.50
+CHOICE C = 0.25
+CHOICE D = 0.00
 
 Set yes_count_16 = null.
 
@@ -118,7 +119,7 @@ Return your response as a JSON object with exactly these seven fields:
   "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention decimal values, yes counts, or the evaluation process itself.]",
   "smi": [final_smi, expressed as a number with two decimal places, e.g. 3.50],
   "yes_count_16": [integer 0-16 for Levels 1-3 | null for Levels 4-5],
-  "yes_count_8": [integer 0-8 for Level 4 | null for Levels 1-3 and 5]
+  "yes_count_8": [null — no longer used for Level 4 | null for all levels]
 }
 
 Do not include any fields other than these seven. Describe only what you observe in this artwork. Each work is evaluated entirely on its own — no prior works, no historical context, no recognition of artist identity or fame may enter the reasoning.
