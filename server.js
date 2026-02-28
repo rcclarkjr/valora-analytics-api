@@ -1267,7 +1267,8 @@ CRITICAL EVALUATION RULES:
     // ================================================================================
 
     const { integer, integer_reasoning, decimal, decimal_reasoning, smi } = aiResponse;
-    const yes_count = aiResponse.yes_count;
+    const yes_count_16 = aiResponse.yes_count_16;
+    const yes_count_8 = aiResponse.yes_count_8;
 
     // Validate integer
     if (!Number.isInteger(integer) || integer < 1 || integer > 5) {
@@ -1310,7 +1311,8 @@ CRITICAL EVALUATION RULES:
     console.log(`DECIMAL: ${decimalRounded}`);
     console.log(`DECIMAL REASONING: ${decimal_reasoning}`);
     console.log(`FINAL SMI: ${finalSMI}`);
-	console.log(`YES COUNT: ${yes_count}`);
+    console.log(`YES COUNT 16: ${yes_count_16}`);
+    console.log(`YES COUNT 8: ${yes_count_8}`);
 	
 
     // ================================================================================
@@ -1322,7 +1324,8 @@ CRITICAL EVALUATION RULES:
     res.json({
       smi: finalSMI,
       analysis: combinedAnalysis,
-	  yes_count: yes_count
+	  yes_count_16: yes_count_16,
+      yes_count_8: yes_count_8
     });
 
   } catch (error) {
