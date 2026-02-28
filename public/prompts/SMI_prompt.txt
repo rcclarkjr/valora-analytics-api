@@ -33,7 +33,13 @@ The work achieves transcendence. Technical mastery is total and invisible — te
 
 PART 2 — DETERMINE THE DECIMAL
 
-Your integer is locked. Do not reconsider it. Your only task in this part is to answer the following 16 questions by observing the artwork carefully. Answer each question YES or NO only. Do not explain your answers.
+Your integer is locked. Do not reconsider it. Your only task in this part is to answer questions about the artwork and look up the decimal in the table provided. Follow only the instructions for your locked integer level. Do not read instructions for other levels.
+
+---
+
+IF INTEGER = 1, 2, or 3:
+
+Answer the following 16 questions by observing the artwork carefully. Answer each question YES or NO only. Do not explain your answers.
 
 1.  Does the color palette depart from the naturalistic colors of the subject?
 2.  Does the level of detail vary across the surface?
@@ -52,35 +58,48 @@ Your integer is locked. Do not reconsider it. Your only task in this part is to 
 15. Does the work deliberately balance active space (areas of detail, complexity, or density) against passive space (areas of rest, simplicity, or openness)?
 16. Does the work establish at least two contrasting visual rhythms — such as dense vs. open, angular vs. curved, or light vs. dark — that create dynamic tension rather than uniform repetition?
 
-Count your YES answers. This is your yes_count.
-
----
-
-PART 3 — CALCULATE THE DECIMAL FROM THE THRESHOLD TABLE
-
-This is a mechanical lookup. Do not use judgment or override the table. Find your integer level and your yes_count in the table below and read off the decimal directly.
-
-THRESHOLD TABLE
+Count your YES answers. This is your yes_count_16. Look up the decimal in this table:
 
           Dec=0.00  Dec=0.25  Dec=0.50  Dec=0.75
 Level 1:   0-2       3-4       5-6       7-16
 Level 2:   0-5       6-8       9-11      12-16
 Level 3:   0-9       10-11     12-13     14-16
-Level 4:   0-11      12-13     14-15     16
-Level 5:   always 0.00 — do not evaluate questions for Level 5
 
-Examples of correct table lookup:
-- Integer=1, yes_count=4  → decimal=0.25, SMI=1.25
-- Integer=2, yes_count=8  → decimal=0.25, SMI=2.25
-- Integer=2, yes_count=11 → decimal=0.50, SMI=2.50
-- Integer=3, yes_count=10 → decimal=0.25, SMI=3.25
-- Integer=3, yes_count=13 → decimal=0.50, SMI=3.50
-- Integer=3, yes_count=15 → decimal=0.75, SMI=3.75
-- Integer=4, yes_count=12 → decimal=0.25, SMI=4.25
-- Integer=4, yes_count=14 → decimal=0.50, SMI=4.50
-- Integer=4, yes_count=16 → decimal=0.75, SMI=4.75
+Set yes_count_8 = null.
 
-The decimal comes only from this table. Do not adjust it based on qualitative assessment.
+---
+
+IF INTEGER = 4:
+
+Answer the following 8 questions by observing the artwork carefully. Answer each question YES or NO only. Do not explain your answers.
+
+1.  Does the work read well as a thumbnail — retaining its visual impact at small scale?
+2.  Is the color palette one that works harmoniously in a contemporary interior?
+3.  Does the title add meaning or depth to the work rather than simply stating the subject?
+4.  Does the work have the scale and presence of a painting made to hang in a significant space?
+5.  Does the work show evidence of belonging to a developed series or sustained body of work rather than being a one-off piece?
+6.  Does the subject matter carry cultural weight or timeless appeal rather than feeling trend-driven or novelty-based?
+7.  Is this work unlikely to have been made by any other artist — does it feel genuinely irreplaceable as the product of one specific sensibility?
+8.  Does the work contain at least one element that feels load-bearing and irreplaceable — a passage, a color relationship, or a compositional risk — that could not be removed or swapped without losing what makes the work succeed?
+
+Count your YES answers. This is your yes_count_8. Look up the decimal in this table:
+
+  yes_count_8   Decimal   SMI
+  0-1           0.00      4.00
+  2-4           0.25      4.25
+  5-6           0.50      4.50
+  7-8           0.75      4.75
+
+Set yes_count_16 = null.
+
+---
+
+IF INTEGER = 5:
+The decimal is always 0.00. The SMI is always 5.00. Do not answer any questions. Set yes_count_16 = null and yes_count_8 = null. Proceed directly to the output.
+
+---
+
+PART 3 — CALCULATE THE FINAL SMI
 
 final_smi = integer + decimal
 
@@ -90,7 +109,7 @@ If final_smi exceeds 5.00, set final_smi = 5.00.
 
 REQUIRED OUTPUT FORMAT
 
-Return your response as a JSON object with exactly these six fields:
+Return your response as a JSON object with exactly these seven fields:
 
 {
   "integer": [1, 2, 3, 4, or 5],
@@ -98,7 +117,8 @@ Return your response as a JSON object with exactly these six fields:
   "decimal": [0.00, 0.25, 0.50, or 0.75],
   "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention decimal values, yes counts, or the evaluation process itself.]",
   "smi": [final_smi, expressed as a number with two decimal places, e.g. 3.50],
-  "yes_count": [integer 0-16, the total number of YES answers from Part 2]
+  "yes_count_16": [integer 0-16 for Levels 1-3 | null for Levels 4-5],
+  "yes_count_8": [integer 0-8 for Level 4 | null for Levels 1-3 and 5]
 }
 
-Do not include any fields other than these six. Describe only what you observe in this artwork. Each work is evaluated entirely on its own — no prior works, no historical context, no recognition of artist identity or fame may enter the reasoning.
+Do not include any fields other than these seven. Describe only what you observe in this artwork. Each work is evaluated entirely on its own — no prior works, no historical context, no recognition of artist identity or fame may enter the reasoning.
