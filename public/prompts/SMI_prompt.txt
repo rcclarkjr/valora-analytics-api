@@ -36,21 +36,21 @@ PART 2 — DETERMINE THE DECIMAL
 Your integer is locked. Do not reconsider it. Your only task in this part is to answer the following 16 questions by observing the artwork carefully. Answer each question YES or NO only. Do not explain your answers.
 
 1.  Does the color palette depart from the naturalistic colors of the subject?
-2.  Is there a value structure that organizes the composition?
-3.  Does the work contain at least one area that is intentionally left unresolved?
-4.  Does the work use contrast to direct the viewer's eye toward a specific area?
-5.  Is there a clear focal point?
-6.  Does the level of detail vary across the surface?
-7.  Is the mark-making consistent across the work?
-8.  Does the surface texture vary intentionally across the work?
-9.  Do all centers of interest in the work appear finished?
-10. Does the work demonstrate control of color temperature — with warm and cool tones used in relationship to each other?
-11. Is saturation varied across the surface?
-12. Does the composition guide the viewer's eye through the work?
-13. Is negative space used as a compositional element?
-14. Does the work contain at least one decision that departs from the most conventional approach to this subject?
-15. Does the work convey a discernible mood?
-16. Does the work reveal additional detail, complexity, or meaning upon longer looking?
+2.  Does the level of detail vary across the surface?
+3.  Does the surface texture vary intentionally across the work?
+4.  Is saturation varied across the surface?
+5.  Does the composition guide the viewer's eye through the work?
+6.  Does the work contain at least one decision that departs from the most conventional approach to this subject?
+7.  Does the work reveal additional detail, complexity, or meaning upon longer looking?
+8.  Does the primary focal point have the highest level of contrast in the entire work?
+9.  Do the predominant lines in the work coordinate to lead the viewer's eye to the primary focal point?
+10. Is the area with the most intricate detail work near or at the same area as the primary focal point?
+11. Does the mark-making directionally follow the implied contours of the objects in a representational painting or exhibit confident intentionality and efficiency in an abstract work?
+12. Does the level of finish vary intentionally across the work — with areas of high refinement contrasted against areas of deliberate looseness?
+13. Does the work use color temperature shifts to model form or create depth — with warm and cool variations within a single object or area rather than just across the composition as a whole?
+14. Is the mood of the work created through pictorial means rather than being entirely dependent on the subject matter itself?
+15. Does the work deliberately balance active space (areas of detail, complexity, or density) against passive space (areas of rest, simplicity, or openness)?
+16. Does the work establish at least two contrasting visual rhythms — such as dense vs. open, angular vs. curved, or light vs. dark — that create dynamic tension rather than uniform repetition?
 
 Count your YES answers. This is your yes_count.
 
