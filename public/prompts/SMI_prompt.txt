@@ -33,49 +33,16 @@ The work achieves transcendence. Technical mastery is total and invisible — te
 
 PART 2 — DETERMINE THE DECIMAL
 
-Your integer is locked. Do not reconsider it. Your only task in this part is to answer questions about the artwork and look up the decimal in the table provided. Follow only the instructions for your locked integer level. Do not read instructions for other levels.
+Your integer is locked. Do not reconsider it. Your task in this part is to score the 27 Essential Factors and then look up your decimal in the table for your locked integer level.
 
 ---
 
-IF INTEGER = 1, 2, or 3:
+SUBROUTINE: THE 27 ESSENTIAL FACTORS
 
-Answer the following 16 questions by observing the artwork carefully. Answer each question YES or NO only. Do not explain your answers.
+Score each of the 27 factors below on a scale of 0 to 5. For each factor, select the score whose description most accurately reflects what you observe in this work — where 0 means this factor is not present in the work, 1 means it is present but working at a novice level, and 5 means it is performing at a master level and is a primary reason a buyer would choose this work. Score honestly — lower-level works will naturally score low across most factors, and that is the correct and expected result.
 
-1.  Does the color palette depart from the naturalistic colors of the subject?
-2.  Does the level of detail vary across the surface?
-3.  Does the surface texture vary intentionally across the work?
-4.  Is saturation varied across the surface?
-5.  Does the composition guide the viewer's eye through the work?
-6.  Does the work contain at least one decision that departs from the most conventional approach to this subject?
-7.  Does the work reveal additional detail, complexity, or meaning upon longer looking?
-8.  Does the primary focal point have the highest level of contrast in the entire work?
-9.  Do the predominant lines in the work coordinate to lead the viewer's eye to the primary focal point?
-10. Is the area with the most intricate detail work near or at the same area as the primary focal point?
-11. Does the mark-making directionally follow the implied contours of the objects in a representational painting or exhibit confident intentionality and efficiency in an abstract work?
-12. Does the level of finish vary intentionally across the work — with areas of high refinement contrasted against areas of deliberate looseness?
-13. Does the work use color temperature shifts to model form or create depth — with warm and cool variations within a single object or area rather than just across the composition as a whole?
-14. Is the mood of the work created through pictorial means rather than being entirely dependent on the subject matter itself?
-15. Does the work deliberately balance active space (areas of detail, complexity, or density) against passive space (areas of rest, simplicity, or openness)?
-16. Does the work establish at least two contrasting visual rhythms — such as dense vs. open, angular vs. curved, or light vs. dark — that create dynamic tension rather than uniform repetition?
-
-Count your YES answers. This is your yes_count_16. Look up the decimal in this table:
-
-          Dec=0.00  Dec=0.25  Dec=0.50  Dec=0.75
-Level 1:   0-2       3-4       5-6       7-16
-Level 2:   0-5       6-8       9-11      12-16
-Level 3:   0-9       10-11     12-13     14-16
-
-Set yes_count_8 = null.
-
----
-
-IF INTEGER = 4:
-
-Score each of the 27 Essential Factors outlined below on a scale of 0 to 5.
-For each factor, select the score whose description most accurately reflects what you observe in this work — where 0 means this factor is not present in the work, 1 means it is present but working at a novice level, and 5 means it is performing at a master level and is a primary reason a buyer would choose this work. A Level 4 artwork will have factors performing across the full range — score honestly at every level.
 Accumulate all scores across the 27 factors as Total_Factor_Score.
-
-## THE 27 ESSENTIAL FACTORS
+Calculate Avg_Score = Total_Factor_Score / 27.
 
 **Factor 1: Line**
 
@@ -320,24 +287,45 @@ Accumulate all scores across the 27 factors as Total_Factor_Score.
 * Score 4: Emotional resonance is a positive contributor to this work's value — the work connects with something real in the viewer's experience or inner life in a way that is distinctive and memorable, and a buyer would feel that connection as a primary reason to want to own this work.
 * Score 5: Emotional resonance is the defining quality of this work and its most compelling reason for ownership — the work connects with something so deep and so universal that a buyer would feel seen or moved by it, and that emotional experience would make the work feel necessary rather than merely desirable.
 
-Calculate Avg_Score = Total_Factor_Score / 27.
-
-The Avg_Score determines the decimal:
-
-Look up the decimal in this table:
-
-Avg_Score      Decimal
-0.00-2.49       0.00
-2.50-3.24       0.25
-3.25-3.99       0.50
-4.00-5.00       0.75
-
-Proceed to the output section.
+[YOU NOW HAVE Avg_Score. Return to your locked integer level below and look up your decimal.]
 
 ---
 
+INTEGER LEVEL DECIMAL LOOKUP
+
+IF INTEGER = 1:
+Avg_Score      Decimal
+0.00-0.99       0.00
+1.00-1.49       0.25
+1.50-1.99       0.50
+2.00-5.00       0.75
+(Placeholder thresholds — recalibrate to quartiles after first batch.)
+
+IF INTEGER = 2:
+Avg_Score      Decimal
+0.00-1.49       0.00
+1.50-2.24       0.25
+2.25-2.99       0.50
+3.00-5.00       0.75
+(Placeholder thresholds — recalibrate to quartiles after first batch.)
+
+IF INTEGER = 3:
+Avg_Score      Decimal
+0.00-2.49       0.00
+2.50-2.99       0.25
+3.00-3.49       0.50
+3.50-5.00       0.75
+(Placeholder thresholds — recalibrate to quartiles after first batch.)
+
+IF INTEGER = 4:
+Avg_Score      Decimal
+0.00-3.77       0.00
+3.78-4.18       0.25
+4.19-4.33       0.50
+4.34-5.00       0.75
+
 IF INTEGER = 5:
-The decimal is always 0.00. The SMI is always 5.00. Do not answer any questions. Proceed directly to the output.
+The decimal is always 0.00. The SMI is always 5.00. Do not score any factors. Proceed directly to the output.
 
 ---
 
@@ -359,7 +347,7 @@ Return your response as a JSON object with exactly these six fields:
   "decimal": [0.00, 0.25, 0.50, or 0.75],
   "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention decimal values, yes counts, or the evaluation process itself.]",
   "smi": [final_smi, expressed as a number with two decimal places, e.g. 3.50],
-  "factor_scores": [For Level 4 only: an array of 27 integers, one per factor in order from Factor 1 to Factor 27, each integer being the score (0–5) you assigned to that factor. For all other levels: null]
+  "factor_scores": [For Levels 1, 2, 3, and 4: an array of 27 integers, one per factor in order from Factor 1 to Factor 27, each integer being the score (0–5) you assigned to that factor. For Level 5 only: null]
 }
 
 Do not include any fields other than these six. Describe only what you observe in this artwork. Each work is evaluated entirely on its own — no prior works, no historical context, no recognition of artist identity or fame may enter the reasoning.
