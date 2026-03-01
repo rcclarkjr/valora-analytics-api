@@ -1321,13 +1321,19 @@ const { integer, integer_reasoning, decimal, decimal_reasoning, smi } = aiRespon
 
     const combinedAnalysis = `${integer_reasoning}\n\n${decimal_reasoning}`;
 
-    res.json({
+res.json({
       smi: finalSMI,
       analysis: combinedAnalysis,
       factor_scores: factor_scores
     });
 
-
+  } catch (error) {
+    console.error("Unexpected error in SMI analysis:", error);
+    res.status(500).json({
+      error: { message: "Internal server error during analysis" }
+    });
+  }
+});
 
 
 
