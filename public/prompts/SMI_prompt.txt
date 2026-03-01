@@ -295,26 +295,26 @@ INTEGER LEVEL DECIMAL LOOKUP
 
 IF INTEGER = 1:
 Avg_Score      Decimal
-0.00-0.99       0.00
-1.00-1.49       0.25
-1.50-1.99       0.50
-2.00-5.00       0.75
+0.00-0.55       0.00
+0.56-0.74       0.25
+0.75-0.92       0.50
+0.93-5.00       0.75
 (Placeholder thresholds — recalibrate to quartiles after first batch.)
 
 IF INTEGER = 2:
 Avg_Score      Decimal
-0.00-1.49       0.00
-1.50-2.24       0.25
-2.25-2.99       0.50
-3.00-5.00       0.75
+0.00-1.11       0.00
+1.12-1.48       0.25
+1.49-1.85       0.50
+1.86-5.00       0.75
 (Placeholder thresholds — recalibrate to quartiles after first batch.)
 
 IF INTEGER = 3:
 Avg_Score      Decimal
-0.00-2.49       0.00
-2.50-2.99       0.25
-3.00-3.49       0.50
-3.50-5.00       0.75
+0.00-2.36       0.00
+2.37-2.63       0.25
+2.64-2.81       0.50
+2.82-5.00       0.75
 (Placeholder thresholds — recalibrate to quartiles after first batch.)
 
 IF INTEGER = 4:
