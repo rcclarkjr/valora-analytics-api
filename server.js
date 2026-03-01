@@ -1271,7 +1271,8 @@ CRITICAL EVALUATION RULES:
     // ================================================================================
 
 const { integer, integer_reasoning, decimal, decimal_reasoning, smi } = aiResponse;
-    const factor_scores = aiResponse.factor_scores || null;
+const factor_scores = aiResponse.factor_scores || null;
+    console.log(`FACTOR SCORES: ${factor_scores ? JSON.stringify(factor_scores) : 'null — not returned by AI'}`);
 
     // Validate integer
     if (!Number.isInteger(integer) || integer < 1 || integer > 5) {
