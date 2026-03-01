@@ -65,235 +65,260 @@ Level 1:   0-2       3-4       5-6       7-16
 Level 2:   0-5       6-8       9-11      12-16
 Level 3:   0-9       10-11     12-13     14-16
 
-Proceed to the output section.
+Set yes_count_8 = null.
 
 ---
 
 IF INTEGER = 4:
 
-Score each of the 27 Essential Factors outlined below on a scale of 1 to 5.
-Select the best answer (most accurate sentence) and assign the score associated with that sentence.
+Score each of the 27 Essential Factors outlined below on a scale of 0 to 5.
+For each factor, select the score whose description most accurately reflects what you observe in this work — where 0 means this factor is not present in the work, 1 means it is present but working at a novice level, and 5 means it is performing at a master level and is a primary reason a buyer would choose this work. A Level 4 artwork will have factors performing across the full range — score honestly at every level.
 Accumulate all scores across the 27 factors as Total_Factor_Score.
 
 ## THE 27 ESSENTIAL FACTORS
 
-**Factor 1: Line** 
+**Factor 1: Line**
 
-* Score 1: Static or accidental lines; fails to guide the eye or define edges, resulting in a lack of energy or structural clarity.
-* Score 2: Basic use of line for outlines; lacks variation in thickness or texture and provides minimal sense of rhythm or movement.
-* Score 3: Controlled line quality; uses clear pathways to connect elements and demonstrates a basic understanding of hard vs. soft edges.
-* Score 4: Dynamic line work (like Starry Night); varies line weight and texture to infuse the work with vitality and lead the eye through the composition.
-* Score 5: Masterful rhythmic expression; uses line as a primary emotional language, expertly juxtaposing bold verticality with fluid, energetic movement.
+* Score 0: Line is not deployed as a visual element in this work.
+* Score 1: Line is present but poorly controlled — wobbly, hesitant, or inconsistent in ways that reveal the artist is still learning to render it intentionally.
+* Score 2: Line is present but used in a basic or predictable way — primarily for outlines or edges, with little variation in weight, texture, or direction.
+* Score 3: Line is used competently and consistently — varies in weight and character, connects elements effectively, but does not yet distinguish this work or reveal a personal vision.
+* Score 4: Line is used expressively and with clear personal intention — its weight, rhythm, and direction are deliberate choices that contribute to what makes this work feel like it belongs to one specific artist.
+* Score 5: Line is a primary carrier of the work's emotional or expressive content — its quality, energy, and rhythm are things a buyer would respond to viscerally, even without being able to name why.
 
-**Factor 2: Shape** 
+**Factor 2: Shape**
 
-* Score 1: Indistinct or haphazard shapes; boundaries are poorly defined, and there is no clear relationship between positive and negative space.
-* Score 2: Relies on literal, predictable shapes; shows little attempt to simplify forms or use shapes to create a sense of rhythm.
-* Score 3: Effective use of organic and geometric forms; shapes establish a clear visual hierarchy and begin to guide the eye through the work.
-* Score 4: Dynamic abstraction (like Les Demoiselles d'Avignon); fragments or exaggerates shapes to create tension, movement, and modern energy.
-* Score 5: Masterful shape manipulation; uses interlocking planes and deliberate distortion to turn shapes into powerful vehicles for symbolic and emotional content.
+* Score 0: Shape is not deployed as a deliberate visual element in this work.
+* Score 1: Shapes are present but poorly resolved — boundaries are uncertain, and the relationship between positive and negative space appears unintentional.
+* Score 2: Shapes are present but literal and predictable — they describe the subject without being used to create rhythm, tension, or visual interest beyond recognition.
+* Score 3: Shapes are used competently — they establish a clear visual hierarchy and guide the eye effectively, but they do not yet reveal a personal vision or distinctive approach.
+* Score 4: Shapes are used expressively and with clear personal intention — their contours, proportions, or spatial relationships are manipulated in ways that contribute to what makes this work distinctively this artist's.
+* Score 5: Shape is a primary carrier of the work's emotional or conceptual content — every boundary and silhouette feels inevitable and charged, and a buyer would respond to the shapes themselves as a reason to own this work.
 
 **Factor 3: Form**
 
-* Score 1: Flat appearance; minimal indication of mass or volume, with little awareness of how objects occupy three-dimensional space.
-* Score 2: Basic suggestion of form; uses simple shading but fails to create a tangible sense of weight or depth in complex objects.
-* Score 3: Clear three-dimensional illusion; effectively uses light and shadow to define contours and establish a visual hierarchy within the forms.
-* Score 4: Strong volumetric representation (like the Arnolfini Portrait); uses chiaroscuro and meticulous gradations of light to make forms feel palpable and heavy.
-* Score 5: Exceptional mastery of mass; scuplts forms that feel tangible and grounded, integrating symbolic meaning into the very structure of the objects.
+* Score 0: Three-dimensional form is not a feature of this work — it operates in a flat or decorative visual language where volume is not relevant.
+* Score 1: The artist attempts to render form but the results reveal incomplete understanding — volumes feel flat, inconsistent, or unconvincing in ways that distract from the work.
+* Score 2: Form is suggested but only partially realized — basic shading is present but fails to create a convincing sense of weight, mass, or depth in complex objects.
+* Score 3: Form is rendered competently — light and shadow define contours clearly and objects occupy three-dimensional space convincingly, but the execution is professional rather than distinctive.
+* Score 4: Form is rendered with personal mastery — the way this artist models volume, weight, and mass is a recognizable part of their visual signature and contributes to the work's distinctiveness.
+* Score 5: Form is a primary source of the work's power — the sculptural presence of objects or figures is so convincing and so expressively charged that a buyer would feel it physically, even without being able to articulate why.
 
-**Factor 4: Space** 
+**Factor 4: Space**
 
-* Score 1: Confused spatial relationships; elements appear to "float" without a clear sense of foreground, midground, or background.
-* Score 2: Basic overlapping; relies on simple size variation to suggest depth but lacks a structured or convincing spatial framework.
-* Score 3: Intentional use of space; effectively balances positive and negative areas and uses atmospheric perspective to create depth.
-* Score 4: Structured deep space (like The School of Athens); masterfully employs linear perspective and scale to organize complex compositions.
-* Score 5: Immersion and Grandeur; creates a sophisticated spatial hierarchy that directs the eye to focal points while offering "passive space" for visual rest.
+* Score 0: Spatial depth is not a feature of this work — it operates intentionally in a flat or compressed visual field.
+* Score 1: The artist attempts to create spatial depth but the results are confused — elements float without clear spatial logic, or perspective errors undermine the illusion.
+* Score 2: Space is suggested through basic overlapping or size variation but lacks a convincing or structured spatial framework that draws the viewer in.
+* Score 3: Space is handled competently — foreground, midground, and background are clearly established, and the viewer moves through the work in a believable way, but the spatial construction is not distinctive.
+* Score 4: Space is used with personal vision — the way this artist constructs depth, compresses distance, or manipulates the picture plane is a recognizable part of their approach and adds to the work's appeal.
+* Score 5: Space is a primary vehicle for the work's emotional impact — the sense of depth, atmosphere, or spatial tension is so immersive and so expressively handled that a buyer would feel drawn into the work in a way they could not easily explain.
 
-**Factor 5: Color/Hue** 
+**Factor 5: Color/Hue**
 
-* Score 1: Arbitrary color choices; palette feels discordant or muddy, failing to support the mood or narrative of the piece.
-* Score 2: Literal use of color; focuses on local color without considering harmony, temperature, or emotional impact.
-* Score 3: Strategic palette; uses color harmony (complementary/analogous) to create balance and employs temperature to suggest depth.
-* Score 4: Emotionally charged palette (like The Scream); uses unnatural or exaggerated hues to amplify intensity and visceral emotional response.
-* Score 5: Masterful color architecture; uses temperature and saturation as a psychological tool to guide focus and express the intangible.
+* Score 0: Color as an expressive or structural element is not deployed in this work — it is monochromatic or operates purely descriptively.
+* Score 1: Color choices reveal incomplete understanding — the palette feels arbitrary, muddy, or discordant in ways that work against the piece rather than supporting it.
+* Score 2: Color is used literally and predictably — local colors are rendered accurately but without consideration of harmony, temperature, or emotional impact.
+* Score 3: Color is used competently — the palette is harmonious, temperature is considered, and color supports the mood of the work, but it does not yet distinguish this work or signal a personal vision.
+* Score 4: Color is used with clear personal intention — the palette choices are distinctive and expressive, contributing to what makes this work immediately recognizable as belonging to this artist.
+* Score 5: Color is the primary vehicle for the work's emotional content — the palette is so precisely and powerfully deployed that a buyer would respond to it as a primary reason to own this work, even before fully taking in the subject.
 
-**Factor 6: Texture** 
+**Factor 6: Texture**
 
-* Score 1: Flat or unintended surface quality; no distinction between different materials.
-* Score 2: Minimal attempt at implied texture; uses basic brushwork but fails to convey the tactile "feel" of specific surfaces.
-* Score 3: Effective use of implied texture; distinguishes between materials using light and shadow to create a believable surface variety.
-* Score 4: Sophisticated tactile richness (like The Night Watch); uses varied paint application and contrast to make materials feel tangible and three-dimensional.
-* Score 5: Masterful textural narrative; expertly combines actual and implied textures to capture light uniquely, using surface quality to symbolize status or emotion.
+* Score 0: Texture is not deployed as a visual or expressive element in this work.
+* Score 1: The artist attempts to render texture but the results are inconsistent or unconvincing — surface qualities feel accidental rather than controlled.
+* Score 2: Texture is present but used in a basic way — some surface variation exists but it does not convincingly distinguish between materials or contribute meaningfully to the work's appeal.
+* Score 3: Texture is handled competently — surfaces are differentiated believably and the tactile quality of the work is consistent and professional, but not distinctive.
+* Score 4: Texture is used with personal intention — the way this artist handles surface quality is a recognizable part of their visual signature and adds a dimension of richness that contributes to the work's value.
+* Score 5: Texture is a primary source of the work's sensory appeal — its variety, richness, and expressiveness are things a buyer would respond to physically, wanting to look closer or touch the surface.
 
 **Factor 7: Tone/Value**
 
-* Score 1: Weak tonal range; predominantly mid-tones with no clear "lightest light" or "darkest dark," resulting in a muddy or flat image.
-* Score 2: Limited value scale; uses some highlights and shadows but lacks the depth required to define complex forms or space.
-* Score 3: Competent tonal structure; uses a full value scale to define three-dimensional form and establish clear focal points.
-* Score 4: Dramatic Chiaroscuro (like Caravaggio); uses high-contrast value relationships to guide the eye and create an intense atmospheric "beam" of focus.
-* Score 5: Masterful value architecture; uses subtle tonal gradations and dramatic contrasts to support a deep narrative.
+* Score 0: Tonal variation is not deployed as a structural or expressive element in this work.
+* Score 1: Tonal handling reveals incomplete understanding — the value range is too narrow, too uniform, or applied inconsistently in ways that make the work feel flat or muddy.
+* Score 2: Tone is used in a basic way — some highlights and shadows are present but the value structure does not successfully define form, create depth, or establish a clear focal hierarchy.
+* Score 3: Tone is handled competently — a full value range is present, form is defined clearly, and focal points are established through contrast, but the tonal structure is professional rather than expressive.
+* Score 4: Tone is used with personal mastery — the way this artist orchestrates light and dark is a distinctive and intentional part of their visual language, contributing to what makes this work feel like theirs.
+* Score 5: Tone is a primary carrier of the work's drama and emotional power — the value architecture is so precisely and expressively deployed that a buyer would feel its impact immediately and viscerally.
 
-**Factor 8: Saturation** 
+**Factor 8: Saturation**
 
-* Score 1: Uncontrolled intensity; colors are either universally over-saturated or universally desaturated without purpose.
-* Score 2: Basic variation in intensity; shows some awareness of muted vs. vivid colors but fails to use them to create focus or depth.
-* Score 3: Strategic use of saturation; balances vivid focal points against muted backgrounds to create a cohesive atmosphere.
-* Score 4: Atmospheric saturation (like Monet's Sunrise); masterfully uses desaturated tones for spatial recession and high saturation for a singular focal point.
-* Score 5: Psychological saturation; uses the "push-pull" of color intensity to advance or recede elements.
+* Score 0: Saturation is not used as a deliberate expressive or structural tool in this work.
+* Score 1: Saturation reveals incomplete control — colors are uniformly over-intense or uniformly dull in ways that feel unintentional and work against the piece.
+* Score 2: Saturation is managed in a basic way — some awareness of muted versus vivid is present but it is not used effectively to create focus, depth, or emotional atmosphere.
+* Score 3: Saturation is handled competently — vivid and muted areas are balanced to create a coherent atmosphere and guide attention, but the approach is professional rather than distinctive.
+* Score 4: Saturation is used with personal intention — the way this artist deploys color intensity is a recognizable part of their visual approach and contributes meaningfully to the work's character and appeal.
+* Score 5: Saturation is a primary expressive tool — its push and pull across the surface creates emotional tension or atmosphere so effectively that a buyer would feel it as one of the work's most compelling qualities.
 
-**Factor 9: Cohesiveness** 
+**Factor 9: Cohesiveness**
 
-* Score 1: Fragmented or disjointed; elements feel unrelated in style, technique, or concept.
-* Score 2: Surface-level unity; uses a consistent color but contains distracting elements that contradict the message.
-* Score 3: Purposeful alignment; ensures that the brushwork, palette, and composition work together to support a unified mood.
-* Score 4: Conceptual and visual synergy (like Bosch's Garden); maintains a consistent style across complex scenes to serve a single message.
-* Score 5: Exceptional structural unity; masterfully connects every detail—from small motifs to large-scale flow.
+* Score 0: Cohesiveness is not applicable — this work is a study, sketch, or fragment not intended as a unified whole.
+* Score 1: The work feels disjointed — style, technique, or concept shift in ways that reveal the artist has not yet unified their approach, and the result feels unresolved.
+* Score 2: The work has surface-level unity — a consistent color or subject holds it together, but elements contradict each other in ways that reduce its impact and appeal.
+* Score 3: The work is cohesive and professional — brushwork, palette, and composition support a unified mood consistently throughout, but cohesiveness is a baseline achievement rather than a distinguishing strength.
+* Score 4: Cohesiveness is a positive contributor to this work's value — every element feels like it belongs to a single vision, and the unity of the work is something a viewer would notice and respond to as a mark of a fully formed artist.
+* Score 5: Cohesiveness is a defining strength of this work — the integration of every element into a single seamless vision is so complete and so distinctive that it is itself a reason a buyer would choose this work over another.
 
 **Factor 10: Pattern**
 
-* Score 1: Absence of rhythm; no repetition or accidental repetition that creates visual "clutter."
-* Score 2: Decorative use of pattern; repetitive elements are present but feel like an afterthought rather than integrated.
-* Score 3: Rhythmic structure; uses intentional repetition of shapes or colors to lead the eye.
-* Score 4: Pattern as a spatial organizer (like Matisse's Red Studio); uses repeated motifs to define space.
-* Score 5: Masterful rhythmic movement; varies scale and orientation of patterns to create dynamic energy.
+* Score 0: Pattern is not deployed as a visual element in this work.
+* Score 1: The artist attempts to use pattern but the results feel accidental or cluttered — repetition creates visual noise rather than contributing to the work's structure or appeal.
+* Score 2: Pattern is present but used decoratively and without integration — repetitive elements feel like an afterthought rather than a deliberate structural or expressive choice.
+* Score 3: Pattern is used competently — intentional repetition of shapes, colors, or marks leads the eye and contributes to the work's visual organization, but it does not distinguish the work or reveal a personal vision.
+* Score 4: Pattern is used with personal intention — its scale, rhythm, or character is a recognizable part of this artist's visual language and adds a dimension of interest that contributes to the work's appeal.
+* Score 5: Pattern is a primary vehicle for the work's visual energy — its rhythmic complexity, variation, and expressive force are things a buyer would respond to as a defining quality of this work.
 
-**Factor 11: Balance** 
+**Factor 11: Balance**
 
-* Score 1: Visual instability; the weight of the composition is skewed haphazardly.
-* Score 2: Literal or rigid balance; relies on heavy-handed centering or repetitive symmetry.
-* Score 3: Harmonious equilibrium; effectively uses strategic focal point placement to distribute visual weight.
-* Score 4: Masterful Minimalism (like Friedrich's Monk); achieves powerful balance through negative space and a single off-center "anchor."
-* Score 5: Dynamic Equilibrium; perfectly balances "visual weights" (color, contrast, texture) to create stability and movement.
+* Score 0: Balance is not a relevant feature of this work — it operates in a visual language where equilibrium is not a structural consideration.
+* Score 1: The work feels visually unstable in ways that appear unintentional — weight distribution creates discomfort or distraction rather than intentional tension.
+* Score 2: Balance is achieved through basic or rigid means — centered composition or obvious symmetry produces stability without sophistication or visual interest.
+* Score 3: Balance is handled competently — visual weight is distributed effectively and the composition feels resolved and professional, but the approach to balance is not distinctive.
+* Score 4: Balance is used with personal vision — the way this artist distributes visual weight, uses negative space, or creates equilibrium through asymmetry is a recognizable part of their compositional approach and adds to the work's appeal.
+* Score 5: Balance is a primary source of the work's visual authority — the equilibrium achieved is so precisely and expressively calibrated that a buyer would feel it as a quality of inevitability, as if nothing could be moved without destroying the whole.
 
-**Factor 12: Contrast** 
+**Factor 12: Contrast**
 
-* Score 1: Flat or monotonous; lack of variation in value, color, or texture.
-* Score 2: Simple juxtaposition; uses basic "light vs. dark" but lacks nuance to create dramatic emotional resonance.
-* Score 3: Intentional focus; uses high contrast (value or color temperature) strategically to highlight focal points.
-* Score 4: Dramatic Chiaroscuro (like Zurbarán); uses stark, luminous contrast to create a monumental presence.
-* Score 5: Masterful dualism; expertly weaves multiple types of contrast to create a profound narrative impact.
+* Score 0: Contrast is not deployed as a deliberate structural or expressive element in this work.
+* Score 1: Contrast is present but reveals incomplete control — tonal or color differences are inconsistent or create confusion rather than clarity or drama.
+* Score 2: Contrast is used in a basic way — simple light versus dark relationships are present but lack the nuance or intentionality to create focus, drama, or emotional resonance.
+* Score 3: Contrast is handled competently — it is used strategically to establish focal points and create visual interest, but the approach is professional rather than expressive or distinctive.
+* Score 4: Contrast is used with personal mastery — the way this artist deploys tonal, color, or textural contrast is a recognizable and intentional part of their visual language that contributes to the work's impact and distinctiveness.
+* Score 5: Contrast is a primary carrier of the work's dramatic power — its deployment is so precise and so expressively charged that a buyer would feel it as one of the most compelling reasons to own this work.
 
-**Factor 13: Emphasis** 
+**Factor 13: Emphasis**
 
-* Score 1: Lack of a focal point; the viewer's eye wanders aimlessly.
-* Score 2: Accidental emphasis; an area draws attention due to an unintended high-contrast "spot."
-* Score 3: Clear focal point; uses placement and basic contrast to ensure the main subject is noticed first.
-* Score 4: Strategic hierarchy (like Delacroix); masterfully uses tonal isolation and sharp detail to anchor the viewer.
-* Score 5: Psychological & Visual focus; creates a commanding presence where every secondary element serves the primary focal point.
+* Score 0: Emphasis is not used as a deliberate compositional strategy in this work.
+* Score 1: The work lacks clear emphasis or attempts it unsuccessfully — either everything competes equally for attention or the focal hierarchy is confused in ways that frustrate the viewer.
+* Score 2: Emphasis is established but through basic or predictable means — a single focal point exists but the work does little to make the journey to it interesting or rewarding.
+* Score 3: Emphasis is handled competently — clear focal hierarchy exists, the eye is guided effectively, and the work rewards looking, but the approach to emphasis is professional rather than distinctive.
+* Score 4: Emphasis is used with personal intention — the way this artist directs attention, creates focal hierarchy, or subverts expected emphasis is a recognizable part of their approach and contributes to what makes the work engaging and distinctive.
+* Score 5: Emphasis is a primary source of the work's visual drama — the focal strategy is so precisely and compellingly executed that a buyer would feel drawn into the work in a way that holds their attention and makes it difficult to look away.
 
-**Factor 14: Movement** 
+**Factor 14: Movement**
 
-* Score 1: Static and "frozen"; elements feel disconnected or rigid, providing no visual path.
-* Score 2: Basic directional cues; uses simple lines or gestures, but the flow is often interrupted.
-* Score 3: Fluid visual path; uses diagonal lines or rhythmic repetition to guide the viewer's eye through the narrative.
-* Score 4: Dynamic turbulence (like Géricault's Medusa); employs opposing diagonals and twisting gestures for motion.
-* Score 5: Kinetic unity; creates a "perpetual motion" effect where light, brushwork, and composition propel the eye.
+* Score 0: Visual movement is not deployed as an expressive or structural element in this work.
+* Score 1: The work feels static in ways that appear unintentional — there is no visual flow, and the eye has nowhere to go after the initial point of entry.
+* Score 2: Movement is suggested but weak or predictable — some directional energy exists but it does not carry the eye through the work in a rewarding or sustained way.
+* Score 3: Movement is handled competently — the eye travels through the work along a clear and satisfying path, but the way movement is created is professional rather than expressive or distinctive.
+* Score 4: Movement is used with personal vision — the way this artist creates directional energy, visual flow, or kinetic tension is a recognizable part of their compositional approach and adds a dimension of vitality that contributes to the work's appeal.
+* Score 5: Movement is a primary source of the work's energy and life — its force and direction are so expressively deployed that a buyer would feel the work as dynamic and alive, and that quality would be a compelling reason to own it.
 
-**Factor 15: Rhythm** 
+**Factor 15: Rhythm**
 
-* Score 1: Monotonous or chaotic; repetition is either too mechanical or completely absent.
-* Score 2: Simple repetition; repeats a color or shape but lacks variation to keep the viewer engaged.
-* Score 3: Harmonious flow; uses alternation or progression to create a steady, structural rhythm.
-* Score 4: Orchestrated balance (like David's Horatii); uses repeating geometric forms and "color beats" to reinforce order.
-* Score 5: Sophisticated visual tempo; weaves multiple rhythms to create a complex "staccato" or "flowing" energy.
+* Score 0: Rhythm is not deployed as a deliberate visual element in this work.
+* Score 1: Rhythm is attempted but the results feel mechanical or unintentional — repetition creates monotony or visual noise rather than a sense of tempo or pulse.
+* Score 2: Rhythm is present but basic — repetitive elements create a simple beat that is consistent but too uniform to generate visual interest or sustained engagement.
+* Score 3: Rhythm is handled competently — variations in repetition create a sense of visual tempo that organizes the work effectively, but the rhythmic approach is professional rather than expressive or distinctive.
+* Score 4: Rhythm is used with personal intention — the way this artist varies pace, density, and repetition is a recognizable part of their visual language and contributes to what makes the work feel alive and distinctively theirs.
+* Score 5: Rhythm is a primary source of the work's vitality — its pulse, variation, and expressive momentum are things a buyer would feel as a defining quality of the work, making it feel uniquely energetic and alive.
 
-**Factor 16: Variety** 
+**Factor 16: Variety**
 
-* Score 1: Flat and repetitive; the work is too uniform in color, texture, and subject.
-* Score 2: Disjointed variety; includes different elements but they feel scattered and do not contribute to a whole.
-* Score 3: Engaging diversity; introduces a healthy range of textures or tones that maintain interest.
-* Score 4: Complex richness (like Las Meninas); balances diverse figures and layers within a structured composition.
-* Score 5: Infinite fascination; creates a multi-layered narrative where variety invites the viewer to return repeatedly.
+* Score 0: Variety is not deployed as a deliberate visual strategy in this work.
+* Score 1: The work is monotonous in ways that appear unintentional — a single approach is applied uniformly throughout, creating visual fatigue rather than sustained interest.
+* Score 2: Variety is present but limited — some differences in mark, color, or form exist but they are not sufficient to maintain engagement or reward sustained looking.
+* Score 3: Variety is handled competently — enough diversity of element exists to maintain visual interest throughout the work, but the variety is professionally managed rather than expressive or distinctive.
+* Score 4: Variety is used with personal vision — the way this artist introduces diversity of mark, color, texture, or form is a deliberate and recognizable part of their approach, adding richness and depth that contribute to the work's appeal.
+* Score 5: Variety is a primary reason this work rewards sustained looking — its richness and diversity of visual experience are so expertly orchestrated that a buyer would discover new details and relationships each time they look, making the work feel inexhaustible.
 
-**Factor 17: Proportion** 
+**Factor 17: Proportion**
 
-* Score 1: Distorted or awkward; size relationships feel accidental, disrupting believability.
-* Score 2: Basic scaling; elements are generally the right size but foreground/background relationship feels flat.
-* Score 3: Anatomical and spatial accuracy (like Lippi's Christ Child); uses realistic proportions for harmony.
-* Score 4: Symbolic scaling (like Lippi's Madonna); uses proportion to denote spiritual importance while maintaining grace.
-* Score 5: Mathematical mastery; employs systems like the Golden Ratio to achieve perfect, stable harmony.
+* Score 0: Proportion is not a relevant consideration in this work — it operates in a visual language where representational accuracy of scale is not applicable.
+* Score 1: Proportion reveals incomplete understanding — size relationships between elements feel incorrect or inconsistent in ways that distract from the work and undermine its credibility.
+* Score 2: Proportion is basically managed — size relationships are mostly plausible but lack the refinement or intentionality to contribute meaningfully to the work's visual impact.
+* Score 3: Proportion is handled competently — size relationships between elements are convincing and well-considered, contributing to the work's professional quality, but proportion is not used as an expressive tool.
+* Score 4: Proportion is used with personal intention — size relationships are deliberately manipulated or refined in ways that are expressive and distinctive, contributing to what makes this work feel like it belongs to one specific artistic vision.
+* Score 5: Proportion is a primary expressive vehicle — the way size relationships are deployed creates such a powerful sense of presence, drama, or meaning that a buyer would feel it as one of the work's most compelling and distinctive qualities.
 
-**Factor 18: Harmony** 
+**Factor 18: Harmony**
 
-* Score 1: Jarring or disjointed; elements fight for attention, making the work feel "broken."
-* Score 2: Emerging unity; attempts to limit the palette are present, but "loud" elements still disrupt the scene.
-* Score 3: Cohesive balance; uses analogous colors and consistent brushwork to ensure all parts complement each other.
-* Score 4: Naturalistic serenity (like Constable); blends elements through tonal harmony and repeated organic forms.
-* Score 5: Absolute Equilibrium; light, atmosphere, and form are so perfectly integrated that no single part could be altered.
+* Score 0: Harmony is not deployed as a deliberate visual or expressive strategy in this work.
+* Score 1: The work feels discordant in ways that appear unintentional — elements clash in style, color, or feeling in ways that create discomfort rather than intentional tension.
+* Score 2: Harmony is present at a surface level — a consistent subject or color holds the work together, but underlying dissonances reduce its sense of unity and appeal.
+* Score 3: Harmony is handled competently — all elements work together to support a unified feeling, and the work has a consistent and pleasing visual character, but harmony is a baseline achievement rather than a distinguishing quality.
+* Score 4: Harmony is used with personal mastery — the way this artist achieves unity across color, form, and feeling is a recognizable and distinctive part of their vision, and the harmony of the work is something a viewer would notice and respond to as a mark of a fully formed artist.
+* Score 5: Harmony is a defining strength and a primary source of the work's appeal — the integration of all visual elements into a single resonant whole is so complete and so beautiful that a buyer would feel it as an almost physical sense of rightness, making the work deeply satisfying to live with.
 
 **Factor 19: Perspective**
 
-* Score 1: Distorted spatial logic; fails to create a convincing illusion of depth.
-* Score 2: Basic receding lines; uses simple linear perspective but lacks atmospheric effects.
-* Score 3: Consistent 1 or 2-point perspective; demonstrates a solid technical grasp of traditional systems.
-* Score 4: Mastery of multi-point or aerial perspective; creates a sophisticated sense of deep space.
-* Score 5: Immersive spatial reality; manipulates perspective to draw the viewer into a fully realized world.
+* Score 0: Perspective is not deployed as a spatial strategy in this work — it operates in a flat, compressed, or non-representational visual language.
+* Score 1: The artist attempts perspective but the results reveal incomplete understanding — spatial logic is inconsistent or incorrect in ways that undermine the work's credibility and distract the viewer.
+* Score 2: Perspective is managed at a basic level — simple recession is present but the spatial construction lacks conviction or sophistication, and depth feels thin or unconvincing.
+* Score 3: Perspective is handled competently — the spatial illusion is consistent and convincing, and the work has a professional command of depth, but perspective is not used as an expressive or distinctive tool.
+* Score 4: Perspective is used with personal vision — the way this artist constructs or subverts spatial depth is a recognizable part of their approach and contributes to what makes the work distinctive and visually compelling.
+* Score 5: Perspective is a primary vehicle for the work's spatial drama or immersive quality — its handling is so precise and so expressively deployed that a buyer would feel drawn into the work's space in a way that is memorable and distinctive.
 
-**Factor 20: Composition** 
+**Factor 20: Composition**
 
-* Score 1: Disorganized or haphazard; lacks a clear structure or underlying plan.
-* Score 2: Formulaic or predictable; relies on standard "rules" without original thought.
-* Score 3: Strong structural bones; uses a clear and effective framework to organize elements.
-* Score 4: Sophisticated eye-path management; masterfully coordinates all elements to create a dynamic journey.
-* Score 5: Iconic structural resonance; achieves a powerful arrangement that feels both inevitable and profound.
+* Score 0: Composition is not applicable — this work is a study, detail, or fragment not intended as a fully resolved compositional statement.
+* Score 1: Composition reveals incomplete understanding — the arrangement of elements feels random or unconsidered, and the work lacks a visual structure that holds it together or gives the eye a place to begin.
+* Score 2: Composition is managed at a basic level — a simple formula organizes the elements adequately, but the structure is predictable and does not enhance the work's impact or reward sustained looking.
+* Score 3: Composition is handled competently — the arrangement of elements is clearly considered, creates a satisfying visual structure, and guides the eye effectively, but the compositional approach is professional rather than distinctive.
+* Score 4: Composition is used with personal vision — the way this artist organizes the picture plane is a recognizable and intentional part of their aesthetic, and the compositional choices contribute meaningfully to what makes this work feel like it belongs to one specific artistic sensibility.
+* Score 5: Composition is a primary source of the work's visual authority and staying power — its structure is so precisely and inventively conceived that a buyer would feel it as a quality of inevitability, and the compositional intelligence of the work would be a compelling reason to own it.
 
-**Factor 21: Brushwork** 
+**Factor 21: Brushwork**
 
-* Score 1: Inconsistent or accidental strokes; brushwork feels hesitant or "messy."
-* Score 2: Uniform application; same stroke type throughout, failing to distinguish focal points.
-* Score 3: Controlled application; varies stroke size and direction to suggest textures and guide the eye.
-* Score 4: Dynamic juxtaposition (like Turner); balances tight strokes for detail with loose strokes for atmosphere.
-* Score 5: Masterful signature style; uses brushwork as a primary vehicle for light and emotion.
+* Score 0: Brushwork is not applicable — this work is executed in a medium or technique where individual brush marks are not a feature.
+* Score 1: Brushwork reveals incomplete control — strokes are hesitant, inconsistent, or overworked in ways that reveal the artist is still developing their handling of the medium.
+* Score 2: Brushwork is present but uniform and undifferentiated — the same stroke type is applied throughout without variation that creates emphasis, texture, or visual interest.
+* Score 3: Brushwork is handled competently — stroke variety creates texture and guides the eye, the medium is handled with professional confidence, but the brushwork does not yet distinguish the work or signal a personal touch.
+* Score 4: Brushwork is a recognizable part of this artist's visual signature — the way they load, drag, or place paint is distinctive and expressive, and a knowledgeable viewer would feel the hand of a specific person in the marks.
+* Score 5: Brushwork is a primary reason to look at this work — its energy, confidence, and expressive range are so compelling that a buyer would respond to the marks themselves as a defining quality, wanting to get close to the surface to experience them directly.
 
-**Factor 22: Chiaroscuro** 
+**Factor 22: Chiaroscuro**
 
-* Score 1: Flat lighting; lack of clear light source or shadow definition.
-* Score 2: Basic tonal modeling; transitions are abrupt or fail to create volume.
-* Score 3: Effective directional light; uses a clear light source to define form and establish focus.
-* Score 4: Luminous modeling (like Vermeer); uses soft transitions and highlights to make subjects emerge from darkness.
-* Score 5: Masterful dramatic architecture; uses extreme contrast or "North Light" precision for sculptural realism.
+* Score 0: Chiaroscuro is not deployed as a modeling or dramatic tool in this work.
+* Score 1: The artist attempts chiaroscuro but the results reveal incomplete understanding — light and shadow are inconsistent, the light source is unclear, or the modeling undermines rather than defines form.
+* Score 2: Chiaroscuro is present but basic — a light source is established and some modeling occurs, but transitions are abrupt or insufficient to create convincing volume or dramatic atmosphere.
+* Score 3: Chiaroscuro is handled competently — a clear directional light defines form convincingly and establishes mood, but the light and shadow are used professionally rather than expressively or distinctively.
+* Score 4: Chiaroscuro is used with personal mastery — the way this artist orchestrates light and shadow is a distinctive and expressive part of their visual language, contributing to what makes this work feel atmospheric, dramatic, and distinctively theirs.
+* Score 5: Chiaroscuro is a primary source of the work's drama and emotional power — the way light emerges from or dissolves into darkness is so precisely and expressively handled that a buyer would feel it as one of the most compelling and memorable qualities of the work.
 
-**Factor 23: Uniqueness** 
+**Factor 23: Uniqueness**
 
-* Score 1: Predictable execution; relies entirely on cliché themes or student-level techniques.
-* Score 2: Conventional approach; follows the rules with only minor personal touches.
-* Score 3: Emerging personal voice; demonstrates a clear departure from standard methods in at least one area.
-* Score 4: Strong innovation; deliberately subverts expectations through innovative techniques or unique materials.
-* Score 5: Masterful Subversion (like Pollock); process and outcome challenge norms to create a new visual language.
+* Score 0: Uniqueness is not a feature of this work — it follows established conventions without departure.
+* Score 1: The work reveals an artist still finding their way — the approach is derivative or imitative in ways that make the work feel like an exercise rather than a personal statement.
+* Score 2: The work has minor personal touches but remains largely conventional — individual preferences are visible but have not yet cohered into a distinctive approach that sets this work apart.
+* Score 3: The work has a clear personal character — departures from convention are consistent and intentional, giving the work a recognizable quality, but uniqueness is not yet a primary source of its value or appeal.
+* Score 4: Uniqueness is a positive contributor to this work's market value — the approach is sufficiently distinctive that a knowledgeable buyer would recognize this artist's hand and value the work partly for its individuality and originality.
+* Score 5: Uniqueness is a defining strength and a primary reason to own this work — the artist's vision is so fully formed and so unlike anyone else's that the work is irreplaceable, and a buyer would feel that irreplaceability as a compelling reason to acquire it.
 
-**Factor 24: Creativity** 
+**Factor 24: Creativity**
 
-* Score 1: Relies on literal, predictable depictions; no "What If?" exploration or imaginative departure.
-* Score 2: Shows minor imaginative twists but stays largely within conventional bounds.
-* Score 3: Demonstrates conceptual innovation; successfully blends unlikely elements or reinterprets a symbol.
-* Score 4: Strong inventive concept (like Dalí); uses imagery to challenge the viewer's perception of reality.
-* Score 5: Exceptional visionary execution; fuses hyper-realistic technique with surreal or deeply subconscious concepts.
+* Score 0: Creative invention is not a feature of this work — it depicts its subject in a straightforward and conventional way.
+* Score 1: The work reveals an artist attempting creative invention but not yet achieving it — conceptual ambitions exceed current execution, and the result feels forced or unresolved.
+* Score 2: The work shows minor creative departures — small imaginative touches are present but they are not sufficiently developed or integrated to contribute meaningfully to the work's appeal or distinctiveness.
+* Score 3: The work demonstrates genuine creative thought — the concept or approach departs from the obvious in a way that is interesting and consistent, but creativity is not yet a primary source of the work's value or market appeal.
+* Score 4: Creativity is a positive contributor to this work's value — the imaginative vision behind the work is developed and distinctive enough that a buyer would respond to the concept itself as a reason to own it, not just the execution.
+* Score 5: Creativity is a defining strength and primary reason to own this work — the imaginative vision is so original, so fully realized, and so compelling that the work feels genuinely irreplaceable, and a buyer would feel they are acquiring something no one else could have made.
 
-**Factor 25: Mood** 
+**Factor 25: Mood**
 
-* Score 1: Inconsistent emotional tone; lighting and color work at cross-purposes.
-* Score 2: Establishes a basic atmosphere but lacks nuance to evoke a specific emotional undercurrent.
-* Score 3: Harmonious interplay of color and light; creates a clear atmosphere that guides interpretation.
-* Score 4: Sophisticated atmospheric ambiguity (like Friedrich); leverages shadow for an immersive experience.
-* Score 5: Masterful emotional architecture; every element evokes a profound existential or emotional resonance.
+* Score 0: Mood is not a feature of this work — it is neutral or descriptive in emotional character.
+* Score 1: The work attempts to establish a mood but the result is inconsistent or contradictory — elements work against each other emotionally, and the viewer is left uncertain about how to feel.
+* Score 2: The work has a basic emotional character — a general feeling is present but it is generic or superficial, not sufficiently developed to create a memorable or distinctive atmosphere.
+* Score 3: Mood is established competently — color, light, and composition work together to create a clear and consistent atmosphere that the viewer can feel, but the mood is professionally achieved rather than deeply distinctive or resonant.
+* Score 4: Mood is a positive contributor to this work's value — the emotional atmosphere is distinctive, fully developed, and sufficiently powerful that a buyer would feel it as one of the primary reasons this work would be compelling to live with.
+* Score 5: Mood is the defining quality of this work and a primary reason to own it — the emotional atmosphere is so precisely and powerfully created that a buyer would feel it immediately and carry it with them after looking away, making the work emotionally unforgettable.
 
-**Factor 26: Viewer Engagement** 
+**Factor 26: Viewer Engagement**
 
-* Score 1: Passive composition; lacks a clear visual pathway or "hook" to draw the viewer in.
-* Score 2: Basic engagement through a single focal point; provides little reason to explore further.
-* Score 3: Active visual dialogue; uses leading lines and contrast to guide the eye through a clear pathway.
-* Score 4: Compels sustained attention through "push-pull" dynamics (like Hopper) or strategic narrative tension.
-* Score 5: Exceptional interactive experience; balances isolation/connection or clarity/ambiguity to make the viewer a participant.
+* Score 0: Viewer engagement is not a feature of this work — it makes no particular attempt to draw or hold the viewer's attention beyond the subject matter itself.
+* Score 1: The work fails to engage — there is no visual hook, no pathway into the work, and nothing that rewards sustained looking beyond an initial glance.
+* Score 2: The work engages at a basic level — a single focal point or subject draws the initial glance, but the work offers little reason to keep looking or explore further.
+* Score 3: The work engages competently — visual pathways, contrast, and compositional interest invite the viewer in and reward some sustained looking, but the engagement is professional rather than compelling or distinctive.
+* Score 4: Viewer engagement is a positive contributor to this work's value — the work actively rewards sustained looking, reveals new relationships or details over time, and creates the kind of visual experience a buyer would want to return to repeatedly.
+* Score 5: Viewer engagement is a defining strength and primary reason to own this work — it is the kind of work that stops people in a room, holds their attention, and reveals something new each time it is looked at, making it compelling to live with in a way that justifies ownership.
 
 **Factor 27: Emotional Resonance**
 
-* Score 1: Surface-level depiction; fails to tap into universal themes, leaving the work feeling emotionally hollow.
-* Score 2: Touches on relatable themes but relies on overt drama or literal storytelling rather than depth.
-* Score 3: Clear emotional connection; uses pose or "intentional space" to reflect universal experiences like hope or solitude.
-* Score 4: Strong resonance through "narrative ambiguity" (like Wyeth); allows the viewer to project their own memories.
-* Score 5: Masterful universal appeal; specific details dissolve into a timeless, shared human emotion.
-
-Record your 27 individual factor scores in order as the factor_scores array for the output.
+* Score 0: Emotional resonance is not a feature of this work — it communicates visually without engaging the viewer's emotions.
+* Score 1: The work attempts emotional resonance but does not achieve it — the emotional content feels forced, sentimental, or so literal that it fails to connect with the viewer on a deeper level.
+* Score 2: The work touches on emotional territory but only superficially — a general feeling is evoked but it is not sufficiently specific, deep, or distinctive to create a lasting emotional impression.
+* Score 3: The work achieves genuine emotional resonance — it connects with the viewer through universal themes or visual means that go beyond mere subject matter, but the emotional impact is consistent rather than profound or distinctive.
+* Score 4: Emotional resonance is a positive contributor to this work's value — the work connects with something real in the viewer's experience or inner life in a way that is distinctive and memorable, and a buyer would feel that connection as a primary reason to want to own this work.
+* Score 5: Emotional resonance is the defining quality of this work and its most compelling reason for ownership — the work connects with something so deep and so universal that a buyer would feel seen or moved by it, and that emotional experience would make the work feel necessary rather than merely desirable.
 
 Calculate Avg_Score = Total_Factor_Score / 27.
 
@@ -302,16 +327,10 @@ The Avg_Score determines the decimal:
 Look up the decimal in this table:
 
 Avg_Score      Decimal
-1.00-2.99       0.00
-3.00-3.60       0.25
-3.61-4.10       0.50
-4.11-5.00       0.75
-
-Your selected choice determines the decimal:
-CHOICE A = 0.75
-CHOICE B = 0.50
-CHOICE C = 0.25
-CHOICE D = 0.00
+0.00-2.49       0.00
+2.50-3.24       0.25
+3.25-3.99       0.50
+4.00-5.00       0.75
 
 Proceed to the output section.
 
@@ -340,7 +359,7 @@ Return your response as a JSON object with exactly these six fields:
   "decimal": [0.00, 0.25, 0.50, or 0.75],
   "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention decimal values, yes counts, or the evaluation process itself.]",
   "smi": [final_smi, expressed as a number with two decimal places, e.g. 3.50],
-  "factor_scores": [For Level 4 only: an array of 27 integers, one per factor in order from Factor 1 to Factor 27, each integer being the score (1–5) you assigned to that factor. For all other levels: null]
+  "factor_scores": [For Level 4 only: an array of 27 integers, one per factor in order from Factor 1 to Factor 27, each integer being the score (0–5) you assigned to that factor. For all other levels: null]
 }
 
 Do not include any fields other than these six. Describe only what you observe in this artwork. Each work is evaluated entirely on its own — no prior works, no historical context, no recognition of artist identity or fame may enter the reasoning.
