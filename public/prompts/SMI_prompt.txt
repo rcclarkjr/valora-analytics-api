@@ -287,7 +287,7 @@ Calculate Avg_Score = Total_Factor_Score / 27.
 * Score 4: Emotional resonance is a positive contributor to this work's value — the work connects with something real in the viewer's experience or inner life in a way that is distinctive and memorable, and a buyer would feel that connection as a primary reason to want to own this work.
 * Score 5: Emotional resonance is the defining quality of this work and its most compelling reason for ownership — the work connects with something so deep and so universal that a buyer would feel seen or moved by it, and that emotional experience would make the work feel necessary rather than merely desirable.
 
-[YOU NOW HAVE Avg_Score. Return to your locked integer level below and look up your decimal.]
+[YOU NOW HAVE Avg_Score. Return to your locked integer level below and look up your decimal based on the Avg_Score.]
 
 ---
 
@@ -311,18 +311,18 @@ Avg_Score      Decimal
 
 IF INTEGER = 3:
 Avg_Score      Decimal
-0.00-2.36       0.00
-2.37-2.63       0.25
-2.64-2.81       0.50
-2.82-5.00       0.75
+0.00-2.05       0.00
+2.06-2.42       0.25
+2.43-2.57       0.50
+2.58-5.00       0.75
 (Placeholder thresholds — recalibrate to quartiles after first batch.)
 
 IF INTEGER = 4:
 Avg_Score      Decimal
-0.00-3.77       0.00
-3.78-4.18       0.25
-4.19-4.33       0.50
-4.34-5.00       0.75
+0.00-3.31      0.00
+3.32-3.50      0.25
+3.51-3.69      0.50
+3.70-5.00      0.75
 
 IF INTEGER = 5:
 The decimal is always 0.00. The SMI is always 5.00. Do not score any factors. Proceed directly to the output.
