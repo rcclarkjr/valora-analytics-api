@@ -982,7 +982,7 @@ app.post("/analyze-cli", async (req, res) => {
 
     const aiResponse = await callAI(
       messages,
-      500,
+      2000,
       systemContent,
       true,
       temperature
@@ -1250,7 +1250,7 @@ CRITICAL EVALUATION RULES:
     try {
       aiResponse = await callAI(
         messages,
-        1000,
+        2000,
         systemContent,
         true,   // useJSON = true
         temperature
@@ -1446,7 +1446,7 @@ app.post("/analyze-ri", async (req, res) => {
       // Request JSON response from AI (useJSON = true)
       aiResponse = await callAI(
         messages,
-        1500,
+        2000,
         systemContent,
         true,
         temperature
