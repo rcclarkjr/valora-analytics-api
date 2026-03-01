@@ -65,7 +65,7 @@ Level 1:   0-2       3-4       5-6       7-16
 Level 2:   0-5       6-8       9-11      12-16
 Level 3:   0-9       10-11     12-13     14-16
 
-Set yes_count_8 = null.
+Proceed to the output section.
 
 ---
 
@@ -311,12 +311,12 @@ CHOICE B = 0.50
 CHOICE C = 0.25
 CHOICE D = 0.00
 
-Set yes_count_16 = Avg_Score.
+Proceed to the output section.
 
 ---
 
 IF INTEGER = 5:
-The decimal is always 0.00. The SMI is always 5.00. Do not answer any questions. Set yes_count_16 = null and yes_count_8 = null. Proceed directly to the output.
+The decimal is always 0.00. The SMI is always 5.00. Do not answer any questions. Proceed directly to the output.
 
 ---
 
@@ -330,7 +330,7 @@ If final_smi exceeds 5.00, set final_smi = 5.00.
 
 REQUIRED OUTPUT FORMAT
 
-Return your response as a JSON object with exactly these seven fields:
+Return your response as a JSON object with exactly these six fields:
 
 {
   "integer": [1, 2, 3, 4, or 5],
@@ -338,8 +338,7 @@ Return your response as a JSON object with exactly these seven fields:
   "decimal": [0.00, 0.25, 0.50, or 0.75],
   "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention decimal values, yes counts, or the evaluation process itself.]",
   "smi": [final_smi, expressed as a number with two decimal places, e.g. 3.50],
-  "yes_count_16": [integer 0-16 for Levels 1-3 | null for Levels 4-5],
-  "yes_count_8": [null — no longer used for Level 4 | null for all levels]
+  "factor_scores": [For Level 4 only: an array of 27 integers, one per factor in order from Factor 1 to Factor 27, each integer being the score (1–5) you assigned to that factor. For all other levels: null]
 }
 
-Do not include any fields other than these seven. Describe only what you observe in this artwork. Each work is evaluated entirely on its own — no prior works, no historical context, no recognition of artist identity or fame may enter the reasoning.
+Do not include any fields other than these six. Describe only what you observe in this artwork. Each work is evaluated entirely on its own — no prior works, no historical context, no recognition of artist identity or fame may enter the reasoning.
