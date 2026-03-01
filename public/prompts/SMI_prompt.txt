@@ -293,6 +293,8 @@ Accumulate all scores across the 27 factors as Total_Factor_Score.
 * Score 4: Strong resonance through "narrative ambiguity" (like Wyeth); allows the viewer to project their own memories.
 * Score 5: Masterful universal appeal; specific details dissolve into a timeless, shared human emotion.
 
+Record your 27 individual factor scores in order as the factor_scores array for the output.
+
 Calculate Avg_Score = Total_Factor_Score / 27.
 
 The Avg_Score determines the decimal:
