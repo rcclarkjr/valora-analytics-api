@@ -1116,7 +1116,143 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
 });
 
 
+// ============================================================
+// /compute-smi endpoint
+// Add this to your existing Render server (server.js or app.js)
+// ============================================================
+//
+// THRESHOLDS — update these every 6 months after recalibration.
+// Format: [ceiling, decimal] — if avg_score <= ceiling, assign decimal.
+// Rows are evaluated top to bottom; first match wins.
+//
+const SMI_THRESHOLDS = {
+    1: [
+        [0.55, 0.00],
+        [0.74, 0.25],
+        [0.92, 0.50],
+        [5.00, 0.75]
+    ],
+    2: [
+        [1.11, 0.00],
+        [1.48, 0.25],
+        [1.85, 0.50],
+        [5.00, 0.75]
+    ],
+    3: [
+        [2.36, 0.00],   // Calibrated March 2026, n=84
+        [2.63, 0.25],
+        [2.81, 0.50],
+        [5.00, 0.75]
+    ],
+    4: [
+        [3.77, 0.00],   // Calibrated March 2026, n=106
+        [4.18, 0.25],
+        [4.33, 0.50],
+        [5.00, 0.75]
+    ],
+    5: [
+        [5.00, 0.00]    // Level 5 always 0.00
+    ]
+};
 
+// Core computation function — shared logic, no AI involved.
+function computeSMI(integer, factorScores) {
+    // Validate integer
+    const intLevel = parseInt(integer);
+    if (!intLevel || intLevel < 1 || intLevel > 5) {
+        throw new Error(`Invalid integer: ${integer}. Must be 1-5.`);
+    }
+
+    // Level 5 — no factor scores, always 5.00
+    if (intLevel === 5) {
+        return {
+            integer: 5,
+            avg_score: null,
+            decimal: 0.00,
+            smi: 5.00
+        };
+    }
+
+    // Validate factor_scores
+    if (!Array.isArray(factorScores) || factorScores.length !== 27) {
+        throw new Error(`factor_scores must be an array of exactly 27 integers. Got ${Array.isArray(factorScores) ? factorScores.length : typeof factorScores}.`);
+    }
+
+    // Validate each score is 0-5
+    const scores = factorScores.map((s, i) => {
+        const n = parseInt(s);
+        if (isNaN(n) || n < 0 || n > 5) {
+            throw new Error(`factor_scores[${i}] is invalid: ${s}. Each score must be 0-5.`);
+        }
+        return n;
+    });
+
+    // Sum and average
+    const total = scores.reduce((sum, s) => sum + s, 0);
+    const avg = Math.round((total / 27) * 100) / 100;
+
+    // Lookup decimal from thresholds
+    const thresholdRows = SMI_THRESHOLDS[intLevel];
+    const match = thresholdRows.find(([ceiling]) => avg <= ceiling);
+    if (!match) {
+        throw new Error(`No threshold match found for integer=${intLevel}, avg_score=${avg}. Check SMI_THRESHOLDS.`);
+    }
+    const decimal = match[1];
+
+    // Final SMI capped at 5.00
+    const smi = Math.min(parseFloat((intLevel + decimal).toFixed(2)), 5.00);
+
+    return {
+        integer: intLevel,
+        avg_score: avg,
+        decimal: decimal,
+        smi: smi
+    };
+}
+
+// ============================================================
+// Express route — add this alongside your other app.post() routes
+// ============================================================
+app.post('/compute-smi', (req, res) => {
+    try {
+        const { integer, factor_scores } = req.body;
+
+        if (integer === undefined || integer === null) {
+            return res.status(400).json({ error: 'Missing required field: integer' });
+        }
+        if (factor_scores === undefined || factor_scores === null) {
+            return res.status(400).json({ error: 'Missing required field: factor_scores' });
+        }
+
+        const result = computeSMI(integer, factor_scores);
+
+        return res.status(200).json(result);
+
+    } catch (err) {
+        console.error('❌ /compute-smi error:', err.message);
+        return res.status(400).json({ error: err.message });
+    }
+});
+
+// ============================================================
+// EXAMPLE REQUEST (from Netlify batch or Kajabi one-off):
+//
+// POST https://valora-analytics-api.onrender.com/compute-smi
+// Content-Type: application/json
+//
+// {
+//   "integer": 3,
+//   "factor_scores": [2,3,1,2,3,2,2,1,3,2,3,2,3,2,2,3,2,3,0,3,2,0,2,2,3,3,3]
+// }
+//
+// RESPONSE:
+// {
+//   "integer": 3,
+//   "avg_score": 2.19,
+//   "decimal": 0.00,
+//   "smi": 3.00
+// }
+// ============================================================
 
 
 // ====================================================================================
