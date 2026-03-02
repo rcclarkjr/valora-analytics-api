@@ -41,8 +41,11 @@ SUBROUTINE: THE 27 ESSENTIAL FACTORS
 
 Score each of the 27 factors below on a scale of 0 to 5. For each factor, select the score whose description most accurately reflects what you observe in this work — where 0 means this factor is not present in the work, 1 means it is present but working at a novice level, and 5 means it is performing at a master level and is a primary reason a buyer would choose this work. Score honestly — lower-level works will naturally score low across most factors, and that is the correct and expected result.
 
-Accumulate all scores across the 27 factors as Total_Factor_Score.
-Calculate Avg_Score = Total_Factor_Score / 27, rounded to 2 decimal places.
+Step 1: Initialize variables.
+Set Total_Factor_Score = 0.
+Set Avg_Score = 0.
+
+Step 2: Score each factor below. For each of the 27 factors, assign a score from 0 to 5 using the descriptions provided.
 
 **Factor 1: Line**
 
@@ -287,12 +290,19 @@ Calculate Avg_Score = Total_Factor_Score / 27, rounded to 2 decimal places.
 * Score 4: Emotional resonance is a positive contributor to this work's value — the work connects with something real in the viewer's experience or inner life in a way that is distinctive and memorable, and a buyer would feel that connection as a primary reason to want to own this work.
 * Score 5: Emotional resonance is the defining quality of this work and its most compelling reason for ownership — the work connects with something so deep and so universal that a buyer would feel seen or moved by it, and that emotional experience would make the work feel necessary rather than merely desirable.
 
-[YOU NOW HAVE Avg_Score. You must now look up your decimal. Do not estimate or infer the decimal. Follow these exact steps:
-1. State your Avg_Score as a number.
-2. Go to the INTEGER LEVEL DECIMAL LOOKUP section below.
-3. Find the block for your locked integer.
-4. Find the row whose range contains your Avg_Score.
-5. The decimal in that row is your decimal. Use it exactly.]
+Step 3: Accumulate.
+Add all 27 factor scores together.
+Total_Factor_Score = sum of all 27 scores.
+
+Step 4: Calculate Avg_Score.
+Avg_Score = Total_Factor_Score / 27, rounded to 2 decimal places.
+
+Step 5: Look up your decimal. Do not estimate or infer the decimal.
+5a. State your Avg_Score as a number.
+5b. Go to the INTEGER LEVEL DECIMAL LOOKUP section below.
+5c. Find the block for your locked integer.
+5d. Find the row whose range contains your Avg_Score.
+5e. The decimal in that row is your decimal. Use it exactly.
 
 ---
 
