@@ -31,21 +31,11 @@ The work achieves transcendence. Technical mastery is total and invisible — te
 
 ---
 
-PART 2 — DETERMINE THE DECIMAL
+PART 2 — SCORE THE 27 ESSENTIAL FACTORS
 
-Your integer is locked. Do not reconsider it. Your task in this part is to score the 27 Essential Factors and then look up your decimal in the table for your locked integer level.
+Your integer is locked. Do not reconsider it. Your only task in this part is to score each of the 27 factors below on a scale of 0 to 5. Select the score whose description most accurately reflects what you observe in this work — where 0 means this factor is not present in the work, 1 means it is present but working at a novice level, and 5 means it is performing at a master level and is a primary reason a buyer would choose this work. Score honestly — lower-level works will naturally score low across most factors, and that is the correct and expected result.
 
----
-
-SUBROUTINE: THE 27 ESSENTIAL FACTORS
-
-Score each of the 27 factors below on a scale of 0 to 5. For each factor, select the score whose description most accurately reflects what you observe in this work — where 0 means this factor is not present in the work, 1 means it is present but working at a novice level, and 5 means it is performing at a master level and is a primary reason a buyer would choose this work. Score honestly — lower-level works will naturally score low across most factors, and that is the correct and expected result.
-
-Step 1: Initialize variables.
-Set Total_Factor_Score = 0.
-Set Avg_Score = 0.
-
-Step 2: Score each factor below. For each of the 27 factors, assign a score from 0 to 5 using the descriptions provided.
+For Level 5 only: Do not score any factors. Proceed directly to the output.
 
 **Factor 1: Line**
 
@@ -290,64 +280,17 @@ Step 2: Score each factor below. For each of the 27 factors, assign a score from
 * Score 4: Emotional resonance is a positive contributor to this work's value — the work connects with something real in the viewer's experience or inner life in a way that is distinctive and memorable, and a buyer would feel that connection as a primary reason to want to own this work.
 * Score 5: Emotional resonance is the defining quality of this work and its most compelling reason for ownership — the work connects with something so deep and so universal that a buyer would feel seen or moved by it, and that emotional experience would make the work feel necessary rather than merely desirable.
 
-Step 3: Accumulate.
-Add all 27 factor scores together.
-Total_Factor_Score = sum of all 27 scores.
-
-Step 4: Calculate Avg_Score.
-Avg_Score = Total_Factor_Score / 27, rounded to 2 decimal places.
-
-Step 5: Assign your decimal using only your Avg_Score and the rules below.
-Do not estimate. Do not use judgment. Do not default to 0.50.
-Apply only the rule that matches your locked integer.
-
-IF your integer is 1:
-  IF Avg_Score <= 0.55 THEN decimal = 0.00
-  IF Avg_Score >= 0.56 AND Avg_Score <= 0.74 THEN decimal = 0.25
-  IF Avg_Score >= 0.75 AND Avg_Score <= 0.92 THEN decimal = 0.50
-  IF Avg_Score >= 0.93 THEN decimal = 0.75
-
-IF your integer is 2:
-  IF Avg_Score <= 1.11 THEN decimal = 0.00
-  IF Avg_Score >= 1.12 AND Avg_Score <= 1.48 THEN decimal = 0.25
-  IF Avg_Score >= 1.49 AND Avg_Score <= 1.85 THEN decimal = 0.50
-  IF Avg_Score >= 1.86 THEN decimal = 0.75
-
-IF your integer is 3:
-  IF Avg_Score <= 2.05 THEN decimal = 0.00
-  IF Avg_Score >= 2.06 AND Avg_Score <= 2.42 THEN decimal = 0.25
-  IF Avg_Score >= 2.43 AND Avg_Score <= 2.57 THEN decimal = 0.50
-  IF Avg_Score >= 2.58 THEN decimal = 0.75
-
-IF your integer is 4:
-  IF Avg_Score <= 3.31 THEN decimal = 0.00
-  IF Avg_Score >= 3.32 AND Avg_Score <= 3.50 THEN decimal = 0.25
-  IF Avg_Score >= 3.51 AND Avg_Score <= 3.69 THEN decimal = 0.50
-  IF Avg_Score >= 3.70 THEN decimal = 0.75
-
-IF your integer is 5: decimal = 0.00
-
----
-
-PART 3 — CALCULATE THE FINAL SMI
-
-final_smi = integer + decimal
-
-If final_smi exceeds 5.00, set final_smi = 5.00.
-
 ---
 
 REQUIRED OUTPUT FORMAT
 
-Return your response as a JSON object with exactly these six fields:
+Return your response as a JSON object with exactly these four fields:
 
 {
   "integer": [1, 2, 3, 4, or 5],
   "integer_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention scoring, levels by number, or the evaluation process itself.]",
-  "decimal": [0.00, 0.25, 0.50, or 0.75],
-  "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention decimal values, yes counts, or the evaluation process itself.]",
-  "smi": [final_smi, expressed as a number with two decimal places, e.g. 3.50],
+  "decimal_reasoning": "[One or two sentences — honest, kind, and tactful. Describe only what you observe in the image itself. Do not reference the artist's reputation, historical significance, critical standing, or anything derived from recognizing who made this work. Do not reference other works by this artist or suggest comparisons to their broader practice. Do not mention decimal values, factor scores, or the evaluation process itself.]",
   "factor_scores": [For Levels 1, 2, 3, and 4: an array of 27 integers, one per factor in order from Factor 1 to Factor 27, each integer being the score (0–5) you assigned to that factor. For Level 5 only: null]
 }
 
-Do not include any fields other than these six. Describe only what you observe in this artwork. Each work is evaluated entirely on its own — no prior works, no historical context, no recognition of artist identity or fame may enter the reasoning.
+Do not include any fields other than these four. Do not include "decimal" or "smi" fields — these will be calculated by the system from your factor_scores. Describe only what you observe in this artwork. Each work is evaluated entirely on its own — no prior works, no historical context, no recognition of artist identity or fame may enter the reasoning.
