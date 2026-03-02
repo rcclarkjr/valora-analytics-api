@@ -297,50 +297,35 @@ Total_Factor_Score = sum of all 27 scores.
 Step 4: Calculate Avg_Score.
 Avg_Score = Total_Factor_Score / 27, rounded to 2 decimal places.
 
-Step 5: Look up your decimal. Do not estimate or infer the decimal.
-5a. State your Avg_Score as a number.
-5b. Go to the INTEGER LEVEL DECIMAL LOOKUP section below.
-5c. Find the block for your locked integer.
-5d. Find the row whose range contains your Avg_Score.
-5e. The decimal in that row is your decimal. Use it exactly.
+Step 5: Assign your decimal using only your Avg_Score and the rules below.
+Do not estimate. Do not use judgment. Do not default to 0.50.
+Apply only the rule that matches your locked integer.
 
----
+IF your integer is 1:
+  IF Avg_Score <= 0.55 THEN decimal = 0.00
+  IF Avg_Score >= 0.56 AND Avg_Score <= 0.74 THEN decimal = 0.25
+  IF Avg_Score >= 0.75 AND Avg_Score <= 0.92 THEN decimal = 0.50
+  IF Avg_Score >= 0.93 THEN decimal = 0.75
 
-INTEGER LEVEL DECIMAL LOOKUP
+IF your integer is 2:
+  IF Avg_Score <= 1.11 THEN decimal = 0.00
+  IF Avg_Score >= 1.12 AND Avg_Score <= 1.48 THEN decimal = 0.25
+  IF Avg_Score >= 1.49 AND Avg_Score <= 1.85 THEN decimal = 0.50
+  IF Avg_Score >= 1.86 THEN decimal = 0.75
 
-IF INTEGER = 1:
-Avg_Score      Decimal
-0.00-0.55       0.00
-0.56-0.74       0.25
-0.75-0.92       0.50
-0.93-5.00       0.75
-(Placeholder thresholds — recalibrate to quartiles after first batch.)
+IF your integer is 3:
+  IF Avg_Score <= 2.05 THEN decimal = 0.00
+  IF Avg_Score >= 2.06 AND Avg_Score <= 2.42 THEN decimal = 0.25
+  IF Avg_Score >= 2.43 AND Avg_Score <= 2.57 THEN decimal = 0.50
+  IF Avg_Score >= 2.58 THEN decimal = 0.75
 
-IF INTEGER = 2:
-Avg_Score      Decimal
-0.00-1.11       0.00
-1.12-1.48       0.25
-1.49-1.85       0.50
-1.86-5.00       0.75
-(Placeholder thresholds — recalibrate to quartiles after first batch.)
+IF your integer is 4:
+  IF Avg_Score <= 3.31 THEN decimal = 0.00
+  IF Avg_Score >= 3.32 AND Avg_Score <= 3.50 THEN decimal = 0.25
+  IF Avg_Score >= 3.51 AND Avg_Score <= 3.69 THEN decimal = 0.50
+  IF Avg_Score >= 3.70 THEN decimal = 0.75
 
-IF INTEGER = 3:
-Avg_Score      Decimal
-0.00-2.05       0.00
-2.06-2.42       0.25
-2.43-2.57       0.50
-2.58-5.00       0.75
-(Placeholder thresholds — recalibrate to quartiles after first batch.)
-
-IF INTEGER = 4:
-Avg_Score      Decimal
-0.00-3.31      0.00
-3.32-3.50      0.25
-3.51-3.69      0.50
-3.70-5.00      0.75
-
-IF INTEGER = 5:
-The decimal is always 0.00. The SMI is always 5.00. Do not score any factors. Proceed directly to the output.
+IF your integer is 5: decimal = 0.00
 
 ---
 
