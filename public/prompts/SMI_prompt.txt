@@ -42,7 +42,7 @@ SUBROUTINE: THE 27 ESSENTIAL FACTORS
 Score each of the 27 factors below on a scale of 0 to 5. For each factor, select the score whose description most accurately reflects what you observe in this work — where 0 means this factor is not present in the work, 1 means it is present but working at a novice level, and 5 means it is performing at a master level and is a primary reason a buyer would choose this work. Score honestly — lower-level works will naturally score low across most factors, and that is the correct and expected result.
 
 Accumulate all scores across the 27 factors as Total_Factor_Score.
-Calculate Avg_Score = Total_Factor_Score / 27.
+Calculate Avg_Score = Total_Factor_Score / 27, rounded to 2 decimal places.
 
 **Factor 1: Line**
 
@@ -287,7 +287,12 @@ Calculate Avg_Score = Total_Factor_Score / 27.
 * Score 4: Emotional resonance is a positive contributor to this work's value — the work connects with something real in the viewer's experience or inner life in a way that is distinctive and memorable, and a buyer would feel that connection as a primary reason to want to own this work.
 * Score 5: Emotional resonance is the defining quality of this work and its most compelling reason for ownership — the work connects with something so deep and so universal that a buyer would feel seen or moved by it, and that emotional experience would make the work feel necessary rather than merely desirable.
 
-[YOU NOW HAVE Avg_Score. Return to your locked integer level below and look up your decimal based on the Avg_Score.]
+[YOU NOW HAVE Avg_Score. You must now look up your decimal. Do not estimate or infer the decimal. Follow these exact steps:
+1. State your Avg_Score as a number.
+2. Go to the INTEGER LEVEL DECIMAL LOOKUP section below.
+3. Find the block for your locked integer.
+4. Find the row whose range contains your Avg_Score.
+5. The decimal in that row is your decimal. Use it exactly.]
 
 ---
 
