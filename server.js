@@ -422,6 +422,7 @@ async function callClaude(messages, maxTokens, systemContent, useJSON, temperatu
   }
   
 const responseText = response.data.content[0]?.text || "";
+console.log(`RAW CLAUDE RESPONSE TEXT: ${responseText}`);
 
 if (useJSON) {
   try {
