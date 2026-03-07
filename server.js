@@ -1399,23 +1399,35 @@ CRITICAL EVALUATION RULES:
       });
     }
 	
-	
-	
-	console.log(`RAW FACTOR SCORES ARRAY: ${JSON.stringify(aiResponse.factor_scores)}`);
-    console.log(`RAW FACTOR SCORES COUNT: ${aiResponse.factor_scores ? aiResponse.factor_scores.length : 'null'}`);
-	
-	
-	
-	
-
-
-    // ================================================================================
+	    // ================================================================================
     // VALIDATE RESPONSE
     // ================================================================================
+	
 
 const { integer, integer_reasoning, decimal_reasoning } = aiResponse;
-    const factor_scores = aiResponse.factor_scores || null;
+    let factor_scores = null;
+
+    if (aiResponse.factor_scores && typeof aiResponse.factor_scores === 'object' && !Array.isArray(aiResponse.factor_scores)) {
+        // Convert keyed object {"1": 3, "2": 4, ...} to ordered array [3, 4, ...]
+        factor_scores = [];
+        for (let i = 1; i <= 27; i++) {
+            const score = aiResponse.factor_scores[String(i)];
+            if (score === undefined) {
+                console.warn(`⚠️ Factor ${i} missing from AI response`);
+                factor_scores.push(null);
+            } else {
+                factor_scores.push(parseInt(score));
+            }
+        }
+    } else {
+        factor_scores = aiResponse.factor_scores || null;
+    }
+
     console.log(`FACTOR SCORES: ${factor_scores ? JSON.stringify(factor_scores) : 'null — not returned by AI'}`);
+    console.log(`FACTOR SCORES COUNT: ${factor_scores ? factor_scores.length : 'null'}`);
+
+
+
 
     // Validate integer
     if (!Number.isInteger(integer) || integer < 1 || integer > 5) {
