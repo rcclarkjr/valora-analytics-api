@@ -255,7 +255,7 @@ function roundSMIUp(value) {
 // ====================
 async function callAI(
   messages,
-  maxTokens = 1000,
+  maxTokens = 3000,
   systemContent = "",
   useJSON = false,
   temperature = DEFAULT_TEMPERATURE
