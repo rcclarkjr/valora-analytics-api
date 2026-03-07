@@ -1397,6 +1397,15 @@ CRITICAL EVALUATION RULES:
         error: { message: "SMI evaluation failed: " + error.message }
       });
     }
+	
+	
+	
+	console.log(`RAW FACTOR SCORES ARRAY: ${JSON.stringify(aiResponse.factor_scores)}`);
+    console.log(`RAW FACTOR SCORES COUNT: ${aiResponse.factor_scores ? aiResponse.factor_scores.length : 'null'}`);
+	
+	
+	
+	
 
 
     // ================================================================================
