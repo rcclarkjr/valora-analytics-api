@@ -1399,15 +1399,12 @@ CRITICAL EVALUATION RULES:
     }
 
 
-
-
-
     // ================================================================================
     // VALIDATE RESPONSE
     // ================================================================================
 
-const { integer, integer_reasoning, decimal, decimal_reasoning, smi } = aiResponse;
-const factor_scores = aiResponse.factor_scores || null;
+const { integer, integer_reasoning, decimal_reasoning } = aiResponse;
+    const factor_scores = aiResponse.factor_scores || null;
     console.log(`FACTOR SCORES: ${factor_scores ? JSON.stringify(factor_scores) : 'null — not returned by AI'}`);
 
     // Validate integer
@@ -1418,52 +1415,22 @@ const factor_scores = aiResponse.factor_scores || null;
       });
     }
 
-    // Validate decimal against the level-specific valid set
-    const validDecimalsByLevel = {
-      1: [0.00, 0.25, 0.50, 0.75],
-      2: [0.00, 0.25, 0.50, 0.75],
-      3: [0.00, 0.25, 0.50, 0.75],
-      4: [0.00, 0.25, 0.50, 0.75],
-      5: [0.00]
-    };
-
-    const validDecimals = validDecimalsByLevel[integer];
-    const decimalRounded = parseFloat(parseFloat(decimal).toFixed(2));
-
-    if (!validDecimals.includes(decimalRounded)) {
-      console.error(`Invalid decimal ${decimal} for integer level ${integer}. Valid values: ${validDecimals.join(', ')}`);
-      return res.status(500).json({
-        error: { message: `Invalid decimal ${decimal} for level ${integer}. Valid values: ${validDecimals.join(', ')}` }
-      });
-    }
-
-    // Validate and recalculate SMI from integer + decimal
-    const expectedSMI = parseFloat(Math.min(5.00, integer + decimalRounded).toFixed(2));
-    const returnedSMI = parseFloat(smi);
-    if (Math.abs(returnedSMI - expectedSMI) > 0.001) {
-      console.warn(`SMI mismatch — recalculating. AI returned ${smi}, expected ${expectedSMI}`);
-    }
-
-    const finalSMI = expectedSMI.toFixed(2);
-
     console.log(`INTEGER: ${integer}`);
     console.log(`INTEGER REASONING: ${integer_reasoning}`);
-    console.log(`DECIMAL: ${decimalRounded}`);
     console.log(`DECIMAL REASONING: ${decimal_reasoning}`);
-    console.log(`FINAL SMI: ${finalSMI}`);
 
     // ================================================================================
     // RETURN RESPONSE
     // ================================================================================
 
-    const combinedAnalysis = `${integer_reasoning}\n\n${decimal_reasoning}`;
-
-res.json({
-      smi: finalSMI,
-      analysis: combinedAnalysis,
+    res.json({
+      integer: integer,
+      integer_reasoning: integer_reasoning,
+      decimal_reasoning: decimal_reasoning,
       factor_scores: factor_scores
     });
-
+	
+	
   } catch (error) {
     console.error("Unexpected error in SMI analysis:", error);
     res.status(500).json({
