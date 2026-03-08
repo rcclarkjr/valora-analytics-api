@@ -982,7 +982,7 @@ app.post("/analyze-cli", async (req, res) => {
 
     const aiResponse = await callAI(
       messages,
-      2000,
+      3000,
       systemContent,
       true,
       temperature
@@ -1174,8 +1174,8 @@ function computeSMI(integer, factorScores) {
     }
 
     // Validate factor_scores
-    if (!Array.isArray(factorScores) || factorScores.length !== 27) {
-        throw new Error(`factor_scores must be an array of exactly 27 integers. Got ${Array.isArray(factorScores) ? factorScores.length : typeof factorScores}.`);
+if (!Array.isArray(factorScores) || factorScores.length !== 16) {
+        throw new Error(`factor_scores must be an array of exactly 16 integers. Got ${Array.isArray(factorScores) ? factorScores.length : typeof factorScores}.`);
     }
 
     // Validate each score is 0-5
@@ -1189,7 +1189,7 @@ function computeSMI(integer, factorScores) {
 
     // Sum and average
     const total = scores.reduce((sum, s) => sum + s, 0);
-    const avg = Math.round((total / 27) * 100) / 100;
+    const avg = Math.round((total / 16) * 100) / 100;
 
     // Lookup decimal from thresholds
     const thresholdRows = SMI_THRESHOLDS[intLevel];
@@ -1242,7 +1242,7 @@ app.post('/compute-smi', (req, res) => {
 //
 // {
 //   "integer": 3,
-//   "factor_scores": [2,3,1,2,3,2,2,1,3,2,3,2,3,2,2,3,2,3,0,3,2,0,2,2,3,3,3]
+//   "factor_scores": [2,3,1,2,3,2,2,1,3,2,3,2,3,2,2,3]
 // }
 //
 // RESPONSE:
@@ -1409,10 +1409,10 @@ const { integer, integer_reasoning, decimal_reasoning } = aiResponse;
     if (aiResponse.factor_scores && typeof aiResponse.factor_scores === 'object' && !Array.isArray(aiResponse.factor_scores)) {
         // Convert keyed object {"1": 3, "2": 4, ...} to ordered array [3, 4, ...]
         factor_scores = [];
-        for (let i = 1; i <= 27; i++) {
+        for (let i = 1; i <= 16; i++) {
             const score = aiResponse.factor_scores[String(i)];
             if (score === undefined) {
-                console.warn(`⚠️ Factor ${i} missing from AI response`);
+                console.warn(`⚠️ Factor ${i} of 16 missing from AI response`);
                 factor_scores.push(null);
             } else {
                 factor_scores.push(parseInt(score));
