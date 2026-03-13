@@ -10,50 +10,7 @@ const sharp = require("sharp");
 const archiver = require("archiver");
 const unzipper = require("unzipper");
 
-const VALID_FACTOR_NAMES = [
-  "Line", "Shape", "Form", "Space", "Color/Hue", "Texture", "Tone/Value", 
-  "Saturation", "Cohesiveness", "Pattern", "Balance", "Contrast", "Emphasis", 
-  "Movement", "Rhythm", "Variety", "Proportion", "Harmony", "Perspective", 
-  "Composition", "Brushwork", "Chiaroscuro", "Impasto", "Sfumato", "Glazing", 
-  "Scumbling", "Pointillism", "Wet-on-Wet", "Uniqueness", "Creativity", 
-  "Mood", "Viewer Engagement", "Emotional Resonance"
-];
 
-const FACTOR_DEFINITIONS = {
-  "Line": "using line to create rhythm and guide the eye",
-  "Shape": "relationships between forms and negative space",
-  "Form": "creating three-dimensional volume and mass",
-  "Space": "depth and spatial relationships between elements",
-  "Color/Hue": "palette selection and emotional color impact",
-  "Texture": "surface quality and tactile visual experience",
-  "Tone/Value": "light and dark relationships for depth",
-  "Saturation": "color intensity to create focus and atmosphere",
-  "Cohesiveness": "unity of style, technique, and concept",
-  "Pattern": "rhythmic repetition of visual elements",
-  "Balance": "distribution of visual weight in composition",
-  "Contrast": "abrupt tonal shift for emphasis and drama",
-  "Emphasis": "creating clear focal points for the viewer",
-  "Movement": "visual flow and directional energy",
-  "Rhythm": "tempo and progression through repetition",
-  "Variety": "diversity of elements to maintain interest",
-  "Proportion": "size relationships between elements",
-  "Harmony": "elements working together in unity",
-  "Perspective": "creating convincing illusion of depth",
-  "Composition": "structural arrangement of all elements",
-  "Brushwork": "stroke quality and paint application",
-  "Chiaroscuro": "light and shadow modeling technique",
-  "Impasto": "thick paint application for texture",
-  "Sfumato": "soft, blended edge transitions",
-  "Glazing": "transparent layering for luminosity",
-  "Scumbling": "semi-opaque layering for atmospheric effects",
-  "Pointillism": "optical color mixing using dots",
-  "Wet-on-Wet": "blending paint while still wet",
-  "Uniqueness": "personal voice and innovative approach",
-  "Creativity": "imaginative concept and vision",
-  "Mood": "emotional atmosphere and tone",
-  "Viewer Engagement": "drawing and holding viewer attention",
-  "Emotional Resonance": "connecting to universal human emotions"
-};
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -133,119 +90,7 @@ function writeModelConfig(model) {
 
 
 
-// Helper function to extract category scores from analysis text with improved regex patterns
-function extractCategoryScores(analysisText) {
-  console.log("Extracting category scores from analysis text...");
 
-  // More robust regex patterns that look for category names followed by scores
-  const categoryScoreRegex = {
-    composition: /(?:1\.\s*)?(?:Composition\s*&\s*Design|Composition[\s:]+)[\s:]*(\d+\.?\d*)/i,
-    color: /(?:2\.\s*)?(?:Color\s+Harmony\s*&\s+Use\s+of\s+Light|Color(?:\s+&\s+Light)?[\s:]+)[\s:]*(\d+\.?\d*)/i,
-    technical: /(?:3\.\s*)?(?:Technical\s+Skill\s*&\s*Craftsmanship|Technical[\s:]+)[\s:]*(\d+\.?\d*)/i,
-    originality: /(?:4\.\s*)?(?:Originality\s*&\s*Innovation|Originality[\s:]+)[\s:]*(\d+\.?\d*)/i,
-    emotional: /(?:5\.\s*)?(?:Emotional\s*&\s*Conceptual\s+Depth|Emotional[\s:]+)[\s:]*(\d+\.?\d*)/i
-  };
-
-  // Try to find a section that might contain all scores
-  let scoreSection = analysisText;
-
-  // Look for sections that might contain all the category scores
-  const categorySection = analysisText.match(
-    /(?:Category|Criteria)\s+Scores[\s\S]*?(?=\n\n|$)/i
-  );
-  if (categorySection) {
-    scoreSection = categorySection[0];
-    console.log("Found dedicated category scores section");
-  }
-
-  const scores = {};
-
-  // Extract each category score and log detailed info for debugging
-  for (const [category, regex] of Object.entries(categoryScoreRegex)) {
-    const match = scoreSection.match(regex);
-    console.log(`Looking for ${category} score with regex: ${regex}`);
-
-    if (match && match[1]) {
-      const scoreValue = parseFloat(match[1]);
-      scores[category] = scoreValue;
-      console.log(`Found ${category} score: ${scoreValue}`);
-    } else {
-      // Check the whole text if not found in the score section
-      const fullMatch = analysisText.match(regex);
-      if (fullMatch && fullMatch[1]) {
-        const scoreValue = parseFloat(fullMatch[1]);
-        scores[category] = scoreValue;
-        console.log(`Found ${category} score in full text: ${scoreValue}`);
-      } else {
-        // Don't set a default - we'll detect missing values and abort
-        console.log(`Could not find ${category} score`);
-      }
-    }
-  }
-
-  // Also try to find scores in a different format
-  // Look for all numbers in the format "Score: X.X" or "X.X/5.0"
-  const allScores = scoreSection.match(
-    /(?:Score|Rating):\s*(\d+\.?\d*)|(\d+\.?\d*)\/5\.0/g
-  );
-  if (allScores && allScores.length >= 5) {
-    console.log("Found alternative score format:", allScores);
-    // If we have enough scores in this format, use them instead
-    const categories = [
-      "composition",
-      "color",
-      "technical",
-      "originality",
-      "emotional"
-    ];
-    allScores.slice(0, 5).forEach((scoreText, index) => {
-      const scoreMatch = scoreText.match(/(\d+\.?\d*)/);
-      if (scoreMatch && scoreMatch[1] && categories[index]) {
-        scores[categories[index]] = parseFloat(scoreMatch[1]);
-        console.log(
-          `Set ${categories[index]} score to ${scores[categories[index]]} from alternative format`
-        );
-      }
-    });
-  }
-
-  // Check if we have all required scores
-  const missingCategories = [];
-  for (const category of [
-    "composition",
-    "color",
-    "technical",
-    "originality",
-    "emotional"
-  ]) {
-    if (
-      !scores[category] ||
-      isNaN(scores[category]) ||
-      scores[category] < 1.0 ||
-      scores[category] > 5.0
-    ) {
-      missingCategories.push(category);
-    }
-  }
-
-  if (missingCategories.length > 0) {
-    console.log(
-      `Missing or invalid scores for categories: ${missingCategories.join(", ")}`
-    );
-    return null; // Return null to indicate missing scores
-  }
-
-  console.log("Final extracted category scores:", scores);
-  return scores;
-}
-
-// Function to round the SMI score up to the nearest 0.25 increment
-function roundSMIUp(value) {
-  // Calculate how many 0.25 increments in the value
-  const increments = Math.ceil(value * 4) / 4;
-  // Round to 2 decimal places to avoid floating point issues
-  return Math.round(increments * 100) / 100;
-}
 
 
 
@@ -1117,115 +962,51 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
 
 
 // ============================================================
-// /compute-smi endpoint
-// Add this to your existing Render server (server.js or app.js)
+// /compute-smi — two-pillar weighted average → SMI 1.00–5.00
+// Receives subject_scores (S1–S5) and rendering_scores (R1–R5)
+// from /analyze-smi. Performs all math server-side.
 // ============================================================
-//
-// THRESHOLDS — update these every 6 months after recalibration.
-// Format: [ceiling, decimal] — if avg_score <= ceiling, assign decimal.
-// Rows are evaluated top to bottom; first match wins.
-//
-const SMI_THRESHOLDS = {
-    1: [
-        [0.55, 0.00],
-        [0.74, 0.25],
-        [0.92, 0.50],
-        [5.00, 0.75]
-    ],
-    2: [
-        [1.11, 0.00],
-        [1.48, 0.25],
-        [1.85, 0.50],
-        [5.00, 0.75]
-    ],
-    3: [
-        [2.35, 0.00],   // Calibrated March 2026, n=84
-        [2.91, 0.25],
-        [3.16, 0.50],
-        [5.00, 0.75]
-    ],
-    4: [
-        [2.97, 0.00],   // Calibrated March 2026, n=106
-        [3.28, 0.25],
-        [3.41, 0.50],
-        [5.00, 0.75]
-    ],
-    5: [
-        [5.00, 0.00]    // Level 5 always 0.00
-    ]
-};
 
-// Core computation function — shared logic, no AI involved.
-function computeSMI(integer, factorScores) {
-    // Validate integer
-    const intLevel = parseInt(integer);
-    if (!intLevel || intLevel < 1 || intLevel > 5) {
-        throw new Error(`Invalid integer: ${integer}. Must be 1-5.`);
+// Core computation: subject avg * 0.60 + rendering avg * 0.40
+// then map 0–1 weighted score onto 1.00–5.00 scale.
+function computeSMI(subjectScores, renderingScores) {
+    const sKeys = ['S1','S2','S3','S4','S5'];
+    const rKeys = ['R1','R2','R3','R4','R5'];
+
+    for (const k of sKeys) {
+        const v = parseFloat(subjectScores[k]);
+        if (isNaN(v) || v < 0 || v > 1) throw new Error(`Invalid subject score ${k}: ${subjectScores[k]}`);
+    }
+    for (const k of rKeys) {
+        const v = parseFloat(renderingScores[k]);
+        if (isNaN(v) || v < 0 || v > 1) throw new Error(`Invalid rendering score ${k}: ${renderingScores[k]}`);
     }
 
-    // Level 5 — no factor scores, always 5.00
-    if (intLevel === 5) {
-        return {
-            integer: 5,
-            avg_score: null,
-            decimal: 0.00,
-            smi: 5.00
-        };
-    }
+    const subjectAvg  = sKeys.reduce((sum, k) => sum + parseFloat(subjectScores[k]),  0) / 5;
+    const renderingAvg = rKeys.reduce((sum, k) => sum + parseFloat(renderingScores[k]), 0) / 5;
 
-    // Validate factor_scores
-if (!Array.isArray(factorScores) || factorScores.length !== 16) {
-        throw new Error(`factor_scores must be an array of exactly 16 integers. Got ${Array.isArray(factorScores) ? factorScores.length : typeof factorScores}.`);
-    }
+    const weighted = (subjectAvg * 0.60) + (renderingAvg * 0.40);
 
-    // Validate each score is 0-5
-    const scores = factorScores.map((s, i) => {
-        const n = parseInt(s);
-        if (isNaN(n) || n < 0 || n > 5) {
-            throw new Error(`factor_scores[${i}] is invalid: ${s}. Each score must be 0-5.`);
-        }
-        return n;
-    });
+    // Map 0–1 onto 1.00–5.00
+    const smi = parseFloat((1.00 + (weighted * 4.00)).toFixed(2));
 
-    // Sum and average
-    const total = scores.reduce((sum, s) => sum + s, 0);
-    const avg = Math.round((total / 16) * 100) / 100;
-
-    // Lookup decimal from thresholds
-    const thresholdRows = SMI_THRESHOLDS[intLevel];
-    const match = thresholdRows.find(([ceiling]) => avg <= ceiling);
-    if (!match) {
-        throw new Error(`No threshold match found for integer=${intLevel}, avg_score=${avg}. Check SMI_THRESHOLDS.`);
-    }
-    const decimal = match[1];
-
-    // Final SMI capped at 5.00
-    const smi = Math.min(parseFloat((intLevel + decimal).toFixed(2)), 5.00);
-
-    return {
-        integer: intLevel,
-        avg_score: avg,
-        decimal: decimal,
-        smi: smi
-    };
+    return { smi: Math.min(smi, 5.00) };
 }
 
 // ============================================================
-// Express route — add this alongside your other app.post() routes
+// Express route
+// POST /compute-smi
+// Body: { subject_scores: {S1..S5}, rendering_scores: {R1..R5} }
+// Response: { smi: 1.00–5.00 }
 // ============================================================
 app.post('/compute-smi', (req, res) => {
     try {
-        const { integer, factor_scores } = req.body;
+        const { subject_scores, rendering_scores } = req.body;
 
-        if (integer === undefined || integer === null) {
-            return res.status(400).json({ error: 'Missing required field: integer' });
-        }
-        if (factor_scores === undefined || factor_scores === null) {
-            return res.status(400).json({ error: 'Missing required field: factor_scores' });
-        }
+        if (!subject_scores) return res.status(400).json({ error: 'Missing required field: subject_scores' });
+        if (!rendering_scores) return res.status(400).json({ error: 'Missing required field: rendering_scores' });
 
-        const result = computeSMI(integer, factor_scores);
-
+        const result = computeSMI(subject_scores, rendering_scores);
         return res.status(200).json(result);
 
     } catch (err) {
@@ -1233,26 +1014,6 @@ app.post('/compute-smi', (req, res) => {
         return res.status(400).json({ error: err.message });
     }
 });
-
-// ============================================================
-// EXAMPLE REQUEST (from Netlify batch or Kajabi one-off):
-//
-// POST https://valora-analytics-api.onrender.com/compute-smi
-// Content-Type: application/json
-//
-// {
-//   "integer": 3,
-//   "factor_scores": [2,3,1,2,3,2,2,1,3,2,3,2,3,2,2,3]
-// }
-//
-// RESPONSE:
-// {
-//   "integer": 3,
-//   "avg_score": 2.19,
-//   "decimal": 0.00,
-//   "smi": 3.00
-// }
-// ============================================================
 
 
 // ====================================================================================
@@ -1348,7 +1109,7 @@ app.post("/analyze-smi", async (req, res) => {
 
     // Build full prompt with medium context prepended
     const fullPrompt = `Medium: ${medium}
-(Note: Evaluate the level of mastery demonstrated considering what was achieved with this medium. Some mediums make certain techniques easier or harder — achieving sophisticated effects in challenging mediums may demonstrate additional mastery. A masterwork is a masterwork whether executed in oil, acrylic, or any other medium. The quality of what was achieved in the image is the only measure — the prestige or historical associations of the submitted medium play no role in the evaluation.)
+(Note: Evaluate the subject and rendering considering what was achieved with this medium. Some mediums make certain techniques easier or harder. The quality of what was achieved in the image is the only measure — the prestige or historical associations of the medium play no role in the evaluation.)
 
 ${smiPrompt}`;
 
@@ -1356,12 +1117,12 @@ ${smiPrompt}`;
     // SINGLE AI CALL
     // ================================================================================
 
-    const systemContent = `You are an expert fine art analyst specializing in evaluating artistic skill mastery. Analyze the artwork and return your evaluation in valid JSON format only.
+    const systemContent = `You are an expert fine art analyst evaluating artwork for relative collector market value. Analyze the artwork and return your evaluation in valid JSON format only.
 
 CRITICAL EVALUATION RULES:
 1. Evaluate only what you observe in this image. Every artwork is assessed entirely on its own merits.
-2. If you recognize this artwork or its artist, set that recognition aside completely. The historical reputation, critical standing, fame, or importance of the artist or work must play no role whatsoever in your evaluation or your reasoning. Evaluate what you see, not what you know.
-3. Do not reference any other works by this artist, their broader practice, or their development over time. You have no information about any other works. This image is the only thing being evaluated.
+2. If you recognize this artwork or its artist, set that recognition aside completely. The historical reputation, critical standing, fame, or importance of the artist or work must play no role in your evaluation. Evaluate what you see, not what you know.
+3. Do not reference any other works by this artist, their broader practice, or their development over time.
 4. The title and artist name provided are for identification only. Do not use them to infer anything about the work's significance or the artist's stature.`;
 
     const messages = [
@@ -1386,7 +1147,7 @@ CRITICAL EVALUATION RULES:
     try {
       aiResponse = await callAI(
         messages,
-        2000,
+        1000,
         systemContent,
         true,   // useJSON = true
         temperature
@@ -1397,61 +1158,50 @@ CRITICAL EVALUATION RULES:
         error: { message: "SMI evaluation failed: " + error.message }
       });
     }
-	
-	    // ================================================================================
+
+    // ================================================================================
     // VALIDATE RESPONSE
     // ================================================================================
-	
 
-const { integer, integer_reasoning, decimal_reasoning } = aiResponse;
-    let factor_scores = null;
+    const { subject_scores, rendering_scores } = aiResponse;
 
-    if (aiResponse.factor_scores && typeof aiResponse.factor_scores === 'object' && !Array.isArray(aiResponse.factor_scores)) {
-        // Convert keyed object {"1": 3, "2": 4, ...} to ordered array [3, 4, ...]
-        factor_scores = [];
-        for (let i = 1; i <= 16; i++) {
-            const score = aiResponse.factor_scores[String(i)];
-            if (score === undefined) {
-                console.warn(`⚠️ Factor ${i} of 16 missing from AI response`);
-                factor_scores.push(null);
-            } else {
-                factor_scores.push(parseInt(score));
-            }
-        }
-    } else {
-        factor_scores = aiResponse.factor_scores || null;
-    }
-
-    console.log(`FACTOR SCORES: ${factor_scores ? JSON.stringify(factor_scores) : 'null — not returned by AI'}`);
-    console.log(`FACTOR SCORES COUNT: ${factor_scores ? factor_scores.length : 'null'}`);
-
-
-
-
-    // Validate integer
-    if (!Number.isInteger(integer) || integer < 1 || integer > 5) {
-      console.error(`Invalid integer returned: ${integer}`);
+    if (!subject_scores || !rendering_scores) {
+      console.error("AI response missing subject_scores or rendering_scores");
       return res.status(500).json({
-        error: { message: `Invalid integer level: ${integer}. Must be 1-5.` }
+        error: { message: "AI returned incomplete response — missing pillar scores" }
       });
     }
 
-    console.log(`INTEGER: ${integer}`);
-    console.log(`INTEGER REASONING: ${integer_reasoning}`);
-    console.log(`DECIMAL REASONING: ${decimal_reasoning}`);
+    const sKeys = ['S1','S2','S3','S4','S5'];
+    const rKeys = ['R1','R2','R3','R4','R5'];
+
+    for (const k of sKeys) {
+      const v = parseFloat(subject_scores[k]);
+      if (isNaN(v) || v < 0 || v > 1) {
+        console.error(`Invalid subject score ${k}: ${subject_scores[k]}`);
+        return res.status(500).json({ error: { message: `Invalid subject score ${k}: ${subject_scores[k]}` } });
+      }
+    }
+    for (const k of rKeys) {
+      const v = parseFloat(rendering_scores[k]);
+      if (isNaN(v) || v < 0 || v > 1) {
+        console.error(`Invalid rendering score ${k}: ${rendering_scores[k]}`);
+        return res.status(500).json({ error: { message: `Invalid rendering score ${k}: ${rendering_scores[k]}` } });
+      }
+    }
+
+    console.log(`SUBJECT SCORES: ${JSON.stringify(subject_scores)}`);
+    console.log(`RENDERING SCORES: ${JSON.stringify(rendering_scores)}`);
 
     // ================================================================================
-    // RETURN RESPONSE
+    // RETURN RESPONSE — raw sub-scores only; math done by /compute-smi
     // ================================================================================
 
     res.json({
-      integer: integer,
-      integer_reasoning: integer_reasoning,
-      decimal_reasoning: decimal_reasoning,
-      factor_scores: factor_scores
+      subject_scores,
+      rendering_scores
     });
-	
-	
+
   } catch (error) {
     console.error("Unexpected error in SMI analysis:", error);
     res.status(500).json({
