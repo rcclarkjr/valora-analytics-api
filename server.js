@@ -12,6 +12,52 @@ const unzipper = require("unzipper");
 
 
 
+// Used by /analyze-art endpoint to validate AI-returned study factors
+const VALID_FACTOR_NAMES = [
+  "Line", "Shape", "Form", "Space", "Color/Hue", "Texture", "Tone/Value", 
+  "Saturation", "Cohesiveness", "Pattern", "Balance", "Contrast", "Emphasis", 
+  "Movement", "Rhythm", "Variety", "Proportion", "Harmony", "Perspective", 
+  "Composition", "Brushwork", "Chiaroscuro", "Impasto", "Sfumato", "Glazing", 
+  "Scumbling", "Pointillism", "Wet-on-Wet", "Uniqueness", "Creativity", 
+  "Mood", "Viewer Engagement", "Emotional Resonance"
+];
+
+const FACTOR_DEFINITIONS = {
+  "Line": "using line to create rhythm and guide the eye",
+  "Shape": "relationships between forms and negative space",
+  "Form": "creating three-dimensional volume and mass",
+  "Space": "depth and spatial relationships between elements",
+  "Color/Hue": "palette selection and emotional color impact",
+  "Texture": "surface quality and tactile visual experience",
+  "Tone/Value": "light and dark relationships for depth",
+  "Saturation": "color intensity to create focus and atmosphere",
+  "Cohesiveness": "unity of style, technique, and concept",
+  "Pattern": "rhythmic repetition of visual elements",
+  "Balance": "distribution of visual weight in composition",
+  "Contrast": "abrupt tonal shift for emphasis and drama",
+  "Emphasis": "creating clear focal points for the viewer",
+  "Movement": "visual flow and directional energy",
+  "Rhythm": "tempo and progression through repetition",
+  "Variety": "diversity of elements to maintain interest",
+  "Proportion": "size relationships between elements",
+  "Harmony": "elements working together in unity",
+  "Perspective": "creating convincing illusion of depth",
+  "Composition": "structural arrangement of all elements",
+  "Brushwork": "stroke quality and paint application",
+  "Chiaroscuro": "light and shadow modeling technique",
+  "Impasto": "thick paint application for texture",
+  "Sfumato": "soft, blended edge transitions",
+  "Glazing": "transparent layering for luminosity",
+  "Scumbling": "semi-opaque layering for atmospheric effects",
+  "Pointillism": "optical color mixing using dots",
+  "Wet-on-Wet": "blending paint while still wet",
+  "Uniqueness": "personal voice and innovative approach",
+  "Creativity": "imaginative concept and vision",
+  "Mood": "emotional atmosphere and tone",
+  "Viewer Engagement": "drawing and holding viewer attention",
+  "Emotional Resonance": "connecting to universal human emotions"
+};
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -94,6 +140,12 @@ function writeModelConfig(model) {
 
 
 
+
+// Used by legacy batch endpoint to round SMI to nearest 0.25 increment
+function roundSMIUp(value) {
+  const increments = Math.ceil(value * 4) / 4;
+  return Math.round(increments * 100) / 100;
+}
 
 // ====================
 // AI CALLER FUNCTION
