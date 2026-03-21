@@ -1662,7 +1662,7 @@ app.get("/api/stats", (req, res) => {
     // Find records missing required fields
     const incompleteRecords = [];
     data.records.forEach(record => {
-      const requiredFields = ['smi', 'ri', 'cli', 'ssi', 'aop', 'appsi', 'stdppsi'];
+      const requiredFields = ['ri', 'cli', 'ssi', 'aop', 'appsi', 'stdppsi'];
       const missingFields = [];
       requiredFields.forEach(field => {
         const value = record[field];
