@@ -1034,9 +1034,15 @@ function computeSMI(subjectScores, renderingScores, coefficients) {
     const smi_subject = parseFloat((sKeys.reduce((sum, k) => sum + parseFloat(subjectScores[k]), 0) / 5).toFixed(4));
     const smi_render  = parseFloat((rKeys.reduce((sum, k) => sum + parseFloat(renderingScores[k]), 0) / 5).toFixed(4));
 
-    // Read weights from metadata — database is the single source of truth
-    const coefSubject = parseFloat(coefficients['coef_smi_subject']) || 0.60;
-    const coefRender  = parseFloat(coefficients['coef_smi_render'])  || 0.40;
+    // Read weights directly from database metadata — no fallbacks
+    const rawSubject = coefficients['coef_smi_subject'];
+    const rawRender  = coefficients['coef_smi_render'];
+    if (rawSubject === undefined || rawSubject === null) throw new Error('coef_smi_subject is not set in metadata. Please update metadata before calculating SMI.');
+    if (rawRender  === undefined || rawRender  === null) throw new Error('coef_smi_render is not set in metadata. Please update metadata before calculating SMI.');
+    const coefSubject = parseFloat(rawSubject);
+    const coefRender  = parseFloat(rawRender);
+    if (isNaN(coefSubject) || coefSubject < 0 || coefSubject > 1) throw new Error(`coef_smi_subject value "${rawSubject}" is invalid. Must be a number between 0 and 1.`);
+    if (isNaN(coefRender)  || coefRender  < 0 || coefRender  > 1) throw new Error(`coef_smi_render value "${rawRender}" is invalid. Must be a number between 0 and 1.`);
 
     const weighted = (smi_subject * coefSubject) + (smi_render * coefRender);
     const smi = parseFloat(Math.min(Math.max(1.00 + (weighted * 4.00), 1.00), 5.00).toFixed(2));
@@ -2255,8 +2261,14 @@ function getMediumIndex(medium, mediumCoefficients) {
 function calculateSMI(smiSubject, smiRender, coefficients) {
     if (smiSubject === null || smiSubject === undefined ||
         smiRender === null || smiRender === undefined) return null;
-    const coefSubject = parseFloat(coefficients['coef_smi_subject']) || 0.60;
-    const coefRender  = parseFloat(coefficients['coef_smi_render'])  || 0.40;
+    const rawSubject = coefficients['coef_smi_subject'];
+    const rawRender  = coefficients['coef_smi_render'];
+    if (rawSubject === undefined || rawSubject === null) throw new Error('coef_smi_subject is not set in metadata.');
+    if (rawRender  === undefined || rawRender  === null) throw new Error('coef_smi_render is not set in metadata.');
+    const coefSubject = parseFloat(rawSubject);
+    const coefRender  = parseFloat(rawRender);
+    if (isNaN(coefSubject) || coefSubject < 0 || coefSubject > 1) throw new Error(`coef_smi_subject "${rawSubject}" is invalid. Must be 0 to 1.`);
+    if (isNaN(coefRender)  || coefRender  < 0 || coefRender  > 1) throw new Error(`coef_smi_render "${rawRender}" is invalid. Must be 0 to 1.`);
     const weighted = (parseFloat(smiSubject) * coefSubject) + (parseFloat(smiRender) * coefRender);
     // Normalize 0–1 range to 1.00–5.00
     const smi = 1.00 + (weighted * 4.00);
@@ -2508,6 +2520,25 @@ app.post("/api/records/recalculate-all", (req, res) => {
 app.post("/api/coefficients", (req, res) => {
     try {
         const data = readDatabase();
+
+        // Validate numeric coefficient fields before saving
+        const numericFields = ['coef_size_constant', 'coef_size_exponent', 'coef_frame_constant', 'coef_frame_exponent'];
+        for (const field of numericFields) {
+            if (req.body[field] !== undefined) {
+                const v = parseFloat(req.body[field]);
+                if (isNaN(v)) return res.status(400).json({ error: `${field} must be a valid number. Got: "${req.body[field]}"` });
+            }
+        }
+
+        // Validate SMI weights — must be numeric and between 0 and 1
+        if (req.body['coef_smi_subject'] !== undefined) {
+            const v = parseFloat(req.body['coef_smi_subject']);
+            if (isNaN(v) || v < 0 || v > 1) return res.status(400).json({ error: `coef_smi_subject must be a number between 0 and 1. Got: "${req.body['coef_smi_subject']}"` });
+        }
+        if (req.body['coef_smi_render'] !== undefined) {
+            const v = parseFloat(req.body['coef_smi_render']);
+            if (isNaN(v) || v < 0 || v > 1) return res.status(400).json({ error: `coef_smi_render must be a number between 0 and 1. Got: "${req.body['coef_smi_render']}"` });
+        }
 
         if (!data.metadata.coefficients) {
             data.metadata.coefficients = {};
