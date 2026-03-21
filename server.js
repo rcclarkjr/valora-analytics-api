@@ -1014,14 +1014,11 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
 
 
 // ============================================================
-// /compute-smi — two-pillar weighted average → SMI 1.00–5.00
-// Receives subject_scores (S1–S5) and rendering_scores (R1–R5)
-// from /analyze-smi. Performs all math server-side.
+// /compute-smi — reads weights from metadata, returns all three values
+// Body: { subject_scores: {S1..S5}, rendering_scores: {R1..R5} }
+// Response: { smi, smi_subject, smi_render }
 // ============================================================
-
-// Core computation: subject avg * 0.60 + rendering avg * 0.40
-// then map 0–1 weighted score onto 1.00–5.00 scale.
-function computeSMI(subjectScores, renderingScores) {
+function computeSMI(subjectScores, renderingScores, coefficients) {
     const sKeys = ['S1','S2','S3','S4','S5'];
     const rKeys = ['R1','R2','R3','R4','R5'];
 
@@ -1034,33 +1031,31 @@ function computeSMI(subjectScores, renderingScores) {
         if (isNaN(v) || v < 0 || v > 1) throw new Error(`Invalid rendering score ${k}: ${renderingScores[k]}`);
     }
 
-    const subjectAvg  = sKeys.reduce((sum, k) => sum + parseFloat(subjectScores[k]),  0) / 5;
-    const renderingAvg = rKeys.reduce((sum, k) => sum + parseFloat(renderingScores[k]), 0) / 5;
+    const smi_subject = parseFloat((sKeys.reduce((sum, k) => sum + parseFloat(subjectScores[k]), 0) / 5).toFixed(4));
+    const smi_render  = parseFloat((rKeys.reduce((sum, k) => sum + parseFloat(renderingScores[k]), 0) / 5).toFixed(4));
 
-    const weighted = (subjectAvg * 0.60) + (renderingAvg * 0.40);
+    // Read weights from metadata — database is the single source of truth
+    const coefSubject = parseFloat(coefficients['coef_smi_subject']) || 0.60;
+    const coefRender  = parseFloat(coefficients['coef_smi_render'])  || 0.40;
 
-    // Map 0–1 onto 1.00–5.00
-    const smi = parseFloat((1.00 + (weighted * 4.00)).toFixed(2));
+    const weighted = (smi_subject * coefSubject) + (smi_render * coefRender);
+    const smi = parseFloat(Math.min(Math.max(1.00 + (weighted * 4.00), 1.00), 5.00).toFixed(2));
 
-    return { smi: Math.min(smi, 5.00) };
+    return { smi, smi_subject, smi_render };
 }
 
-// ============================================================
-// Express route
-// POST /compute-smi
-// Body: { subject_scores: {S1..S5}, rendering_scores: {R1..R5} }
-// Response: { smi: 1.00–5.00 }
-// ============================================================
 app.post('/compute-smi', (req, res) => {
     try {
         const { subject_scores, rendering_scores } = req.body;
-
         if (!subject_scores) return res.status(400).json({ error: 'Missing required field: subject_scores' });
         if (!rendering_scores) return res.status(400).json({ error: 'Missing required field: rendering_scores' });
 
-        const result = computeSMI(subject_scores, rendering_scores);
-        return res.status(200).json(result);
+        // Read weights directly from database metadata
+        const data = readDatabase();
+        const coefficients = data.metadata.coefficients || {};
 
+        const result = computeSMI(subject_scores, rendering_scores, coefficients);
+        return res.status(200).json(result);
     } catch (err) {
         console.error('❌ /compute-smi error:', err.message);
         return res.status(400).json({ error: err.message });
@@ -1472,9 +1467,23 @@ function readDatabase() {
         metadata: {
           lastUpdated: new Date().toISOString(),
           coefficients: {
-            constant: 100,
-            exponent: 0.5,
+            coef_size_constant: 100,
+            coef_size_exponent: 0.5,
+            coef_frame_constant: 0,
+            coef_frame_exponent: 0,
+            coef_smi_subject: 0.60,
+            coef_smi_render: 0.40,
             lastCalculated: new Date().toISOString()
+          },
+          medium: {
+            'Oil': 1.00,
+            'Acrylic': 0.89,
+            'Oil over Acrylic': 0.95,
+            'Watercolor': 0.85,
+            'Pastel': 0.85,
+            'Gouache': 0.82,
+            'Pen & Ink': 0.80,
+            'Mixed': 0.85
           }
         },
         records: []
@@ -1525,15 +1534,14 @@ function writeDatabase(data) {
 
 
 // ====================================================
-// COMPLETE REPLACEMENT: Update All APPSI Function
+// Recalculate all derived fields across all records
+// Called when metadata coefficients change
 // ====================================================
-function updateAllAPPSI(data) {
-  data.records.forEach(record => {
-    if (record.ppsi && record.size) {
-      record.appsi = calculateAPPSI(record.size, record.ppsi, data.metadata.coefficients);
-    }
-  });
-  return data;
+function recalculateAllDerivedFields(data) {
+    data.records.forEach(record => {
+        calculateDerivedFields(record, data.metadata);
+    });
+    return data;
 }
 
 // ====================================================
@@ -1651,22 +1659,17 @@ app.get("/api/stats", (req, res) => {
     // All records are active (deleted records are physically removed)
     const totalRecords = data.records.length;
     
-    // Find records missing required fields (SMI, RI, CLI, PPSI, SSI)
+    // Find records missing required fields
     const incompleteRecords = [];
-    
     data.records.forEach(record => {
-      const requiredFields = ['smi', 'ri', 'cli', 'ppsi', 'size']; // size is SSI
+      const requiredFields = ['smi', 'ri', 'cli', 'ssi', 'aop', 'appsi', 'stdppsi'];
       const missingFields = [];
-      
       requiredFields.forEach(field => {
         const value = record[field];
-        // Check if field is null, undefined, or 0
         if (value === null || value === undefined || value === 0) {
           missingFields.push(field);
         }
       });
-      
-      // If any required fields are missing, add to incomplete list
       if (missingFields.length > 0) {
         incompleteRecords.push(record.id);
       }
@@ -2065,72 +2068,51 @@ app.delete("/api/records/:id", (req, res) => {
 app.get("/api/coefficients/calculate", (req, res) => {
   try {
     const data = readDatabase();
-    const activeRecords = data.records.filter(record => 
-      record.isActive !== false && record.size && record.ppsi);
-    
+    const activeRecords = data.records.filter(record =>
+      record.isActive !== false && (record.ssi || record.size) && (record.aop || record.artOnlyPrice));
+
     if (activeRecords.length < 10) {
-      return res.status(400).json({ 
-        error: 'Not enough active records for reliable coefficient calculation' 
+      return res.status(400).json({
+        error: 'Not enough active records for reliable coefficient calculation'
       });
     }
-    
-    // Extract LSSI and PPSI data (without log-transforming PPSI)
-    const points = activeRecords.map(record => ({
-      x: Math.log(record.size), // LSSI
-      y: record.ppsi            // PPSI (not log-transformed)
-    }));
-    
-    // Simple non-linear regression approach:
-    // 1. Try different exponents
-    // 2. For each exponent, find the optimal constant C
-    // 3. Choose the exponent that gives the best R^2
-    
+
+    // Extract LSSI and AOPPSI data points
+    const points = activeRecords.map(record => {
+      const ssi = record.ssi || record.size;
+      const aop = record.aop || record.artOnlyPrice;
+      return { x: Math.log(ssi), y: aop / ssi };
+    });
+
     let bestExponent = 0;
     let bestConstant = 0;
     let bestR2 = -Infinity;
-    
-    // Try exponents from -5 to 5 in small increments
+
     for (let e = -5; e <= 5; e += 0.1) {
-      // For a given exponent, find the optimal constant
-      let sumXeY = 0;  // Sum of x^e * y
-      let sumXe2 = 0;  // Sum of (x^e)^2
-      
+      let sumXeY = 0; let sumXe2 = 0;
       for (const point of points) {
         const xPowE = Math.pow(point.x, e);
         sumXeY += xPowE * point.y;
         sumXe2 += xPowE * xPowE;
       }
-      
       const constant = sumXeY / sumXe2;
-      
-      // Calculate R^2 for this model
-      let sumResidualSquared = 0;
-      let sumTotalSquared = 0;
+      let sumResidualSquared = 0; let sumTotalSquared = 0;
       const meanY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-      
       for (const point of points) {
         const predicted = constant * Math.pow(point.x, e);
         sumResidualSquared += Math.pow(point.y - predicted, 2);
-        sumTotalSquared += Math.pow(point.y - meanY, 2);
+        sumTotalSquared    += Math.pow(point.y - meanY, 2);
       }
-      
       const r2 = 1 - (sumResidualSquared / sumTotalSquared);
-      
-      // If this is better than our previous best, update
-      if (r2 > bestR2) {
-        bestR2 = r2;
-        bestExponent = e;
-        bestConstant = constant;
-      }
+      if (r2 > bestR2) { bestR2 = r2; bestExponent = e; bestConstant = constant; }
     }
-    
-    // Create proposed coefficients object
+
     const proposedCoefficients = {
-      exponent: bestExponent,
-      constant: bestConstant,
+      coef_size_exponent: bestExponent,
+      coef_size_constant: bestConstant,
       r2: bestR2
     };
-    
+
     res.json({
       current: data.metadata.coefficients,
       proposed: proposedCoefficients
@@ -2222,46 +2204,37 @@ function convertToSentenceCase(text) {
 }
 
 
-// Updated API endpoints with full artOnlyPrice and new APPSI calculation support
+// =============================================================
+// CORE CALCULATION HELPERS
+// =============================================================
 
-// Helper function - add this near your other helper functions
-function calculateArtOnlyPrice(price, framed, frameCoefficients) {
+// Calculate Art Only Price (aop) — removes frame value from total price
+function calculateAOP(price, framed, coefficients) {
     if (!price || price <= 0) return 0;
-    
     let framePercent = 0;
-    
-    if (framed === 'Y' && frameCoefficients && 
-        frameCoefficients['frame-constant'] !== undefined && 
-        frameCoefficients['frame-exponent'] !== undefined) {
-        
-        framePercent = frameCoefficients['frame-constant'] * 
-                      Math.pow(price, frameCoefficients['frame-exponent']);
-        
-        // Clamp between 0 and 1 (0% to 100%)
+    if (framed === 'Y' && coefficients &&
+        coefficients['coef_frame_constant'] !== undefined &&
+        coefficients['coef_frame_exponent'] !== undefined) {
+        framePercent = coefficients['coef_frame_constant'] *
+                       Math.pow(price, coefficients['coef_frame_exponent']);
         framePercent = Math.max(0, Math.min(1, framePercent));
     }
-    
-    const frameValue = price * framePercent;
-    const artOnlyPrice = price - frameValue;
-    
-    return Math.max(0, artOnlyPrice);
+    return Math.max(0, price - (price * framePercent));
 }
 
-// Updated APPSI calculation function - uses artOnlyPrice instead of price
-function calculateAPPSI(size, artOnlyPrice, coefficients) {
-    if (!size || !artOnlyPrice || !coefficients || 
-        !coefficients.constant || !coefficients.exponent || 
-        size <= 0 || artOnlyPrice <= 0) return 0;
-    
+// Calculate APPSI — art only price normalized to 200 sq in
+function calculateAPPSI(ssi, aop, coefficients) {
+    if (!ssi || !aop || !coefficients ||
+        !coefficients['coef_size_constant'] || !coefficients['coef_size_exponent'] ||
+        ssi <= 0 || aop <= 0) return 0;
     try {
-        const artOnlyPPSI = artOnlyPrice / size; // New variable using artOnlyPrice
-        const lssi = Math.log(size);
-        const predictedPPSI = coefficients.constant * Math.pow(lssi, coefficients.exponent);
-        const residualPercentage = (artOnlyPPSI - predictedPPSI) / predictedPPSI; // Only change: use artOnlyPPSI
+        const aoppsi = aop / ssi;
+        const lssi = Math.log(ssi);
+        const predictedPPSI = coefficients['coef_size_constant'] * Math.pow(lssi, coefficients['coef_size_exponent']);
+        const residualPercentage = (aoppsi - predictedPPSI) / predictedPPSI;
         const standardLSSI = Math.log(200);
-        const predictedPPSIStandard = coefficients.constant * Math.pow(standardLSSI, coefficients.exponent);
+        const predictedPPSIStandard = coefficients['coef_size_constant'] * Math.pow(standardLSSI, coefficients['coef_size_exponent']);
         const appsi = predictedPPSIStandard * (1 + residualPercentage);
-        
         return isFinite(appsi) && appsi > 0 ? appsi : 0;
     } catch (error) {
         console.error("APPSI calculation error: " + error.message);
@@ -2269,100 +2242,158 @@ function calculateAPPSI(size, artOnlyPrice, coefficients) {
     }
 }
 
-// Updated POST /api/records
+// Get medium index relative to Oil (1.0)
+function getMediumIndex(medium, mediumCoefficients) {
+    if (!medium || !mediumCoefficients) return 1.0;
+    // Try exact match first, then case-insensitive
+    if (mediumCoefficients[medium] !== undefined) return parseFloat(mediumCoefficients[medium]) || 1.0;
+    const key = Object.keys(mediumCoefficients).find(k => k.toLowerCase() === medium.toLowerCase());
+    return key ? (parseFloat(mediumCoefficients[key]) || 1.0) : 1.0;
+}
+
+// Calculate SMI from smi_subject and smi_render using metadata weights
+function calculateSMI(smiSubject, smiRender, coefficients) {
+    if (smiSubject === null || smiSubject === undefined ||
+        smiRender === null || smiRender === undefined) return null;
+    const coefSubject = parseFloat(coefficients['coef_smi_subject']) || 0.60;
+    const coefRender  = parseFloat(coefficients['coef_smi_render'])  || 0.40;
+    const weighted = (parseFloat(smiSubject) * coefSubject) + (parseFloat(smiRender) * coefRender);
+    // Normalize 0–1 range to 1.00–5.00
+    const smi = 1.00 + (weighted * 4.00);
+    return parseFloat(Math.min(Math.max(smi, 1.00), 5.00).toFixed(2));
+}
+
+// =============================================================
+// calculateDerivedFields — runs in sequence on every ADD / EDIT
+// Pass the full record object and full metadata object.
+// Mutates record in place and returns it.
+// =============================================================
+function calculateDerivedFields(record, metadata) {
+    const coefficients = metadata.coefficients || {};
+    const mediumCoefficients = metadata.medium || {};
+
+    // 1. SSI
+    const height = parseFloat(record.height) || 0;
+    const width  = parseFloat(record.width)  || 0;
+    record.ssi = height * width;
+
+    // 2. LSSI
+    record.lssi = record.ssi > 0 ? Math.log(record.ssi) : 0;
+
+    // 3. AOP
+    const price = parseFloat(record.price) || 0;
+    record.aop = calculateAOP(price, record.framed || 'N', coefficients);
+
+    // 4. AOPPSI
+    record.aoppsi = (record.ssi > 0 && record.aop > 0) ? record.aop / record.ssi : 0;
+
+    // 5. APPSI
+    record.appsi = calculateAPPSI(record.ssi, record.aop, coefficients);
+
+    // 6. STDPPSI — appsi divided by medium index (oil = 1.0)
+    const mediumIndex = getMediumIndex(record.medium, mediumCoefficients);
+    record.stdppsi = (record.appsi > 0 && mediumIndex > 0) ? record.appsi / mediumIndex : 0;
+
+    // 7. SMI — only if both pillar scores are present
+    if (record.smi_subject !== null && record.smi_subject !== undefined &&
+        record.smi_render  !== null && record.smi_render  !== undefined) {
+        record.smi = calculateSMI(record.smi_subject, record.smi_render, coefficients);
+    } else {
+        record.smi = null;
+    }
+
+    return record;
+}
+
+// Keep legacy alias so existing callers of calculateArtOnlyPrice still work
+function calculateArtOnlyPrice(price, framed, coefficients) {
+    return calculateAOP(price, framed, coefficients);
+}
+
+// POST /api/records — Add new record
 app.post("/api/records", async (req, res) => {
     try {
         const data = readDatabase();
+
+        // Required base fields
         const requiredFields = ['artistName', 'title', 'height', 'width', 'price'];
         for (const field of requiredFields) {
             if (!req.body[field]) {
                 return res.status(400).json({ error: `Missing required field: ${field}` });
             }
         }
-        
-        console.log(`Total records: ${data.records.length}`);
+
+        // Required score fields with range validation
+        const smiSubject = req.body.smi_subject !== undefined ? parseFloat(req.body.smi_subject) : undefined;
+        const smiRender  = req.body.smi_render  !== undefined ? parseFloat(req.body.smi_render)  : undefined;
+        const cli        = req.body.cli         !== undefined ? parseFloat(req.body.cli)         : undefined;
+        const ri         = req.body.ri          !== undefined ? parseInt(req.body.ri)            : undefined;
+
+        if (smiSubject === undefined || isNaN(smiSubject) || smiSubject < 0 || smiSubject > 1) {
+            return res.status(400).json({ error: 'SMI Subject Score (smi_subject) is required (0.00 to 1.00). Please calculate this value using the SMI Calculator before adding a record.' });
+        }
+        if (smiRender === undefined || isNaN(smiRender) || smiRender < 0 || smiRender > 1) {
+            return res.status(400).json({ error: 'SMI Render Score (smi_render) is required (0.00 to 1.00). Please calculate this value using the SMI Calculator before adding a record.' });
+        }
+        if (cli === undefined || isNaN(cli) || cli < 1.0 || cli > 5.0) {
+            return res.status(400).json({ error: 'Career Level Index (cli) is required (1.00 to 5.00). Please calculate this value using the CLI Calculator before adding a record.' });
+        }
+        if (ri === undefined || isNaN(ri) || ri < 1 || ri > 5 || !Number.isInteger(ri)) {
+            return res.status(400).json({ error: 'Representational Index (ri) is required (integer 1 to 5). Please calculate this value using the RI Calculator before adding a record.' });
+        }
+
         const maxId = data.records.length > 0
             ? data.records.reduce((max, record) => {
                 const id = Number(record.id);
                 return isNaN(id) ? max : Math.max(max, id);
             }, 0)
             : 0;
-        console.log(`Calculated maxId: ${maxId}`);
         const newId = maxId + 1;
-        
-        // Remove the id field from req.body before spreading
+
         const { id, ...bodyWithoutId } = req.body;
 
         const newRecord = {
             id: newId,
             isActive: true,
             dateAdded: new Date().toISOString(),
-            ...bodyWithoutId
+            ...bodyWithoutId,
+            smi_subject: parseFloat(smiSubject),
+            smi_render:  parseFloat(smiRender),
+            cli:         parseFloat(cli),
+            ri:          parseInt(ri)
         };
 
-        // Calculate size and LSSI
-        newRecord.size = newRecord.height * newRecord.width;
-        if (newRecord.size > 0) {
-            newRecord.lssi = Math.log(newRecord.size);
-        }
-        
-        // Calculate PPSI (unchanged - still total price / size for reference)
-        newRecord.ppsi = newRecord.price / newRecord.size;
-        
-        // Calculate artOnlyPrice using frame coefficients
-        newRecord.artOnlyPrice = calculateArtOnlyPrice(
-            newRecord.price, 
-            newRecord.framed || 'N', 
-            data.metadata.coefficients
-        );
-        
-        // Calculate APPSI using artOnlyPrice (new method)
-        if (newRecord.size > 0 && newRecord.artOnlyPrice > 0) {
-            newRecord.appsi = calculateAPPSI(
-                newRecord.size, 
-                newRecord.artOnlyPrice, 
-                data.metadata.coefficients
-            );
-        }
-        
+        // Run all derived field calculations in sequence
+        calculateDerivedFields(newRecord, data.metadata);
+
         delete newRecord.imagePath;
-		
-		
-		// Process image if provided
-if (newRecord.imageBase64) {
-    try {
-        // Strip data URI prefix if present
-        const base64Data = newRecord.imageBase64.replace(/^data:image\/\w+;base64,/, '');
-        const imageBuffer = Buffer.from(base64Data, 'base64');
-        
-        // Save full image to disk
-        const imagePath = path.join("/mnt/data/images", `record_${newId}.jpg`);
-        await sharp(imageBuffer).jpeg({ quality: 90 }).toFile(imagePath);
-        console.log(`Full image saved: ${imagePath}`);
-        
-        // Generate thumbnail and store on record
-        const thumbnailBuffer = await sharp(imageBuffer)
-            .resize(120, 120, { fit: 'inside' })
-            .jpeg({ quality: 70 })
-            .toBuffer();
-        newRecord.thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
-        console.log(`Thumbnail generated for record ${newId}`);
-        
-        // Remove full base64 from database record (it's on disk now)
-        delete newRecord.imageBase64;
-    } catch (imgError) {
-        console.error('Image processing failed:', imgError.message);
-    }
-}
-		
-		
-		
-		
+        // Remove old field names that may have been passed in
+        delete newRecord.size;
+        delete newRecord.artOnlyPrice;
+        delete newRecord.ppsi;
+
+        // Process image if provided
+        if (newRecord.imageBase64) {
+            try {
+                const base64Data = newRecord.imageBase64.replace(/^data:image\/\w+;base64,/, '');
+                const imageBuffer = Buffer.from(base64Data, 'base64');
+                const imagePath = path.join("/mnt/data/images", `record_${newId}.jpg`);
+                await sharp(imageBuffer).jpeg({ quality: 90 }).toFile(imagePath);
+                console.log(`Full image saved: ${imagePath}`);
+                const thumbnailBuffer = await sharp(imageBuffer)
+                    .resize(120, 120, { fit: 'inside' })
+                    .jpeg({ quality: 70 })
+                    .toBuffer();
+                newRecord.thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
+                delete newRecord.imageBase64;
+            } catch (imgError) {
+                console.error('Image processing failed:', imgError.message);
+            }
+        }
+
         data.records.push(newRecord);
-        console.log(`New record: ID=${newId}, Artist=${newRecord.artistName}, Title=${newRecord.title}, artOnlyPrice=${newRecord.artOnlyPrice}, APPSI=${newRecord.appsi}`);
+        console.log(`New record: ID=${newId}, Artist=${newRecord.artistName}, Title=${newRecord.title}, aop=${newRecord.aop}, appsi=${newRecord.appsi}, smi=${newRecord.smi}`);
         writeDatabase(data);
-        
-        console.log(`Returning record with ID: ${newRecord.id}`);
         res.status(201).json({ ...newRecord, id: newId });
     } catch (error) {
         console.error('Error saving record:', error.message, error.stack);
@@ -2370,113 +2401,80 @@ if (newRecord.imageBase64) {
     }
 });
 
-// Updated PUT /api/records/:id
+// PUT /api/records/:id — Update existing record
 app.put("/api/records/:id", async (req, res) => {
     try {
         const recordId = parseInt(req.params.id);
         if (isNaN(recordId)) {
             return res.status(400).json({ error: 'Invalid record ID' });
         }
-        
+
         const data = readDatabase();
         const index = data.records.findIndex(r => r.id === recordId);
-       
         if (index === -1) {
             return res.status(404).json({ error: 'Record not found' });
         }
-        
+
         const updatedRecord = {
             ...data.records[index],
             ...req.body,
-            id: recordId, // Ensure ID doesn't change
-            dateAdded: data.records[index].dateAdded // Preserve original dateAdded
+            id: recordId,
+            dateAdded: data.records[index].dateAdded
         };
 
-        // Recalculate derived fields if height/width/price/framed changed
-        if (req.body.height || req.body.width || req.body.price || req.body.framed !== undefined) {
-            updatedRecord.size = updatedRecord.height * updatedRecord.width;
-            
-            // Calculate LSSI (Log of Size in Square Inches)
-            if (updatedRecord.size > 0) {
-                updatedRecord.lssi = Math.log(updatedRecord.size);
-            }
-            
-            // Calculate PPSI (unchanged - still total price / size for reference)
-            updatedRecord.ppsi = updatedRecord.price / updatedRecord.size;
-            
-            // Calculate artOnlyPrice using frame coefficients
-            updatedRecord.artOnlyPrice = calculateArtOnlyPrice(
-                updatedRecord.price, 
-                updatedRecord.framed || 'N', 
-                data.metadata.coefficients
-            );
-            
-            // Calculate APPSI using artOnlyPrice (new method)
-            if (updatedRecord.size > 0 && updatedRecord.artOnlyPrice > 0) {
-                updatedRecord.appsi = calculateAPPSI(
-                    updatedRecord.size, 
-                    updatedRecord.artOnlyPrice, 
-                    data.metadata.coefficients
-                );
-            }
-        } else if (!updatedRecord.lssi && updatedRecord.size > 0) {
-            // Ensure LSSI exists even if height/width didn't change
-            updatedRecord.lssi = Math.log(updatedRecord.size);
-            
-            // If artOnlyPrice doesn't exist, calculate it
-            if (!updatedRecord.artOnlyPrice) {
-                updatedRecord.artOnlyPrice = calculateArtOnlyPrice(
-                    updatedRecord.price, 
-                    updatedRecord.framed || 'N', 
-                    data.metadata.coefficients
-                );
-            }
-            
-            // Recalculate APPSI if needed
-            if (updatedRecord.size > 0 && updatedRecord.artOnlyPrice > 0) {
-                updatedRecord.appsi = calculateAPPSI(
-                    updatedRecord.size, 
-                    updatedRecord.artOnlyPrice, 
-                    data.metadata.coefficients
-                );
+        // Validate score fields if provided
+        if (req.body.smi_subject !== undefined) {
+            const v = parseFloat(req.body.smi_subject);
+            if (isNaN(v) || v < 0 || v > 1) return res.status(400).json({ error: 'smi_subject must be 0.00 to 1.00' });
+            updatedRecord.smi_subject = v;
+        }
+        if (req.body.smi_render !== undefined) {
+            const v = parseFloat(req.body.smi_render);
+            if (isNaN(v) || v < 0 || v > 1) return res.status(400).json({ error: 'smi_render must be 0.00 to 1.00' });
+            updatedRecord.smi_render = v;
+        }
+        if (req.body.cli !== undefined) {
+            const v = parseFloat(req.body.cli);
+            if (isNaN(v) || v < 1.0 || v > 5.0) return res.status(400).json({ error: 'cli must be 1.00 to 5.00' });
+            updatedRecord.cli = v;
+        }
+        if (req.body.ri !== undefined) {
+            const v = parseInt(req.body.ri);
+            if (isNaN(v) || v < 1 || v > 5) return res.status(400).json({ error: 'ri must be integer 1 to 5' });
+            updatedRecord.ri = v;
+        }
+
+        // Remove old field names to keep database clean
+        delete updatedRecord.size;
+        delete updatedRecord.artOnlyPrice;
+        delete updatedRecord.ppsi;
+        delete updatedRecord.imagePath;
+
+        // Always recalculate all derived fields
+        calculateDerivedFields(updatedRecord, data.metadata);
+
+        // Process image if a new one was provided
+        if (req.body.imageBase64) {
+            try {
+                const base64Data = updatedRecord.imageBase64.replace(/^data:image\/\w+;base64,/, '');
+                const imageBuffer = Buffer.from(base64Data, 'base64');
+                const imagePath = path.join("/mnt/data/images", `record_${recordId}.jpg`);
+                await sharp(imageBuffer).jpeg({ quality: 90 }).toFile(imagePath);
+                console.log(`Full image saved: ${imagePath}`);
+                const thumbnailBuffer = await sharp(imageBuffer)
+                    .resize(120, 120, { fit: 'inside' })
+                    .jpeg({ quality: 70 })
+                    .toBuffer();
+                updatedRecord.thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
+                delete updatedRecord.imageBase64;
+            } catch (imgError) {
+                console.error('Image processing failed:', imgError.message);
             }
         }
-        
-        // Remove imagePath – now using embedded Base64 images
-        delete updatedRecord.imagePath;
-        
-		
-		// Process image if a new one was provided
-if (req.body.imageBase64) {
-    try {
-        const base64Data = updatedRecord.imageBase64.replace(/^data:image\/\w+;base64,/, '');
-        const imageBuffer = Buffer.from(base64Data, 'base64');
-        
-        // Save full image to disk
-        const imagePath = path.join("/mnt/data/images", `record_${recordId}.jpg`);
-        await sharp(imageBuffer).jpeg({ quality: 90 }).toFile(imagePath);
-        console.log(`Full image saved: ${imagePath}`);
-        
-        // Generate thumbnail and store on record
-        const thumbnailBuffer = await sharp(imageBuffer)
-            .resize(120, 120, { fit: 'inside' })
-            .jpeg({ quality: 70 })
-            .toBuffer();
-        updatedRecord.thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
-        console.log(`Thumbnail generated for record ${recordId}`);
-        
-        // Remove full base64 from database record (it's on disk now)
-        delete updatedRecord.imageBase64;
-    } catch (imgError) {
-        console.error('Image processing failed:', imgError.message);
-    }
-}
-		
-		
+
         data.records[index] = updatedRecord;
         writeDatabase(data);
-        
-        console.log(`Updated record ${recordId}: artOnlyPrice=${updatedRecord.artOnlyPrice}, APPSI=${updatedRecord.appsi}`);
+        console.log(`Updated record ${recordId}: aop=${updatedRecord.aop}, appsi=${updatedRecord.appsi}, smi=${updatedRecord.smi}`);
         res.json(updatedRecord);
     } catch (error) {
         console.error('Error updating record:', error);
@@ -2486,173 +2484,82 @@ if (req.body.imageBase64) {
 
 
 
-// Updated recalculate APPSI endpoint - now uses artOnlyPrice method
-app.post("/api/records/recalculate-appsi", (req, res) => {
-  try {
-    const data = readDatabase();
-    const coefficients = data.metadata.coefficients;
-
-    // Track results
-    const results = {
-      totalRecords: data.records.length,
-      updatedRecords: 0,
-      problematicRecords: [],
-      addedArtOnlyPrice: 0
-    };
-
-    // Recalculate APPSI for all records using new method
-    data.records.forEach(record => {
-      // Ensure artOnlyPrice exists
-      if (!record.artOnlyPrice) {
-        record.artOnlyPrice = calculateArtOnlyPrice(
-          record.price,
-          record.framed || "N",
-          coefficients
-        );
-        results.addedArtOnlyPrice++;
-      }
-
-      // Validate required fields for APPSI calculation
-      if (
-        !record.size ||
-        !record.artOnlyPrice ||
-        isNaN(record.size) ||
-        isNaN(record.artOnlyPrice) ||
-        record.size <= 0 ||
-        record.artOnlyPrice <= 0
-      ) {
-        results.problematicRecords.push({
-          recordId: record.id,
-          issues: {
-            size: record.size,
-            artOnlyPrice: record.artOnlyPrice,
-            hasValidSize:
-              !!record.size && !isNaN(record.size) && record.size > 0,
-            hasValidArtOnlyPrice:
-              !!record.artOnlyPrice &&
-              !isNaN(record.artOnlyPrice) &&
-              record.artOnlyPrice > 0
-          }
+// Recalculate all derived fields across all records (admin utility)
+app.post("/api/records/recalculate-all", (req, res) => {
+    try {
+        const data = readDatabase();
+        let updatedCount = 0;
+        data.records.forEach(record => {
+            calculateDerivedFields(record, data.metadata);
+            updatedCount++;
         });
-
-        return; // Skip this record
-      }
-
-      // Calculate APPSI using artOnlyPrice (new method)
-      const newAPPSI = calculateAPPSI(
-        record.size,
-        record.artOnlyPrice,
-        coefficients
-      );
-
-      if (newAPPSI && newAPPSI > 0) {
-        record.appsi = newAPPSI;
-        results.updatedRecords++;
-      }
-    });
-
-    // Write updated database
-    writeDatabase(data);
-
-    res.json({
-      message: "Successfully recalculated APPSI using artOnlyPrice method",
-      ...results
-    });
-  } catch (error) {
-    console.error("Error in APPSI recalculation:", error);
-    res
-      .status(500)
-      .json({ error: "Failed to recalculate APPSI", details: error.message });
-  }
+        writeDatabase(data);
+        res.json({
+            message: "Successfully recalculated all derived fields for all records",
+            updatedRecords: updatedCount
+        });
+    } catch (error) {
+        console.error("Error in recalculate-all:", error);
+        res.status(500).json({ error: "Failed to recalculate derived fields", details: error.message });
+    }
 });
 
-// Updated POST coefficients - recalculates all APPSI when coefficients change
+// POST /api/coefficients — Save metadata and recalculate all derived fields
 app.post("/api/coefficients", (req, res) => {
-  try {
-    const data = readDatabase();
+    try {
+        const data = readDatabase();
 
-    // Update coefficients
-    if (!data.metadata.coefficients) {
-      data.metadata.coefficients = {};
+        if (!data.metadata.coefficients) {
+            data.metadata.coefficients = {};
+        }
+
+        // Update coefficient fields (everything except medium)
+        Object.keys(req.body).forEach(key => {
+            if (key !== "medium") {
+                data.metadata.coefficients[key] = req.body[key];
+            }
+        });
+
+        // Update medium multipliers if provided
+        if (req.body.medium) {
+            data.metadata.medium = { ...data.metadata.medium, ...req.body.medium };
+        }
+
+        data.metadata.lastUpdated = new Date().toISOString();
+
+        // Recalculate all derived fields across all records with new coefficients
+        let recalculatedCount = 0;
+        data.records.forEach(record => {
+            calculateDerivedFields(record, data.metadata);
+            recalculatedCount++;
+        });
+
+        writeDatabase(data);
+
+        res.json({
+            message: "Coefficients updated successfully",
+            recalculatedRecords: recalculatedCount,
+            coefficients: data.metadata.coefficients,
+            medium: data.metadata.medium
+        });
+    } catch (error) {
+        console.error("Error updating coefficients:", error);
+        res.status(500).json({ error: error.message });
     }
-
-    // Update all coefficient fields
-    Object.keys(req.body).forEach(key => {
-      if (key !== "medium") {
-        data.metadata.coefficients[key] = req.body[key];
-      }
-    });
-
-    // Update medium multipliers if provided
-    if (req.body.medium) {
-      data.metadata.medium = { ...data.metadata.medium, ...req.body.medium };
-    }
-
-    data.metadata.lastUpdated = new Date().toISOString();
-
-    // Recalculate all artOnlyPrice and APPSI values with new coefficients
-    let recalculatedCount = 0;
-    data.records.forEach(record => {
-      // Recalculate artOnlyPrice with potentially new frame coefficients
-      if (record.price && record.price > 0) {
-        record.artOnlyPrice = calculateArtOnlyPrice(
-          record.price,
-          record.framed || "N",
-          data.metadata.coefficients
-        );
-      }
-
-      // Recalculate APPSI with new coefficients and artOnlyPrice
-      if (
-        record.size &&
-        record.artOnlyPrice &&
-        record.size > 0 &&
-        record.artOnlyPrice > 0
-      ) {
-        record.appsi = calculateAPPSI(
-          record.size,
-          record.artOnlyPrice,
-          data.metadata.coefficients
-        );
-        recalculatedCount++;
-      }
-    });
-
-    writeDatabase(data);
-
-    res.json({
-      message: "Coefficients updated successfully",
-      recalculatedRecords: recalculatedCount,
-      coefficients: data.metadata.coefficients,
-      medium: data.metadata.medium
-    });
-  } catch (error) {
-    console.error("Error updating coefficients:", error);
-    res.status(500).json({ error: error.message });
-  }
 });
 
 app.get("/api/sizeyourprice", (req, res) => {
-  try {
-    const data = readDatabase();
-
-    // Extract just the coefficients from the database
-    const coefficients = {
-      constant: data.metadata.coefficients.constant,
-      exponent: data.metadata.coefficients.exponent
-    };
-
-    res.json(coefficients);
-  } catch (error) {
-    console.error("Error in Size Your Price endpoint:", error);
-    res.status(500).json({
-      error: {
-        message:
-          error.message ||
-          "An error occurred retrieving the coefficients"
-      }
-    });
-  }
+    try {
+        const data = readDatabase();
+        const coefficients = {
+            coef_size_constant: data.metadata.coefficients.coef_size_constant,
+            coef_size_exponent: data.metadata.coefficients.coef_size_exponent
+        };
+        res.json(coefficients);
+    } catch (error) {
+        console.error("Error in Size Your Price endpoint:", error);
+        res.status(500).json({ error: { message: error.message || "An error occurred retrieving the coefficients" } });
+    }
 });
 
 
@@ -3982,71 +3889,48 @@ app.get("/api/start-batch-smi", (req, res) => {
 const DATABASE_FILE_PATH = "/mnt/data/art_database.json"; // Common mount path
 
 function migrateAddArtOnlyPrice(databaseData) {
-  console.log("Starting migration: Adding artOnlyPrice field...");
+  console.log("Starting migration: Adding aop and new derived fields...");
 
-  // Get frame coefficients from metadata
-  const frameConstant =
-    databaseData.metadata.coefficients["frame-constant"];
-  const frameExponent =
-    databaseData.metadata.coefficients["frame-exponent"];
+  const frameConstant = databaseData.metadata.coefficients["coef_frame_constant"] ||
+                        databaseData.metadata.coefficients["frame-constant"];
+  const frameExponent = databaseData.metadata.coefficients["coef_frame_exponent"] ||
+                        databaseData.metadata.coefficients["frame-exponent"];
 
-  console.log(
-    `Using frame coefficients: constant=${frameConstant}, exponent=${frameExponent}`
-  );
+  console.log(`Using frame coefficients: constant=${frameConstant}, exponent=${frameExponent}`);
 
   let processed = 0;
   let added = 0;
   let skipped = 0;
 
-  // Process each record
   databaseData.records.forEach(record => {
     processed++;
 
-    // Skip if artOnlyPrice already exists
-    if (record.hasOwnProperty("artOnlyPrice")) {
+    if (record.hasOwnProperty("aop")) {
       skipped++;
-      console.log(
-        `Record ${record.id}: Already has artOnlyPrice (${record.artOnlyPrice}), skipping`
-      );
+      console.log(`Record ${record.id}: Already has aop (${record.aop}), skipping`);
       return;
     }
 
-    // Calculate artOnlyPrice
-    const artOnlyPrice = calculateArtOnlyPrice(
-      record.price,
-      record.framed,
-      databaseData.metadata.coefficients
-    );
-
-    // Add the new field
-    record.artOnlyPrice = Math.round(artOnlyPrice * 100) / 100; // Round to 2 decimal places
+    // Run full derived field calculation
+    calculateDerivedFields(record, databaseData.metadata);
     added++;
 
-    // Log some examples
     if (processed <= 5) {
-      console.log(
-        `Record ${record.id}: price=${record.price}, framed=${record.framed}, artOnlyPrice=${record.artOnlyPrice}`
-      );
+      console.log(`Record ${record.id}: price=${record.price}, framed=${record.framed}, aop=${record.aop}, stdppsi=${record.stdppsi}`);
     }
   });
 
-  // Update metadata to record migration
   databaseData.metadata.lastUpdated = new Date().toISOString();
-  databaseData.metadata.migrations =
-    databaseData.metadata.migrations || [];
+  databaseData.metadata.migrations = databaseData.metadata.migrations || [];
   databaseData.metadata.migrations.push({
-    name: "add_artOnlyPrice",
+    name: "add_derived_fields_v2",
     date: new Date().toISOString(),
     recordsProcessed: processed,
     recordsUpdated: added,
     recordsSkipped: skipped
   });
 
-  console.log("Migration completed:");
-  console.log(`- Records processed: ${processed}`);
-  console.log(`- Records updated: ${added}`);
-  console.log(`- Records skipped: ${skipped}`);
-
+  console.log(`Migration completed: processed=${processed}, updated=${added}, skipped=${skipped}`);
   return databaseData;
 }
 
