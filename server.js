@@ -1013,6 +1013,7 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
 });
 
 
+
 // ============================================================
 // /compute-smi — reads weights from metadata, returns all three values
 // Body: { subject_scores: {S1..S5}, rendering_scores: {R1..R5} }
@@ -2286,17 +2287,17 @@ function calculateDerivedFields(record, metadata) {
     // 2. LSSI
     record.lssi = record.ssi > 0 ? Math.log(record.ssi) : 0;
 
-    // 3. AOP
+    // 3. AOP -- frame value is deducted if present
     const price = parseFloat(record.price) || 0;
     record.aop = calculateAOP(price, record.framed || 'N', coefficients);
 
-    // 4. AOPPSI
+    // 4. AOPPSI -- Art Only Price per SI is calculated
     record.aoppsi = (record.ssi > 0 && record.aop > 0) ? record.aop / record.ssi : 0;
 
-    // 5. APPSI
+    // 5. APPSI -- AOPPSI is normalized to a size of 200 square inches
     record.appsi = calculateAPPSI(record.ssi, record.aop, coefficients);
 
-    // 6. STDPPSI — appsi divided by medium index (oil = 1.0)
+    // 6. STDPPSI — appsi divided by medium index (oil = 1.0) ... normalized to oil
     const mediumIndex = getMediumIndex(record.medium, mediumCoefficients);
     record.stdppsi = (record.appsi > 0 && mediumIndex > 0) ? record.appsi / mediumIndex : 0;
 
@@ -2785,6 +2786,8 @@ function formatAIAnalysisForReport(aiResponse) {
   return aiResponse.trim();
 }
 
+
+
 app.post("/api/valuation", async (req, res) => {
   try {
     console.log("Starting valuation process");
@@ -2805,93 +2808,70 @@ app.post("/api/valuation", async (req, res) => {
       temperature: requestedTemp
     } = req.body;
 
-    // Use different temperatures for different purposes
-    const smiTemperature = typeof requestedTemp === "number" ? requestedTemp : 0;
-    const narrativeTemperature = 0.5; // Higher temp for narrative generation
+    const narrativeTemperature = 0.5;
 
     console.log("Valuation inputs:", {
-      smi,
-      ri,
-      cli,
-      size,
+      smi, ri, cli, size,
       targetedRI: Array.isArray(targetedRI) ? targetedRI : "Not an array",
       hasSubjectImage: !!subjectImageBase64,
-      media,
-      title,
-      artist,
-      subjectDescription,
-      height,
-      width
+      media, title, artist, subjectDescription, height, width
     });
 
-    const db = readDatabase();
-    const allRecords = db.records || [];
-    const coefficients = db.metadata.coefficients;
-
-    if (
-      !smi ||
-      !ri ||
-      !cli ||
-      !size ||
-      !targetedRI ||
-      !Array.isArray(targetedRI) ||
-      !subjectImageBase64 ||
-      !height ||
-      !width
-    ) {
-      return res
-        .status(400)
-        .json({ error: "Missing required valuation inputs." });
+    // ── Validate inputs ──────────────────────────────────────────────────────
+    if (!smi || !ri || !cli || !size || !targetedRI ||
+        !Array.isArray(targetedRI) || !subjectImageBase64 || !height || !width) {
+      return res.status(400).json({ error: "Missing required valuation inputs." });
     }
 
-    // Step 1: Generate AI analysis
+    const db = readDatabase();
+    const allRecords    = db.records || [];
+    const coefficients  = db.metadata.coefficients;
+    const mediumTable   = db.metadata.medium;
+
+    // Confirm all required metadata fields are present — no fallbacks
+    const requiredCoefs = [
+      'coef_size_constant', 'coef_size_exponent',
+      'smi_dist_wt', 'cli_dist_wt',
+      'pass3_top_quantity', 'pass1_cutoff_pct',
+      'coef_A', 'coef_B', 'coef_C'
+    ];
+    for (const field of requiredCoefs) {
+      if (coefficients[field] === undefined || coefficients[field] === null) {
+        console.error(`Missing required metadata field: ${field}`);
+        return res.status(500).json({
+          error: `Server configuration error: metadata field "${field}" is missing. Please contact support@valoraanalytics.com`
+        });
+      }
+    }
+
+    const sizeConstant   = parseFloat(coefficients['coef_size_constant']);
+    const sizeExponent   = parseFloat(coefficients['coef_size_exponent']);
+    const smiDistWt      = parseFloat(coefficients['smi_dist_wt']);
+    const cliDistWt      = parseFloat(coefficients['cli_dist_wt']);
+    const pass3Qty       = parseInt(coefficients['pass3_top_quantity']);
+    const pass1Cutoff    = parseFloat(coefficients['pass1_cutoff_pct']);
+
+    // ── Step 1: Generate AI analysis ─────────────────────────────────────────
     let aiAnalysis = "";
     try {
-      const promptPath = path.join(
-        __dirname,
-        "public",
-        "prompts",
-        "VALUATION_DESCRIPTION.txt"
-      );
+      const promptPath = path.join(__dirname, "public", "prompts", "VALUATION_DESCRIPTION.txt");
       const prompt = fs.readFileSync(promptPath, "utf8").trim();
-      if (prompt.length < 50) {
-        throw new Error("Prompt for ART_ANALYSIS.txt not found or too short");
-      }
+      if (prompt.length < 50) throw new Error("VALUATION_DESCRIPTION.txt not found or too short");
 
-const textContent = subjectDescription
+      const textContent = subjectDescription
         ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"`
         : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}`;
 
+      const messages = [{
+        role: "user",
+        content: [
+          { type: "text", text: textContent },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subjectImageBase64}` } }
+        ]
+      }];
 
-
-const messages = [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: textContent
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/jpeg;base64,${subjectImageBase64}`
-              }
-            }
-          ]
-        }
-      ];
-
-
-
-      aiAnalysis = await callAI(
-        messages,
-        300,
-        prompt,
-        false,
-        narrativeTemperature  // Use higher temp for narrative
-      );
-      console.log("Analysis completed successfully");
+      aiAnalysis = await callAI(messages, 300, prompt, false, narrativeTemperature);
+      console.log("AI analysis completed successfully");
     } catch (error) {
       console.error("Analysis failed:", error.message);
       return res.status(500).json({
@@ -2900,146 +2880,164 @@ const messages = [
       });
     }
 
-    // Step 2: Filter valid comps
-    const comps = allRecords.filter(r => {
-      const isValid =
-        r.ri !== undefined &&
-        targetedRI.includes(Number(r.ri)) &&
-        typeof r.smi === "number" &&
-        typeof r.cli === "number" &&
-        typeof r.appsi === "number" &&
-        r.thumbnailBase64 &&
-        r.artistName &&
-        r.title &&
-        r.height &&
-        r.width &&
-        r.medium &&
-        r.price;
-      return isValid;
-    });
+    // ── Pass 1: Credibility filter — eliminate bottom pass1_cutoff_pct by stdppsi ──
+    const validPool = allRecords.filter(r =>
+      typeof r.stdppsi === "number" && r.stdppsi > 0 &&
+      typeof r.smi     === "number" &&
+      typeof r.cli     === "number" &&
+      r.ri !== undefined &&
+      r.thumbnailBase64 && r.artistName && r.title &&
+      r.height && r.width && r.medium && r.price && r.framed !== undefined
+    );
 
-    console.log(`Found ${comps.length} valid comparison records`);
+    console.log(`Pass 1: ${validPool.length} records with valid stdppsi before credibility cut`);
 
-    if (comps.length === 0) {
+    if (validPool.length === 0) {
+      return res.status(400).json({ error: "No records with valid STDPPSI found in database." });
+    }
+
+    const sortedByStdppsi = [...validPool].sort((a, b) => a.stdppsi - b.stdppsi);
+    const cutoffIndex     = Math.floor(sortedByStdppsi.length * pass1Cutoff);
+    const cutoffValue     = sortedByStdppsi[cutoffIndex].stdppsi;
+    const afterPass1      = validPool.filter(r => r.stdppsi >= cutoffValue);
+
+    console.log(`Pass 1: cutoff stdppsi=${cutoffValue.toFixed(4)}, ${afterPass1.length} records remain after eliminating bottom ${(pass1Cutoff * 100).toFixed(0)}%`);
+
+    if (afterPass1.length === 0) {
+      return res.status(400).json({ error: "No records survived the Pass 1 credibility filter." });
+    }
+
+    // ── Pass 2: Style filter — RI bracket ────────────────────────────────────
+    const afterPass2 = afterPass1.filter(r => targetedRI.includes(Number(r.ri)));
+
+    console.log(`Pass 2: ${afterPass2.length} records within RI bracket [${targetedRI.join(", ")}]`);
+
+    if (afterPass2.length === 0) {
       return res.status(400).json({
-        error: "No valid comparison records found for the specified criteria.",
-        details: { targetedRI, totalRecords: allRecords.length }
+        error: "No comparable records found within the RI bracket after credibility filtering.",
+        details: { targetedRI, afterPass1Count: afterPass1.length }
       });
     }
 
-    // Step 3: Z-score stats
+    // ── Pass 3: Euclidean distance — superior / inferior split ───────────────
+
+    // Z-score helpers (computed from Pass 2 pool)
     const meanStd = (arr, key) => {
       const values = arr.map(r => r[key]);
-      const mean = values.reduce((a, b) => a + b, 0) / values.length;
-      const std = Math.sqrt(
-        values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length
-      );
+      const mean   = values.reduce((a, b) => a + b, 0) / values.length;
+      const std    = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length);
       return { mean, std };
     };
-
-    const z = (v, mean, std) => (std ? (v - mean) / std : 0);
+    const z = (v, mean, std) => (std > 0 ? (v - mean) / std : 0);
 
     const stats = {
-      smi: meanStd(comps, "smi"),
-      cli: meanStd(comps, "cli")
+      smi: meanStd(afterPass2, "smi"),
+      cli: meanStd(afterPass2, "cli")
     };
 
-const zSubject = {
-  smi: z(smi, stats.smi.mean, stats.smi.std),
-  cli: z(cli, stats.cli.mean, stats.cli.std)
-};
-
-	const weights = { smi: 0.50, cli: 0.50 };
-
-    const DISTANCE_THRESHOLD = 999; // Temporarily allow ALL comps through for testing
-
-    // Step 4: Calculate scalar distances and filter by threshold
-
-
-const enriched = comps
-  .map(r => {
-    const zd = {
-      smi: z(r.smi, stats.smi.mean, stats.smi.std),
-      cli: z(r.cli, stats.cli.mean, stats.cli.std)
+    const zSubject = {
+      smi: z(smi, stats.smi.mean, stats.smi.std),
+      cli: z(cli, stats.cli.mean, stats.cli.std)
     };
-    const dist = Math.sqrt(
-      weights.smi * Math.pow(zd.smi - zSubject.smi, 2) +
-        weights.cli * Math.pow(zd.cli - zSubject.cli, 2)
-    );
-    return { ...r, scalarDistance: dist };
-  })
 
+    // Subject composite scalar (weighted sum — NOT Euclidean distance)
+    const subjectComposite = (smiDistWt * smi) + (cliDistWt * cli);
 
-      .filter(r => r.scalarDistance <= DISTANCE_THRESHOLD)
-      .sort((a, b) => a.scalarDistance - b.scalarDistance);
-
-    // Log filtering results
-    console.log(`After distance filtering (≤${DISTANCE_THRESHOLD}): ${enriched.length} comps remain`);
-
-    // Add detailed logging for top 20 comps
-    console.log("\n=== TOP 20 COMPS BY DISTANCE ===");
-    enriched.slice(0, 20).forEach((comp, idx) => {
-      console.log(`#${idx + 1}: Distance=${comp.scalarDistance.toFixed(3)}, SMI=${comp.smi}, CLI=${comp.cli}, RI=${comp.ri}, Artist="${comp.artistName}", Title="${comp.title}"`);
-    });
-    console.log("================================\n");
-
-    // Check if we have enough comps after filtering
-    if (enriched.length < 5) {
-      console.warn(
-        `⚠️ Only ${enriched.length} comps within distance threshold. Consider expanding RI range or threshold.`
+    // Enrich each comp with its Euclidean distance and composite scalar
+    const enriched = afterPass2.map(r => {
+      const zComp = {
+        smi: z(r.smi, stats.smi.mean, stats.smi.std),
+        cli: z(r.cli, stats.cli.mean, stats.cli.std)
+      };
+      const distScore = Math.sqrt(
+        smiDistWt * Math.pow(zComp.smi - zSubject.smi, 2) +
+        cliDistWt * Math.pow(zComp.cli - zSubject.cli, 2)
       );
-      // Continue anyway - use whatever we have
+      const compComposite = (smiDistWt * r.smi) + (cliDistWt * r.cli);
+      return { ...r, distScore, compComposite };
+    });
+
+    // Split into superior (compComposite >= subjectComposite) and
+    // inferior (compComposite <= subjectComposite), each sorted by
+    // distScore ascending (closest first)
+    const superiorPool = enriched
+      .filter(r => r.compComposite >= subjectComposite)
+      .sort((a, b) => a.distScore - b.distScore);
+
+    const inferiorPool = enriched
+      .filter(r => r.compComposite <= subjectComposite)
+      .sort((a, b) => a.distScore - b.distScore);
+
+    console.log(`Pass 3: ${superiorPool.length} superior comps, ${inferiorPool.length} inferior comps available`);
+
+    if (superiorPool.length === 0) {
+      return res.status(400).json({
+        error: "No superior comparable records found. The subject may have the highest SMI/CLI combination in the database.",
+        details: { subjectComposite, afterPass2Count: afterPass2.length }
+      });
     }
 
-    // Step 5: Calculate predictedPPSI for subject
-    const subject = {
-      smi,
-      cli,
-      medium: media,
-      frame: 0,
-      SSI: size,
-      height,
-      width
-    };
+    if (inferiorPool.length === 0) {
+      return res.status(400).json({
+        error: "No inferior comparable records found. The subject may have the lowest SMI/CLI combination in the database.",
+        details: { subjectComposite, afterPass2Count: afterPass2.length }
+      });
+    }
 
-    const lssi = Math.log(subject.SSI);
-    const predictedPPSI =
-      coefficients.constant * Math.pow(lssi, coefficients.exponent);
+    // Take top pass3_top_quantity from each pool
+    const topSuperior = superiorPool.slice(0, pass3Qty);
+    const topInferior = inferiorPool.slice(0, pass3Qty);
 
-    // Step 6: Select top 10 comps with enhanced data and calculate adjustments
-    const topComps = enriched.slice(0, 10).map(r => ({
-      id: r.id,
-      appsi: r.appsi,
-      smi: r.smi,
-      cli: r.cli,
-      ri: r.ri,
-      medium: r.medium,
-      artistName: r.artistName,
-      title: r.title,
-      height: r.height,
-      width: r.width,
-      price: r.price,
+    console.log(`Pass 3: selected ${topSuperior.length} superior, ${topInferior.length} inferior comps`);
+
+    // Log selected comps
+    console.log("\n=== SUPERIOR COMPS ===");
+    topSuperior.forEach((c, i) => console.log(
+      `#${i+1}: ID=${c.id}, distScore=${c.distScore.toFixed(3)}, composite=${c.compComposite.toFixed(3)}, SMI=${c.smi}, CLI=${c.cli}, STDPPSI=${c.stdppsi.toFixed(4)}`
+    ));
+    console.log("=== INFERIOR COMPS ===");
+    topInferior.forEach((c, i) => console.log(
+      `#${i+1}: ID=${c.id}, distScore=${c.distScore.toFixed(3)}, composite=${c.compComposite.toFixed(3)}, SMI=${c.smi}, CLI=${c.cli}, STDPPSI=${c.stdppsi.toFixed(4)}`
+    ));
+    console.log("=====================\n");
+
+    // ── Build topComps response — raw fields only, no adjustment math ────────
+    const buildComp = r => ({
+      id:              r.id,
+      stdppsi:         r.stdppsi,
+      framed:          r.framed,
+      smi:             r.smi,
+      cli:             r.cli,
+      ri:              r.ri,
+      medium:          r.medium,
+      artistName:      r.artistName,
+      title:           r.title,
+      height:          r.height,
+      width:           r.width,
+      price:           r.price,
       thumbnailBase64: r.thumbnailBase64,
-      scalarDistance: r.scalarDistance  // Include distance for transparency
-    }));
+      distScore:       r.distScore,
+      compComposite:   r.compComposite,
+      group:           r.compComposite >= subjectComposite ? "superior" : "inferior"
+    });
 
-    // Calculate sizeAdjFactor
-    subject.predictAt200 =
-      coefficients.constant * Math.pow(Math.log(200), coefficients.exponent);
-    subject.predictAtSubj = predictedPPSI;
-    subject.ratio = subject.predictAtSubj / subject.predictAt200;
-    subject.sizeAdjFactor = subject.ratio - 1;
+    const topComps = [
+      ...topSuperior.map(buildComp),
+      ...topInferior.map(buildComp)
+    ];
 
-    console.log(
-      "Sending enhanced valuation response with analysis and complete comparable data"
-    );
+    console.log(`Returning ${topComps.length} total comps (${topSuperior.length} superior + ${topInferior.length} inferior)`);
 
     res.json({
       topComps,
-      coefficients,
-      medium: db.metadata.medium,
+      metadata: {
+        coefficients: db.metadata.coefficients,
+        medium:        db.metadata.medium
+      },
+      subjectComposite,
       aiAnalysis: formatAIAnalysisForReport(aiAnalysis)
     });
+
   } catch (error) {
     console.error("Valuation request failed:", error.message);
     console.error("Error stack:", error.stack);
@@ -3049,6 +3047,7 @@ const enriched = comps
     });
   }
 });
+
 
 
 
