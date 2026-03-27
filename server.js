@@ -2919,7 +2919,7 @@ app.post("/api/valuation", async (req, res) => {
       });
     }
 
-    // ── Pass 3: Euclidean distance — superior / inferior split ───────────────
+    // ── Pass 3: Euclidean distance — top N by distance ──────────────────────
 
     // Z-score helpers (computed from Pass 2 pool)
     const meanStd = (arr, key) => {
@@ -2940,10 +2940,7 @@ app.post("/api/valuation", async (req, res) => {
       cli: z(cli, stats.cli.mean, stats.cli.std)
     };
 
-    // Subject composite scalar (weighted sum — NOT Euclidean distance)
-    const subjectComposite = (smiDistWt * smi) + (cliDistWt * cli);
-
-    // Enrich each comp with its Euclidean distance and composite scalar
+    // Calculate Euclidean distance for each comp, sort ascending, take top N
     const enriched = afterPass2.map(r => {
       const zComp = {
         smi: z(r.smi, stats.smi.mean, stats.smi.std),
@@ -2953,53 +2950,16 @@ app.post("/api/valuation", async (req, res) => {
         smiDistWt * Math.pow(zComp.smi - zSubject.smi, 2) +
         cliDistWt * Math.pow(zComp.cli - zSubject.cli, 2)
       );
-      const compComposite = (smiDistWt * r.smi) + (cliDistWt * r.cli);
-      return { ...r, distScore, compComposite };
+      return { ...r, distScore };
     });
 
-    // Split into superior (compComposite >= subjectComposite) and
-    // inferior (compComposite <= subjectComposite), each sorted by
-    // distScore ascending (closest first)
-    const superiorPool = enriched
-      .filter(r => r.compComposite >= subjectComposite)
-      .sort((a, b) => a.distScore - b.distScore);
+    const sortedByDist = enriched.sort((a, b) => a.distScore - b.distScore);
+    const topN = sortedByDist.slice(0, pass3Qty);
 
-    const inferiorPool = enriched
-      .filter(r => r.compComposite <= subjectComposite)
-      .sort((a, b) => a.distScore - b.distScore);
-
-    console.log(`Pass 3: ${superiorPool.length} superior comps, ${inferiorPool.length} inferior comps available`);
-
-    if (superiorPool.length === 0) {
-      return res.status(400).json({
-        error: "No superior comparable records found. The subject may have the highest SMI/CLI combination in the database.",
-        details: { subjectComposite, afterPass2Count: afterPass2.length }
-      });
-    }
-
-    if (inferiorPool.length === 0) {
-      return res.status(400).json({
-        error: "No inferior comparable records found. The subject may have the lowest SMI/CLI combination in the database.",
-        details: { subjectComposite, afterPass2Count: afterPass2.length }
-      });
-    }
-
-    // Take top pass3_top_quantity from each pool
-    const topSuperior = superiorPool.slice(0, pass3Qty);
-    const topInferior = inferiorPool.slice(0, pass3Qty);
-
-    console.log(`Pass 3: selected ${topSuperior.length} superior, ${topInferior.length} inferior comps`);
-
-    // Log selected comps
-    console.log("\n=== SUPERIOR COMPS ===");
-    topSuperior.forEach((c, i) => console.log(
-      `#${i+1}: ID=${c.id}, distScore=${c.distScore.toFixed(3)}, composite=${c.compComposite.toFixed(3)}, SMI=${c.smi}, CLI=${c.cli}, STDPPSI=${c.stdppsi.toFixed(4)}`
+    console.log(`Pass 3: ${afterPass2.length} comps available, selected top ${topN.length} by distance`);
+    topN.forEach((c, i) => console.log(
+      `#${i+1}: ID=${c.id}, distScore=${c.distScore.toFixed(3)}, SMI=${c.smi}, CLI=${c.cli}, STDPPSI=${c.stdppsi.toFixed(4)}`
     ));
-    console.log("=== INFERIOR COMPS ===");
-    topInferior.forEach((c, i) => console.log(
-      `#${i+1}: ID=${c.id}, distScore=${c.distScore.toFixed(3)}, composite=${c.compComposite.toFixed(3)}, SMI=${c.smi}, CLI=${c.cli}, STDPPSI=${c.stdppsi.toFixed(4)}`
-    ));
-    console.log("=====================\n");
 
     // ── Build topComps response — raw fields only, no adjustment math ────────
     const buildComp = r => ({
@@ -3016,17 +2976,12 @@ app.post("/api/valuation", async (req, res) => {
       width:           r.width,
       price:           r.price,
       thumbnailBase64: r.thumbnailBase64,
-      distScore:       r.distScore,
-      compComposite:   r.compComposite,
-      group:           r.compComposite >= subjectComposite ? "superior" : "inferior"
+      distScore:       r.distScore
     });
 
-    const topComps = [
-      ...topSuperior.map(buildComp),
-      ...topInferior.map(buildComp)
-    ];
+    const topComps = topN.map(buildComp);
 
-    console.log(`Returning ${topComps.length} total comps (${topSuperior.length} superior + ${topInferior.length} inferior)`);
+    console.log(`Returning ${topComps.length} comps`);
 
     res.json({
       topComps,
@@ -3034,7 +2989,6 @@ app.post("/api/valuation", async (req, res) => {
         coefficients: db.metadata.coefficients,
         medium:        db.metadata.medium
       },
-      subjectComposite,
       aiAnalysis: formatAIAnalysisForReport(aiAnalysis)
     });
 
