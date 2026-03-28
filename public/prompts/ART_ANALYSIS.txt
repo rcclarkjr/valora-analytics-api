@@ -37,7 +37,7 @@ Analyze an artwork and calculate the Bang-for-Buck Index (BFB) as a tool for sel
 * Note: Higher BFB indicates factors that would benefit most from improvement.
 
 
-7. **Refinement Bridge:** Identify the **three factors with the highest BFB values**.
+7. **Refinement Bridge:** Identify the **two factors with the highest BFB values**.
 * Construct advice for a **journeyman artist**.
 * Compare the current score's statement against the Score 4/5 statements.
 * Use the {{INTENT}} as the stylistic north star.
@@ -348,12 +348,12 @@ Respond ONLY with a valid JSON object containing:
    - `description`: A brief explanation of why this is a strength (string, 1-2 sentences)
    Example: [{"title": "Mood", "description": "The painting excels at..."}, {"title": "Composition", "description": "The arrangement..."}]
 
-3. `opportunities`: An array of exactly 3 objects representing the top 3 BFB factors. Each object must have:
+3. `opportunities`: An array of exactly 2 objects representing the top 2 BFB factors. Each object must have:
    - `category`: The factor name (string)
    - `steps`: An array of 2-3 objects, each with a `description` field (string) containing actionable refinement advice
    Example: [{"category": "Texture", "steps": [{"description": "Increase the variety..."}, {"description": "Refine the transitions..."}]}, ...]
 
-4. `recommendedStudy`: An array of exactly 3 factor names (strings only) from the top 3 BFB factors. 
+4. `recommendedStudy`: An array of exactly 2 factor names (strings only) from the top 2 BFB factors. 
    Example: ["Texture", "Tone/Value", "Color/Hue"]
    
 5. `smi`: The calculated Skill Mastery Index as a number (not a string) rounded to the nearest 0.10 (e.g., 3.14 rounds to 3.10, 3.15 rounds to 3.20).
