@@ -102,11 +102,19 @@ Return your response as a JSON object with exactly these fields:
     "R3": [0.00 to 1.00],
     "R4": [0.00 to 1.00],
     "R5": [0.00 to 1.00]
-  }
+  },
+  "subject_description": "[string]",
+  "rendering_description": "[string]"
 }
 
-All values must be numbers with exactly two decimal places.
-Do not include any fields other than these two objects.
-Do not include reasoning, explanations, smi, weighted scores, or any other output.
-Do not perform any math. Return only the ten raw sub-scores.
+All score values must be numbers with exactly two decimal places.
+Do not include any fields other than these four.
+Do not include reasoning, smi, weighted scores, or any other output.
+Do not perform any math. Return only the ten raw sub-scores and the two descriptions.
 Describe only what you observe in this artwork. Each work is evaluated entirely on its own merits.
+
+DESCRIPTION INSTRUCTIONS:
+
+subject_description: Write 2-3 sentences describing the subject matter of this work as it would appear to a serious collector encountering it for the first time. Focus on what the subject is, what it evokes, and why it commands attention in a market context. Do not mention scores, pillars, or evaluation criteria.
+
+rendering_description: Write 2-3 sentences describing the technical execution of this work from the perspective of a knowledgeable collector assessing its craft. Address what is observable about the handling of light, composition, edges, and medium mastery. Frame it as a neutral, informed assessment of what the artist achieved technically — neither promotional nor critical in tone. Do not mention scores, pillars, or evaluation criteria.
