@@ -1210,18 +1210,24 @@ CRITICAL EVALUATION RULES:
       });
     }
 
-    // ================================================================================
-    // VALIDATE RESPONSE
-    // ================================================================================
 
-    const { subject_scores, rendering_scores } = aiResponse;
+// VALIDATE RESPONSE
+const { subject_scores, rendering_scores, subject_description, rendering_description } = aiResponse;
 
-    if (!subject_scores || !rendering_scores) {
-      console.error("AI response missing subject_scores or rendering_scores");
-      return res.status(500).json({
-        error: { message: "AI returned incomplete response — missing pillar scores" }
-      });
-    }
+if (!subject_scores || !rendering_scores) {
+  console.error("AI response missing subject_scores or rendering_scores");
+  return res.status(500).json({
+    error: { message: "AI returned incomplete response — missing pillar scores" }
+  });
+}
+
+if (!subject_description || !rendering_description) {
+  console.error("AI response missing description fields");
+  return res.status(500).json({
+    error: { message: "AI returned incomplete response — missing description fields" }
+  });
+}
+	
 
     const sKeys = ['S1','S2','S3','S4','S5'];
     const rKeys = ['R1','R2','R3','R4','R5'];
@@ -1248,10 +1254,15 @@ CRITICAL EVALUATION RULES:
     // RETURN RESPONSE — raw sub-scores only; math done by /compute-smi
     // ================================================================================
 
-    res.json({
-      subject_scores,
-      rendering_scores
-    });
+
+res.json({
+  subject_scores,
+  rendering_scores,
+  subject_description,
+  rendering_description
+});
+	
+
 
   } catch (error) {
     console.error("Unexpected error in SMI analysis:", error);
