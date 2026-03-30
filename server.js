@@ -4031,6 +4031,139 @@ module.exports = { migrateAddArtOnlyPrice, calculateArtOnlyPrice };
 // Serve static files from the "public" folder
 app.use(express.static("public"));
 
+
+// ====================
+// KAJABI SUBSCRIBER REGISTRATION
+// POST /api/register-subscriber
+// Called by SizeYourPrice mobile app when user submits email gate
+// Adds contact to Kajabi and applies two tags: 33Factors + TAAprospect
+// ====================
+
+const KAJABI_API_KEY    = process.env.KAJABI_API_KEY;    // Set in Render environment variables
+const KAJABI_API_SECRET = process.env.KAJABI_API_SECRET; // Set in Render environment variables
+
+// Tag IDs from your Kajabi account (Settings → People → Tags)
+// Replace these placeholder values with your actual Kajabi tag IDs
+const KAJABI_TAG_33FACTORS  = process.env.KAJABI_TAG_33FACTORS;  // e.g. "123456"
+const KAJABI_TAG_TAAPROSPECT = process.env.KAJABI_TAG_TAAPROSPECT; // e.g. "789012"
+const KAJABI_TAG_SYPUSERS = process.env.KAJABI_TAG_SYPUSERS;
+
+app.post('/api/register-subscriber', async (req, res) => {
+  try {
+    const { name, email } = req.body;
+
+    // ── Validate inputs ──────────────────────────────────────────────
+    if (!name || typeof name !== 'string' || name.trim().length < 2) {
+      return res.status(400).json({ success: false, error: 'A valid name is required.' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email.trim())) {
+      return res.status(400).json({ success: false, error: 'A valid email address is required.' });
+    }
+
+    const cleanName  = name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+
+    console.log(`📧 SizeYourPrice subscriber registration: ${cleanName} <${cleanEmail}>`);
+
+    // ── Build auth header ─────────────────────────────────────────────
+    // Kajabi API uses Basic Auth: API Key as username, Secret as password
+    const basicAuth = Buffer.from(`${KAJABI_API_KEY}:${KAJABI_API_SECRET}`).toString('base64');
+    const headers = {
+      'Authorization': `Basic ${basicAuth}`,
+      'Content-Type': 'application/vnd.api+json',
+      'Accept': 'application/vnd.api+json'
+    };
+
+    // ── Step 1: Create or update the contact ─────────────────────────
+    // Kajabi upserts on email — safe to call even if contact already exists
+    let contactId;
+    try {
+      const contactResponse = await axios.post(
+        'https://api.kajabi.com/v1/contacts',
+        {
+          data: {
+            type: 'contacts',
+            attributes: {
+              name: cleanName,
+              email: cleanEmail,
+              subscribed: true  // opts them into marketing communications
+            }
+          }
+        },
+        { headers }
+      );
+
+      contactId = contactResponse.data?.data?.id;
+
+      if (!contactId) {
+        throw new Error('Kajabi did not return a contact ID');
+      }
+
+      console.log(`✅ Kajabi contact created/updated: ID ${contactId}`);
+
+    } catch (contactError) {
+      // If contact already exists, Kajabi returns 422 — try to find them by email
+      if (contactError.response?.status === 422) {
+        console.log(`ℹ️ Contact may already exist, searching by email...`);
+
+        const searchResponse = await axios.get(
+          `https://api.kajabi.com/v1/contacts?filter[email]=${encodeURIComponent(cleanEmail)}`,
+          { headers }
+        );
+
+        const existingContact = searchResponse.data?.data?.[0];
+        if (!existingContact) {
+          throw new Error('Could not create or find contact in Kajabi');
+        }
+
+        contactId = existingContact.id;
+        console.log(`✅ Found existing Kajabi contact: ID ${contactId}`);
+
+      } else {
+        throw contactError;
+      }
+    }
+
+    // ── Step 2: Apply both tags in a single API call ──────────────────
+    await axios.post(
+      `https://api.kajabi.com/v1/contacts/${contactId}/relationships/tags`,
+      {
+        data: [
+          { type: 'contact_tags', id: KAJABI_TAG_33FACTORS },
+          { type: 'contact_tags', id: KAJABI_TAG_TAAPROSPECT }
+	      { type: 'contact_tags', id: KAJABI_TAG_SYPUSERS }
+        ]
+      },
+      { headers }
+    );
+
+    console.log(`✅ Tags applied to contact ${contactId}: 33Factors + TAAprospect`);
+
+    // ── Success ───────────────────────────────────────────────────────
+    res.json({
+      success: true,
+      message: 'Subscriber registered successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Kajabi subscriber registration failed:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Registration failed. Please try again.'
+    });
+  }
+});
+
+
+
+
 // ====================
 // START THE SERVER
 // ====================
