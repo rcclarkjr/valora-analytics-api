@@ -4132,7 +4132,7 @@ app.post('/api/register-subscriber', async (req, res) => {
       {
         data: [
           { type: 'contact_tags', id: KAJABI_TAG_33FACTORS },
-          { type: 'contact_tags', id: KAJABI_TAG_TAAPROSPECT }
+          { type: 'contact_tags', id: KAJABI_TAG_TAAPROSPECT },
 	      { type: 'contact_tags', id: KAJABI_TAG_SYPUSERS }
         ]
       },
