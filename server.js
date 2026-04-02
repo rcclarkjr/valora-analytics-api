@@ -2951,7 +2951,10 @@ app.post("/api/valuation", async (req, res) => {
       cli: z(cli, stats.cli.mean, stats.cli.std)
     };
 
-    // Calculate Euclidean distance for each comp, sort ascending, take top N
+    // Subject composite scalar (weighted sum of SMI and CLI)
+    const subjectComposite = (smiDistWt * smi) + (cliDistWt * cli);
+
+    // Calculate Euclidean distance and composite for each comp, sort ascending, take top N
     const enriched = afterPass2.map(r => {
       const zComp = {
         smi: z(r.smi, stats.smi.mean, stats.smi.std),
@@ -2961,7 +2964,8 @@ app.post("/api/valuation", async (req, res) => {
         smiDistWt * Math.pow(zComp.smi - zSubject.smi, 2) +
         cliDistWt * Math.pow(zComp.cli - zSubject.cli, 2)
       );
-      return { ...r, distScore };
+      const compComposite = (smiDistWt * r.smi) + (cliDistWt * r.cli);
+      return { ...r, distScore, compComposite };
     });
 
     const sortedByDist = enriched.sort((a, b) => a.distScore - b.distScore);
@@ -2969,7 +2973,7 @@ app.post("/api/valuation", async (req, res) => {
 
     console.log(`Pass 3: ${afterPass2.length} comps available, selected top ${topN.length} by distance`);
     topN.forEach((c, i) => console.log(
-      `#${i+1}: ID=${c.id}, distScore=${c.distScore.toFixed(3)}, SMI=${c.smi}, CLI=${c.cli}, STDPPSI=${c.stdppsi.toFixed(4)}`
+      `#${i+1}: ID=${c.id}, distScore=${c.distScore.toFixed(3)}, composite=${c.compComposite.toFixed(3)}, SMI=${c.smi}, CLI=${c.cli}, STDPPSI=${c.stdppsi.toFixed(4)}`
     ));
 
     // ── Build topComps response — raw fields only, no adjustment math ────────
@@ -2987,7 +2991,8 @@ app.post("/api/valuation", async (req, res) => {
       width:           r.width,
       price:           r.price,
       thumbnailBase64: r.thumbnailBase64,
-      distScore:       r.distScore
+      distScore:       r.distScore,
+      compComposite:   r.compComposite
     });
 
     const topComps = topN.map(buildComp);
@@ -3000,6 +3005,7 @@ app.post("/api/valuation", async (req, res) => {
         coefficients: db.metadata.coefficients,
         medium:        db.metadata.medium
       },
+      subjectComposite,
       aiAnalysis: formatAIAnalysisForReport(aiAnalysis)
     });
 
