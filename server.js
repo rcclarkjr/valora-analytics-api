@@ -2842,8 +2842,8 @@ app.post("/api/valuation", async (req, res) => {
     // Confirm all required metadata fields are present — no fallbacks
     const requiredCoefs = [
       'coef_size_constant', 'coef_size_exponent',
-      'smi_dist_wt',
-      'pass3_top_quantity', 'pass1_cutoff_pct',
+      'smi_dist_wt', 'cli_dist_wt', 'damping_factor',
+      'pass4_top_quantity', 'pass1_cutoff_pct',
       'coef_A', 'coef_B', 'coef_C'
     ];
     for (const field of requiredCoefs) {
@@ -2858,8 +2858,10 @@ app.post("/api/valuation", async (req, res) => {
     const sizeConstant   = parseFloat(coefficients['coef_size_constant']);
     const sizeExponent   = parseFloat(coefficients['coef_size_exponent']);
     const smiDistWt      = parseFloat(coefficients['smi_dist_wt']);
-    const pass3Qty       = parseInt(coefficients['pass3_top_quantity']);
-    const cliPassQty     = pass3Qty * 3;   // Pass 2.5: nearest CLI neighbours (3x pass3Qty)
+    const cliDistWt      = parseFloat(coefficients['cli_dist_wt']);
+    const dampingFactor  = parseFloat(coefficients['damping_factor']);
+    const pass4Qty       = parseInt(coefficients['pass4_top_quantity']);
+    const cliPassQty     = pass4Qty * 3;   // Pass 3: nearest CLI neighbours (3x pass4Qty)
     const pass1Cutoff    = parseFloat(coefficients['pass1_cutoff_pct']);
 
     // ── Step 1: Generate AI analysis ─────────────────────────────────────────
@@ -2930,30 +2932,31 @@ app.post("/api/valuation", async (req, res) => {
       });
     }
 
-    // ── Pass 2.5: CLI nearest-neighbour filter ───────────────────────────────
-    // Sort by absolute CLI distance from subject, take top cliPassQty (3 × pass3Qty).
-    // CLI operates as a 1-D Euclidean distance in its own pass — keeping it cleanly
-    // separated from the SMI-based distance in Pass 3 and eliminating any need to
-    // weight CLI against SMI in a combined metric.
-    const afterPass25 = [...afterPass2]
+    // ── Pass 3: CLI nearest-neighbour filter ─────────────────────────────────
+    // Sort by absolute CLI distance from subject, take top cliPassQty (3 × pass4Qty).
+    // CLI operates as a 1-D absolute distance in its own pass — keeping it cleanly
+    // separated from the SMI/CLI normalized distance in Pass 4 and ensuring
+    // career-level comparability before final selection.
+    const afterPass3 = [...afterPass2]
       .sort((a, b) => Math.abs(a.cli - cli) - Math.abs(b.cli - cli))
       .slice(0, cliPassQty);
 
-    console.log(`Pass 2.5: ${afterPass2.length} records after RI filter → selected ${afterPass25.length} nearest by CLI (cliPassQty=${cliPassQty})`);
-    console.log(`Pass 2.5: subject CLI=${cli}, nearest comp CLI range [${afterPass25[afterPass25.length-1]?.cli} – ${afterPass25[0]?.cli}]`);
+    console.log(`Pass 3: ${afterPass2.length} records after RI filter → selected ${afterPass3.length} nearest by CLI (cliPassQty=${cliPassQty})`);
+    console.log(`Pass 3: subject CLI=${cli}, nearest comp CLI range [${afterPass3[afterPass3.length-1]?.cli} – ${afterPass3[0]?.cli}]`);
 
-    if (afterPass25.length === 0) {
+    if (afterPass3.length === 0) {
       return res.status(400).json({
         error: "No comparable records found after CLI nearest-neighbour filter.",
         details: { cli, afterPass2Count: afterPass2.length }
       });
     }
 
-    // ── Pass 3: Euclidean distance — SMI only ────────────────────────────────
-    // CLI has already done its work as a gate in Pass 2.5.
-    // Pass 3 uses SMI exclusively to find the closest stylistic matches.
+    // ── Pass 4: SMI/CLI Normalized Distance — Final Selection ────────────────
+    // CLI has already done its work as a gate in Pass 3.
+    // Pass 4 uses normalized (z-scored) SMI and CLI combined to find the
+    // closest peers and rank them for price weighting.
 
-    // Z-score helpers (computed from Pass 2.5 pool)
+    // Z-score helpers (computed from Pass 3 pool)
     const meanStd = (arr, key) => {
       const values = arr.map(r => r[key]);
       const mean   = values.reduce((a, b) => a + b, 0) / values.length;
@@ -2962,26 +2965,32 @@ app.post("/api/valuation", async (req, res) => {
     };
     const z = (v, mean, std) => (std > 0 ? (v - mean) / std : 0);
 
-    const smiStats   = meanStd(afterPass25, "smi");
+    const smiStats = meanStd(afterPass3, "smi");
+    const cliStats = meanStd(afterPass3, "cli");
     const zSubjectSMI = z(smi, smiStats.mean, smiStats.std);
+    const zSubjectCLI = z(cli, cliStats.mean, cliStats.std);
 
-    // Subject composite scalar — SMI only
-    const subjectComposite = smiDistWt * smi;
+    // Subject composite scalar — normalized weighted combination of SMI and CLI z-scores
+    const subjectComposite = (smiDistWt * zSubjectSMI) + (cliDistWt * zSubjectCLI);
 
-    // Calculate SMI-only Euclidean distance for each comp, sort ascending, take top N
-    const enriched = afterPass25.map(r => {
+    // Calculate SMI/CLI normalized distance for each comp, sort ascending, take top N
+    const enriched = afterPass3.map(r => {
       const zCompSMI  = z(r.smi, smiStats.mean, smiStats.std);
-      const distScore = Math.sqrt(smiDistWt * Math.pow(zCompSMI - zSubjectSMI, 2));
-      const compComposite = smiDistWt * r.smi;
+      const zCompCLI  = z(r.cli, cliStats.mean, cliStats.std);
+      const distScore = Math.sqrt(
+        smiDistWt * Math.pow(zCompSMI - zSubjectSMI, 2) +
+        cliDistWt * Math.pow(zCompCLI - zSubjectCLI, 2)
+      );
+      const compComposite = (smiDistWt * zCompSMI) + (cliDistWt * zCompCLI);
       return { ...r, distScore, compComposite };
     });
 
     const sortedByDist = enriched.sort((a, b) => a.distScore - b.distScore);
-    const topN = sortedByDist.slice(0, pass3Qty);
+    const topN = sortedByDist.slice(0, pass4Qty);
 
-    console.log(`Pass 3: ${afterPass25.length} CLI-qualified comps → selected top ${topN.length} by SMI distance`);
+    console.log(`Pass 4: ${afterPass3.length} CLI-qualified comps → selected top ${topN.length} by SMI/CLI normalized distance`);
     topN.forEach((c, i) => console.log(
-      `#${i+1}: ID=${c.id}, distScore=${c.distScore.toFixed(3)}, composite=${c.compComposite.toFixed(3)}, SMI=${c.smi}, CLI=${c.cli}, STDPPSI=${c.stdppsi.toFixed(4)}`
+      `#${i+1}: ID=${c.id}, distScore=${c.distScore.toFixed(3)}, SMI=${c.smi}, CLI=${c.cli}, STDPPSI=${c.stdppsi.toFixed(4)}`
     ));
 
     // ── Build topComps response — raw fields only, no adjustment math ────────
@@ -3014,6 +3023,8 @@ app.post("/api/valuation", async (req, res) => {
         medium:        db.metadata.medium
       },
       subjectComposite,
+      poolSMIStats: { mean: smiStats.mean, std: smiStats.std },
+      poolCLIStats: { mean: cliStats.mean, std: cliStats.std },
       aiAnalysis: formatAIAnalysisForReport(aiAnalysis)
     });
 
