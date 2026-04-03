@@ -2000,7 +2000,7 @@ app.get('/api/records/page/:pageNumber', (req, res) => {
     const database = readDatabase();
     
     // Apply any filters from query params
-    let filteredRecords = database;
+    let filteredRecords = database.records;
     if (req.query.year) {
       filteredRecords = filteredRecords.filter(r => r.year == req.query.year);
     }
