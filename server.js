@@ -2950,10 +2950,50 @@ app.post("/api/valuation", async (req, res) => {
       });
     }
 
-    // ── Pass 3: Lowest absolute adjustment — Final Selection ─────────────────
-    // Run the full unwind calculation (SMI → CLI → medium → size) on every
-    // Pass 2 survivor to derive adjPrice, then select the top pass3_top_quantity
-    // records by lowest absolute percentage adjustment from original price.
+    // ── Pass 3A: CLI proximity — keep top 2 × pass3Qty by |comp.cli - subject.cli| ──
+    // Primary quality filter: ensures every candidate entering Pass 3B is in the
+    // subject's career tier. Ties on CLI distance are broken by SMI distance ascending.
+
+    const pass3AQty = 2 * pass3Qty;
+
+    const withCliDist = afterPass2.map(r => ({
+      ...r,
+      cliDist: Math.abs(r.cli - cli),
+      smiDist: Math.abs(r.smi - smi)
+    }));
+
+    const sortedByCli = [...withCliDist].sort((a, b) =>
+      a.cliDist !== b.cliDist
+        ? a.cliDist - b.cliDist
+        : a.smiDist - b.smiDist   // tiebreaker: SMI distance ascending
+    );
+    const afterPass3A = sortedByCli.slice(0, pass3AQty);
+
+    console.log(`Pass 3A: ${afterPass2.length} RI-qualified comps → top ${afterPass3A.length} by CLI proximity (tiebreak: SMI proximity)`);
+    afterPass3A.forEach((c, i) => console.log(
+      `  3A #${i+1}: ID=${c.id}, CLI=${c.cli} (dist=${c.cliDist.toFixed(2)}), SMI=${c.smi} (dist=${c.smiDist.toFixed(2)})`
+    ));
+
+    // ── Pass 3B: SMI proximity — keep top pass3Qty by |comp.smi - subject.smi| ──
+    // Secondary quality filter: refines within the CLI-qualified pool.
+    // Ties on SMI distance are broken by CLI distance ascending.
+
+    const sortedBySmi = [...afterPass3A].sort((a, b) =>
+      a.smiDist !== b.smiDist
+        ? a.smiDist - b.smiDist
+        : a.cliDist - b.cliDist   // tiebreaker: CLI distance ascending
+    );
+    const afterPass3B = sortedBySmi.slice(0, pass3Qty);
+
+    console.log(`Pass 3B: ${afterPass3A.length} CLI-qualified comps → top ${afterPass3B.length} by SMI proximity (tiebreak: CLI proximity)`);
+    afterPass3B.forEach((c, i) => console.log(
+      `  3B #${i+1}: ID=${c.id}, SMI=${c.smi} (dist=${c.smiDist.toFixed(2)}), CLI=${c.cli} (dist=${c.cliDist.toFixed(2)})`
+    ));
+
+    // ── Pass 3C: Full adjustment — unwind standards, apply subject attributes ──
+    // All pass3Qty survivors receive the full price adjustment. adjPrice and adjPct
+    // are returned to the frontend for weighted reconciliation — they are NOT used
+    // here to further reduce the pool.
 
     const subjectSSI        = height * width;
     const predictAt200      = sizeConstant * Math.pow(Math.log(200), sizeExponent);
@@ -2962,7 +3002,7 @@ app.post("/api/valuation", async (req, res) => {
       ? parseFloat(mediumTable[media])
       : (() => { throw new Error(`No medium index found for subject medium: ${media}`); })();
 
-    const enriched = afterPass2.map(r => {
+    const topN = afterPass3B.map(r => {
       // Step 1: unwind SMI standard → apply subject SMI
       const ppsi_1 = r.stdppsi + ((smi - std_SMI) * coef_SMI);
 
@@ -2977,18 +3017,15 @@ app.post("/api/valuation", async (req, res) => {
       const ppsi_4         = predictAtSubject * (1 + residualFactor);
 
       // Step 5: convert to price
-      const adjPrice    = ppsi_4 * subjectSSI;
-      const adjPct      = Math.abs((adjPrice - r.price) / r.price);
+      const adjPrice = ppsi_4 * subjectSSI;
+      const adjPct   = Math.abs((adjPrice - r.price) / r.price);
 
       return { ...r, adjPrice, adjPct };
     });
 
-    const sortedByAdj = enriched.sort((a, b) => a.adjPct - b.adjPct);
-    const topN        = sortedByAdj.slice(0, pass3Qty);
-
-    console.log(`Pass 3: ${afterPass2.length} RI-qualified comps → selected top ${topN.length} by lowest absolute adjustment`);
+    console.log(`Pass 3C: ${topN.length} comps fully adjusted — returning to frontend for weighted reconciliation`);
     topN.forEach((c, i) => console.log(
-      `#${i+1}: ID=${c.id}, adjPct=${(c.adjPct * 100).toFixed(2)}%, adjPrice=${c.adjPrice.toFixed(2)}, SMI=${c.smi}, CLI=${c.cli}, STDPPSI=${c.stdppsi.toFixed(4)}`
+      `  3C #${i+1}: ID=${c.id}, adjPct=${(c.adjPct * 100).toFixed(2)}%, adjPrice=${c.adjPrice.toFixed(2)}, CLI=${c.cli}, SMI=${c.smi}`
     ));
 
     // ── Build topComps response ───────────────────────────────────────────────
