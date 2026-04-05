@@ -2860,8 +2860,8 @@ app.post("/api/valuation", async (req, res) => {
     // Confirm all required metadata fields are present — no fallbacks
     const requiredCoefs = [
       'coef_size_constant', 'coef_size_exponent',
-      'smi_dist_wt', 'cli_dist_wt', 'damping_factor',
-      'pass4_top_quantity', 'pass1_cutoff_pct',
+      'pass3_top_quantity', 'pass1_cutoff_pct',
+      'std_CLI', 'coef_CLI', 'std_SMI', 'coef_SMI',
       'coef_A', 'coef_B', 'coef_C'
     ];
     for (const field of requiredCoefs) {
@@ -2875,12 +2875,12 @@ app.post("/api/valuation", async (req, res) => {
 
     const sizeConstant   = parseFloat(coefficients['coef_size_constant']);
     const sizeExponent   = parseFloat(coefficients['coef_size_exponent']);
-    const smiDistWt      = parseFloat(coefficients['smi_dist_wt']);
-    const cliDistWt      = parseFloat(coefficients['cli_dist_wt']);
-    const dampingFactor  = parseFloat(coefficients['damping_factor']);
-    const pass4Qty       = parseInt(coefficients['pass4_top_quantity']);
-    const cliPassQty     = pass4Qty * 3;   // Pass 3: nearest CLI neighbours (3x pass4Qty)
+    const pass3Qty       = parseInt(coefficients['pass3_top_quantity']);
     const pass1Cutoff    = parseFloat(coefficients['pass1_cutoff_pct']);
+    const std_CLI        = parseFloat(coefficients['std_CLI']);
+    const coef_CLI       = parseFloat(coefficients['coef_CLI']);
+    const std_SMI        = parseFloat(coefficients['std_SMI']);
+    const coef_SMI       = parseFloat(coefficients['coef_SMI']);
 
     // ── Step 1: Generate AI analysis ─────────────────────────────────────────
     let aiAnalysis = "";
@@ -2950,68 +2950,48 @@ app.post("/api/valuation", async (req, res) => {
       });
     }
 
-    // ── Pass 3: CLI nearest-neighbour filter ─────────────────────────────────
-    // Sort by absolute CLI distance from subject, take top cliPassQty (3 × pass4Qty).
-    // CLI operates as a 1-D absolute distance in its own pass — keeping it cleanly
-    // separated from the SMI/CLI normalized distance in Pass 4 and ensuring
-    // career-level comparability before final selection.
-    const afterPass3 = [...afterPass2]
-      .sort((a, b) => Math.abs(a.cli - cli) - Math.abs(b.cli - cli))
-      .slice(0, cliPassQty);
+    // ── Pass 3: Lowest absolute adjustment — Final Selection ─────────────────
+    // Run the full unwind calculation (SMI → CLI → medium → size) on every
+    // Pass 2 survivor to derive adjPrice, then select the top pass3_top_quantity
+    // records by lowest absolute percentage adjustment from original price.
 
-    console.log(`Pass 3: ${afterPass2.length} records after RI filter → selected ${afterPass3.length} nearest by CLI (cliPassQty=${cliPassQty})`);
-    console.log(`Pass 3: subject CLI=${cli}, nearest comp CLI range [${afterPass3[afterPass3.length-1]?.cli} – ${afterPass3[0]?.cli}]`);
+    const subjectSSI        = height * width;
+    const predictAt200      = sizeConstant * Math.pow(Math.log(200), sizeExponent);
+    const predictAtSubject  = sizeConstant * Math.pow(Math.log(subjectSSI), sizeExponent);
+    const subjectMediumIdx  = mediumTable[media] !== undefined
+      ? parseFloat(mediumTable[media])
+      : (() => { throw new Error(`No medium index found for subject medium: ${media}`); })();
 
-    if (afterPass3.length === 0) {
-      return res.status(400).json({
-        error: "No comparable records found after CLI nearest-neighbour filter.",
-        details: { cli, afterPass2Count: afterPass2.length }
-      });
-    }
+    const enriched = afterPass2.map(r => {
+      // Step 1: unwind SMI standard → apply subject SMI
+      const ppsi_1 = r.stdppsi + ((smi - std_SMI) * coef_SMI);
 
-    // ── Pass 4: SMI/CLI Normalized Distance — Final Selection ────────────────
-    // CLI has already done its work as a gate in Pass 3.
-    // Pass 4 uses normalized (z-scored) SMI and CLI combined to find the
-    // closest peers and rank them for price weighting.
+      // Step 2: unwind CLI standard → apply subject CLI
+      const ppsi_2 = ppsi_1 + ((cli - std_CLI) * coef_CLI);
 
-    // Z-score helpers (computed from Pass 3 pool)
-    const meanStd = (arr, key) => {
-      const values = arr.map(r => r[key]);
-      const mean   = values.reduce((a, b) => a + b, 0) / values.length;
-      const std    = Math.sqrt(values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length);
-      return { mean, std };
-    };
-    const z = (v, mean, std) => (std > 0 ? (v - mean) / std : 0);
+      // Step 3: apply subject medium
+      const ppsi_3 = ppsi_2 * subjectMediumIdx;
 
-    const smiStats = meanStd(afterPass3, "smi");
-    const cliStats = meanStd(afterPass3, "cli");
-    const zSubjectSMI = z(smi, smiStats.mean, smiStats.std);
-    const zSubjectCLI = z(cli, cliStats.mean, cliStats.std);
+      // Step 4: apply subject size via residual method
+      const residualFactor = (ppsi_3 - predictAt200) / predictAt200;
+      const ppsi_4         = predictAtSubject * (1 + residualFactor);
 
-    // Subject composite scalar — normalized weighted combination of SMI and CLI z-scores
-    const subjectComposite = (smiDistWt * zSubjectSMI) + (cliDistWt * zSubjectCLI);
+      // Step 5: convert to price
+      const adjPrice    = ppsi_4 * subjectSSI;
+      const adjPct      = Math.abs((adjPrice - r.price) / r.price);
 
-    // Calculate SMI/CLI normalized distance for each comp, sort ascending, take top N
-    const enriched = afterPass3.map(r => {
-      const zCompSMI  = z(r.smi, smiStats.mean, smiStats.std);
-      const zCompCLI  = z(r.cli, cliStats.mean, cliStats.std);
-      const distScore = Math.sqrt(
-        smiDistWt * Math.pow(zCompSMI - zSubjectSMI, 2) +
-        cliDistWt * Math.pow(zCompCLI - zSubjectCLI, 2)
-      );
-      const compComposite = (smiDistWt * zCompSMI) + (cliDistWt * zCompCLI);
-      return { ...r, distScore, compComposite };
+      return { ...r, adjPrice, adjPct };
     });
 
-    const sortedByDist = enriched.sort((a, b) => a.distScore - b.distScore);
-    const topN = sortedByDist.slice(0, pass4Qty);
+    const sortedByAdj = enriched.sort((a, b) => a.adjPct - b.adjPct);
+    const topN        = sortedByAdj.slice(0, pass3Qty);
 
-    console.log(`Pass 4: ${afterPass3.length} CLI-qualified comps → selected top ${topN.length} by SMI/CLI normalized distance`);
+    console.log(`Pass 3: ${afterPass2.length} RI-qualified comps → selected top ${topN.length} by lowest absolute adjustment`);
     topN.forEach((c, i) => console.log(
-      `#${i+1}: ID=${c.id}, distScore=${c.distScore.toFixed(3)}, SMI=${c.smi}, CLI=${c.cli}, STDPPSI=${c.stdppsi.toFixed(4)}`
+      `#${i+1}: ID=${c.id}, adjPct=${(c.adjPct * 100).toFixed(2)}%, adjPrice=${c.adjPrice.toFixed(2)}, SMI=${c.smi}, CLI=${c.cli}, STDPPSI=${c.stdppsi.toFixed(4)}`
     ));
 
-    // ── Build topComps response — raw fields only, no adjustment math ────────
+    // ── Build topComps response ───────────────────────────────────────────────
     const buildComp = r => ({
       id:              r.id,
       stdppsi:         r.stdppsi,
@@ -3025,9 +3005,9 @@ app.post("/api/valuation", async (req, res) => {
       height:          r.height,
       width:           r.width,
       price:           r.price,
-      thumbnailBase64: r.thumbnailBase64,
-      distScore:       r.distScore,
-      compComposite:   r.compComposite
+      adjPrice:        r.adjPrice,
+      adjPct:          r.adjPct,
+      thumbnailBase64: r.thumbnailBase64
     });
 
     const topComps = topN.map(buildComp);
@@ -3040,9 +3020,6 @@ app.post("/api/valuation", async (req, res) => {
         coefficients: db.metadata.coefficients,
         medium:        db.metadata.medium
       },
-      subjectComposite,
-      poolSMIStats: { mean: smiStats.mean, std: smiStats.std },
-      poolCLIStats: { mean: cliStats.mean, std: cliStats.std },
       aiAnalysis: formatAIAnalysisForReport(aiAnalysis)
     });
 
