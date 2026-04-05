@@ -3017,7 +3017,7 @@ app.post("/api/valuation", async (req, res) => {
       const ppsi_4         = predictAtSubject * (1 + residualFactor);
 
       // Step 5: convert to price
-      const adjPrice = ppsi_4 * subjectSSI;
+      const adjPrice = Math.max(10, ppsi_4 * subjectSSI);
       const adjPct   = Math.abs((adjPrice - r.price) / r.price);
 
       return { ...r, adjPrice, adjPct };
