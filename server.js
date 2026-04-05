@@ -2308,17 +2308,35 @@ function calculateDerivedFields(record, metadata) {
     // 5. APPSI -- AOPPSI is normalized to a size of 200 square inches
     record.appsi = calculateAPPSI(record.ssi, record.aop, coefficients);
 
-    // 6. STDPPSI — appsi divided by medium index (oil = 1.0) ... normalized to oil
+    // 6. medium_adj_ppsi — appsi divided by medium index (oil = 1.0) ... normalized to oil
     const mediumIndex = getMediumIndex(record.medium, mediumCoefficients);
-    record.stdppsi = (record.appsi > 0 && mediumIndex > 0) ? record.appsi / mediumIndex : 0;
+    record.medium_adj_ppsi = (record.appsi > 0 && mediumIndex > 0) ? record.appsi / mediumIndex : 0;
 
-    // 7. SMI — only if both pillar scores are present
+    // 7. SMI — only if both pillar scores are present (must precede Steps 8 and 9)
     if (record.smi_subject !== null && record.smi_subject !== undefined &&
         record.smi_render  !== null && record.smi_render  !== undefined) {
         record.smi = calculateSMI(record.smi_subject, record.smi_render, coefficients);
     } else {
         record.smi = null;
     }
+
+    // 8. cli_adj_ppsi — medium_adj_ppsi adjusted for distance of this record's CLI from std_CLI
+    const std_CLI  = coefficients['std_CLI'];
+    const coef_CLI = coefficients['coef_CLI'];
+    if (std_CLI === undefined)  throw new Error('calculateDerivedFields: std_CLI is missing from metadata coefficients.');
+    if (coef_CLI === undefined) throw new Error('calculateDerivedFields: coef_CLI is missing from metadata coefficients.');
+    if (record.cli === undefined || record.cli === null) throw new Error('calculateDerivedFields: record.cli is missing — cannot calculate cli_adj_ppsi.');
+    record.cli_adj_ppsi = record.medium_adj_ppsi + ((parseFloat(std_CLI) - record.cli) * parseFloat(coef_CLI));
+
+    // 9. smi_adj_ppsi — cli_adj_ppsi adjusted for distance of this record's SMI from std_SMI
+    //    stdppsi is set equal to smi_adj_ppsi so the rest of the app continues to use stdppsi unchanged
+    const std_SMI  = coefficients['std_SMI'];
+    const coef_SMI = coefficients['coef_SMI'];
+    if (std_SMI === undefined)  throw new Error('calculateDerivedFields: std_SMI is missing from metadata coefficients.');
+    if (coef_SMI === undefined) throw new Error('calculateDerivedFields: coef_SMI is missing from metadata coefficients.');
+    if (record.smi === undefined || record.smi === null) throw new Error('calculateDerivedFields: record.smi is missing — cannot calculate smi_adj_ppsi.');
+    record.smi_adj_ppsi = record.cli_adj_ppsi + ((parseFloat(std_SMI) - record.smi) * parseFloat(coef_SMI));
+    record.stdppsi      = record.smi_adj_ppsi;
 
     return record;
 }
