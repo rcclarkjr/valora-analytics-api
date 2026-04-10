@@ -1015,13 +1015,23 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
 
 
 // ============================================================
-// /compute-smi — reads weights from metadata, returns all three values
-// Body: { subject_scores: {S1..S5}, rendering_scores: {R1..R5} }
-// Response: { smi, smi_subject, smi_render }
+// /compute-smi — reads weights from metadata, returns all four values
+// Body: { integer: 1-5, subject_scores: {S1..S5}, rendering_scores: {R1..R5} }
+// Response: { smi, smi_subject, smi_render, integer }
 // ============================================================
-function computeSMI(subjectScores, renderingScores, coefficients) {
+function computeSMI(subjectScores, renderingScores, coefficients, integer) {
     const sKeys = ['S1','S2','S3','S4','S5'];
     const rKeys = ['R1','R2','R3','R4','R5'];
+
+    // Validate integer band
+    if (integer === undefined || integer === null) throw new Error('computeSMI: integer is required.');
+    const integerVal = parseInt(integer);
+    if (isNaN(integerVal) || integerVal < 1 || integerVal > 5) throw new Error(`computeSMI: integer must be 1–5. Got: ${integer}`);
+
+    // Level 5 is fixed — sub-scores are not scored by the AI at this level
+    if (integerVal === 5) {
+        return { smi: 5.00, smi_subject: null, smi_render: null, integer: 5 };
+    }
 
     for (const k of sKeys) {
         const v = parseFloat(subjectScores[k]);
@@ -1042,23 +1052,32 @@ function computeSMI(subjectScores, renderingScores, coefficients) {
     if (isNaN(coefSubject) || coefSubject < 0 || coefSubject > 1) throw new Error(`coef_smi_subject value "${rawSubject}" is invalid. Must be a number between 0 and 1.`);
     const coefRender = parseFloat((1 - coefSubject).toFixed(4));
 
-    const weighted = (smi_subject * coefSubject) + (smi_render * coefRender);
-    const smi = parseFloat(Math.min(Math.max(1.00 + (weighted * 4.00), 1.00), 5.00).toFixed(2));
+    // Weighted composite capped at 0.99 to prevent band overflow
+    const weighted = Math.min((smi_subject * coefSubject) + (smi_render * coefRender), 0.99);
 
-    return { smi, smi_subject, smi_render };
+    // Final SMI = integer band + weighted decimal (never escapes the band)
+    const smi = parseFloat((integerVal + weighted).toFixed(2));
+
+    return { smi, smi_subject, smi_render, integer: integerVal };
 }
 
 app.post('/compute-smi', (req, res) => {
     try {
-        const { subject_scores, rendering_scores } = req.body;
+        const { subject_scores, rendering_scores, integer } = req.body;
         if (!subject_scores) return res.status(400).json({ error: 'Missing required field: subject_scores' });
         if (!rendering_scores) return res.status(400).json({ error: 'Missing required field: rendering_scores' });
+        if (integer === undefined || integer === null) return res.status(400).json({ error: 'Missing required field: integer' });
+
+        const integerVal = parseInt(integer);
+        if (isNaN(integerVal) || integerVal < 1 || integerVal > 5) {
+            return res.status(400).json({ error: `integer must be 1–5. Got: ${integer}` });
+        }
 
         // Read weights directly from database metadata
         const data = readDatabase();
         const coefficients = data.metadata.coefficients || {};
 
-        const result = computeSMI(subject_scores, rendering_scores, coefficients);
+        const result = computeSMI(subject_scores, rendering_scores, coefficients, integerVal);
         return res.status(200).json(result);
     } catch (err) {
         console.error('❌ /compute-smi error:', err.message);
@@ -1212,7 +1231,65 @@ CRITICAL EVALUATION RULES:
 
 
 // VALIDATE RESPONSE
-const { subject_scores, rendering_scores, subject_description, rendering_description } = aiResponse;
+const { integer, gate1_score, gate2_score, subject_scores, rendering_scores, subject_description, rendering_description } = aiResponse;
+
+// Validate integer
+if (integer === undefined || integer === null) {
+  console.error("AI response missing integer");
+  return res.status(500).json({
+    error: { message: "AI returned incomplete response — missing integer" }
+  });
+}
+const integerVal = parseInt(integer);
+if (isNaN(integerVal) || integerVal < 1 || integerVal > 5) {
+  console.error(`AI returned invalid integer: ${integer}`);
+  return res.status(500).json({
+    error: { message: `AI returned invalid integer: ${integer}. Must be 1–5.` }
+  });
+}
+
+// gate scores are required for integers 3 and 4, null for 1, 2, and 5
+if (integerVal === 3 || integerVal === 4) {
+  if (gate1_score === undefined || gate1_score === null) {
+    console.error("AI response missing gate1_score for integer 3/4");
+    return res.status(500).json({
+      error: { message: "AI returned incomplete response — missing gate1_score" }
+    });
+  }
+  if (gate2_score === undefined || gate2_score === null) {
+    console.error("AI response missing gate2_score for integer 3/4");
+    return res.status(500).json({
+      error: { message: "AI returned incomplete response — missing gate2_score" }
+    });
+  }
+  if (![0, 1, 2].includes(parseInt(gate1_score))) {
+    return res.status(500).json({
+      error: { message: `AI returned invalid gate1_score: ${gate1_score}. Must be 0, 1, or 2.` }
+    });
+  }
+  if (![0, 1, 2].includes(parseInt(gate2_score))) {
+    return res.status(500).json({
+      error: { message: `AI returned invalid gate2_score: ${gate2_score}. Must be 0, 1, or 2.` }
+    });
+  }
+}
+
+// Level 5 needs no sub-scores — return complete response with fixed smi=5.00
+if (integerVal === 5) {
+  console.log(`SMI integer=5 (Master) — sub-scores not evaluated`);
+  return res.json({
+    smi:               5.00,
+    smi_subject:       null,
+    smi_render:        null,
+    integer:           5,
+    gate1_score:       null,
+    gate2_score:       null,
+    subject_scores:    null,
+    rendering_scores:  null,
+    subject_description:   subject_description || null,
+    rendering_description: rendering_description || null
+  });
+}
 
 if (!subject_scores || !rendering_scores) {
   console.error("AI response missing subject_scores or rendering_scores");
@@ -1251,16 +1328,40 @@ if (!subject_description || !rendering_description) {
     console.log(`RENDERING SCORES: ${JSON.stringify(rendering_scores)}`);
 
     // ================================================================================
-    // RETURN RESPONSE — raw sub-scores only; math done by /compute-smi
+    // COMPUTE FINAL SMI — fold math here so apps receive a complete result in one call
     // ================================================================================
 
+    const data = readDatabase();
+    const coefficients = data.metadata.coefficients || {};
 
-res.json({
-  subject_scores,
-  rendering_scores,
-  subject_description,
-  rendering_description
-});
+    let smiResult;
+    try {
+      smiResult = computeSMI(subject_scores, rendering_scores, coefficients, integerVal);
+    } catch (smiError) {
+      console.error('SMI calculation failed inside /analyze-smi:', smiError.message);
+      return res.status(500).json({
+        error: { message: 'SMI calculation failed: ' + smiError.message }
+      });
+    }
+
+    console.log(`SMI result: smi=${smiResult.smi}, integer=${smiResult.integer}, smi_subject=${smiResult.smi_subject}, smi_render=${smiResult.smi_render}`);
+
+    // ================================================================================
+    // RETURN COMPLETE RESPONSE — smi already calculated, no second call needed
+    // ================================================================================
+
+    res.json({
+      smi:               smiResult.smi,
+      smi_subject:       smiResult.smi_subject,
+      smi_render:        smiResult.smi_render,
+      integer:           integerVal,
+      gate1_score:       (integerVal === 3 || integerVal === 4) ? parseInt(gate1_score) : null,
+      gate2_score:       (integerVal === 3 || integerVal === 4) ? parseInt(gate2_score) : null,
+      subject_scores,
+      rendering_scores,
+      subject_description,
+      rendering_description
+    });
 	
 
 
