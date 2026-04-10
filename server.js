@@ -1275,6 +1275,8 @@ if (integerVal === 3 || integerVal === 4) {
 }
 
 // Level 5 needs no sub-scores — return complete response with fixed smi=5.00
+// Gate scores are 0 (not null) so response shape is consistent across all integer levels.
+// Gates were not run for Level 5; 0/0 is the correct representation.
 if (integerVal === 5) {
   console.log(`SMI integer=5 (Master) — sub-scores not evaluated`);
   return res.json({
@@ -1282,8 +1284,8 @@ if (integerVal === 5) {
     smi_subject:       null,
     smi_render:        null,
     integer:           5,
-    gate1_score:       null,
-    gate2_score:       null,
+    gate1_score:       0,
+    gate2_score:       0,
     subject_scores:    null,
     rendering_scores:  null,
     subject_description:   subject_description || null,
@@ -1355,8 +1357,8 @@ if (!subject_description || !rendering_description) {
       smi_subject:       smiResult.smi_subject,
       smi_render:        smiResult.smi_render,
       integer:           integerVal,
-      gate1_score:       (integerVal === 3 || integerVal === 4) ? parseInt(gate1_score) : null,
-      gate2_score:       (integerVal === 3 || integerVal === 4) ? parseInt(gate2_score) : null,
+      gate1_score:       (integerVal === 3 || integerVal === 4) ? parseInt(gate1_score) : 0,
+      gate2_score:       (integerVal === 3 || integerVal === 4) ? parseInt(gate2_score) : 0,
       subject_scores,
       rendering_scores,
       subject_description,
