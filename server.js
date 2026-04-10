@@ -326,11 +326,11 @@ if (useJSON) {
     let cleanedJSON = responseText.trim();
     
     // Remove markdown code fences if present
-    if (cleanedJSON.startsWith('```json')) {
-      cleanedJSON = cleanedJSON.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-    } else if (cleanedJSON.startsWith('```')) {
-      cleanedJSON = cleanedJSON.replace(/^```\s*/, '').replace(/\s*```$/, '');
-    }
+if (cleanedJSON.startsWith('```json')) {
+  cleanedJSON = cleanedJSON.replace(/^```json\s*/, '').replace(/\s*```\s*$/, '');
+} else if (cleanedJSON.startsWith('```')) {
+  cleanedJSON = cleanedJSON.replace(/^```\s*/, '').replace(/\s*```\s*$/, '');
+}
     
     return JSON.parse(cleanedJSON.trim());
   } catch (parseError) {
