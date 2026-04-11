@@ -1014,76 +1014,7 @@ Write exactly 1-2 sentences about ${artistName}'s current career level using neu
 
 
 
-// ============================================================
-// /compute-smi — reads weights from metadata, returns all four values
-// Body: { integer: 1-5, subject_scores: {S1..S5}, rendering_scores: {R1..R5} }
-// Response: { smi, smi_subject, smi_render, integer }
-// ============================================================
-function computeSMI(subjectScores, renderingScores, coefficients, integer) {
-    const sKeys = ['S1','S2','S3','S4','S5'];
-    const rKeys = ['R1','R2','R3','R4','R5'];
 
-    // Validate integer band
-    if (integer === undefined || integer === null) throw new Error('computeSMI: integer is required.');
-    const integerVal = parseInt(integer);
-    if (isNaN(integerVal) || integerVal < 1 || integerVal > 5) throw new Error(`computeSMI: integer must be 1–5. Got: ${integer}`);
-
-    // Level 5 is fixed — sub-scores are not scored by the AI at this level
-    if (integerVal === 5) {
-        return { smi: 5.00, smi_subject: null, smi_render: null, integer: 5 };
-    }
-
-    for (const k of sKeys) {
-        const v = parseFloat(subjectScores[k]);
-        if (isNaN(v) || v < 0 || v > 1) throw new Error(`Invalid subject score ${k}: ${subjectScores[k]}`);
-    }
-    for (const k of rKeys) {
-        const v = parseFloat(renderingScores[k]);
-        if (isNaN(v) || v < 0 || v > 1) throw new Error(`Invalid rendering score ${k}: ${renderingScores[k]}`);
-    }
-
-    const smi_subject = parseFloat((sKeys.reduce((sum, k) => sum + parseFloat(subjectScores[k]), 0) / 5).toFixed(4));
-    const smi_render  = parseFloat((rKeys.reduce((sum, k) => sum + parseFloat(renderingScores[k]), 0) / 5).toFixed(4));
-
-    // Read subject weight from metadata — render weight is always derived as 1 - subject
-    const rawSubject = coefficients['coef_smi_subject'];
-    if (rawSubject === undefined || rawSubject === null) throw new Error('coef_smi_subject is not set in metadata. Please update metadata before calculating SMI.');
-    const coefSubject = parseFloat(rawSubject);
-    if (isNaN(coefSubject) || coefSubject < 0 || coefSubject > 1) throw new Error(`coef_smi_subject value "${rawSubject}" is invalid. Must be a number between 0 and 1.`);
-    const coefRender = parseFloat((1 - coefSubject).toFixed(4));
-
-    // Weighted composite capped at 0.99 to prevent band overflow
-    const weighted = Math.min((smi_subject * coefSubject) + (smi_render * coefRender), 0.99);
-
-    // Final SMI = integer band + weighted decimal (never escapes the band)
-    const smi = parseFloat((integerVal + weighted).toFixed(2));
-
-    return { smi, smi_subject, smi_render, integer: integerVal };
-}
-
-app.post('/compute-smi', (req, res) => {
-    try {
-        const { subject_scores, rendering_scores, integer } = req.body;
-        if (!subject_scores) return res.status(400).json({ error: 'Missing required field: subject_scores' });
-        if (!rendering_scores) return res.status(400).json({ error: 'Missing required field: rendering_scores' });
-        if (integer === undefined || integer === null) return res.status(400).json({ error: 'Missing required field: integer' });
-
-        const integerVal = parseInt(integer);
-        if (isNaN(integerVal) || integerVal < 1 || integerVal > 5) {
-            return res.status(400).json({ error: `integer must be 1–5. Got: ${integer}` });
-        }
-
-        // Read weights directly from database metadata
-        const data = readDatabase();
-        const coefficients = data.metadata.coefficients || {};
-
-        const result = computeSMI(subject_scores, rendering_scores, coefficients, integerVal);
-        return res.status(200).json(result);
-    } catch (err) {
-        console.error('❌ /compute-smi error:', err.message);
-        return res.status(400).json({ error: err.message });
-    }
-});
 
 
 // ====================================================================================
@@ -1338,7 +1269,7 @@ if (!subject_description || !rendering_description) {
 
     let smiResult;
     try {
-      smiResult = computeSMI(subject_scores, rendering_scores, coefficients, integerVal);
+      smiResult = calculateSMI_fromScores(subject_scores, rendering_scores, coefficients, integerVal);
     } catch (smiError) {
       console.error('SMI calculation failed inside /analyze-smi:', smiError.message);
       return res.status(500).json({
@@ -2369,19 +2300,72 @@ function getMediumIndex(medium, mediumCoefficients) {
     return key ? (parseFloat(mediumCoefficients[key]) || 1.0) : 1.0;
 }
 
-// Calculate SMI from smi_subject and smi_render using metadata weights
-function calculateSMI(smiSubject, smiRender, coefficients) {
+// calculateSMI — called by calculateDerivedFields using stored record fields.
+// Requires record.integer to be present on the record.
+function calculateSMI(smiSubject, smiRender, integer, coefficients) {
     if (smiSubject === null || smiSubject === undefined ||
-        smiRender === null || smiRender === undefined) return null;
+        smiRender  === null || smiRender  === undefined) return null;
+
+    if (integer === null || integer === undefined)
+        throw new Error('calculateSMI: integer is required but missing from record.');
+
+    const integerVal = parseInt(integer);
+    if (isNaN(integerVal) || integerVal < 1 || integerVal > 5)
+        throw new Error(`calculateSMI: integer must be 1–5. Got: ${integer}`);
+
+    // Level 5 is fixed — no sub-score weighting applies
+    if (integerVal === 5) return 5.00;
+
     const rawSubject = coefficients['coef_smi_subject'];
-    if (rawSubject === undefined || rawSubject === null) throw new Error('coef_smi_subject is not set in metadata.');
+    if (rawSubject === undefined || rawSubject === null)
+        throw new Error('calculateSMI: coef_smi_subject is not set in metadata.');
     const coefSubject = parseFloat(rawSubject);
-    if (isNaN(coefSubject) || coefSubject < 0 || coefSubject > 1) throw new Error(`coef_smi_subject "${rawSubject}" is invalid. Must be 0 to 1.`);
-    // Render weight is always derived — never read independently
+    if (isNaN(coefSubject) || coefSubject < 0 || coefSubject > 1)
+        throw new Error(`calculateSMI: coef_smi_subject "${rawSubject}" is invalid. Must be 0 to 1.`);
+
     const coefRender = parseFloat((1 - coefSubject).toFixed(4));
-    const weighted = (parseFloat(smiSubject) * coefSubject) + (parseFloat(smiRender) * coefRender);
-    const smi = 1.00 + (weighted * 4.00);
-    return parseFloat(Math.min(Math.max(smi, 1.00), 5.00).toFixed(2));
+
+    // Weighted composite capped at 0.99 to prevent band overflow into next integer
+    const weighted = Math.min(
+        (parseFloat(smiSubject) * coefSubject) + (parseFloat(smiRender) * coefRender),
+        0.99
+    );
+
+    // Final SMI = integer band + weighted decimal
+    return parseFloat((integerVal + weighted).toFixed(2));
+}
+
+// calculateSMI_fromScores — called by /analyze-smi with raw AI sub-scores.
+// Averages the five subject and five render scores, then delegates to calculateSMI.
+function calculateSMI_fromScores(subjectScores, renderingScores, coefficients, integer) {
+    const sKeys = ['S1','S2','S3','S4','S5'];
+    const rKeys = ['R1','R2','R3','R4','R5'];
+
+    if (integer === undefined || integer === null)
+        throw new Error('calculateSMI_fromScores: integer is required.');
+    const integerVal = parseInt(integer);
+    if (isNaN(integerVal) || integerVal < 1 || integerVal > 5)
+        throw new Error(`calculateSMI_fromScores: integer must be 1–5. Got: ${integer}`);
+
+    if (integerVal === 5)
+        return { smi: 5.00, smi_subject: null, smi_render: null, integer: 5 };
+
+    for (const k of sKeys) {
+        const v = parseFloat(subjectScores[k]);
+        if (isNaN(v) || v < 0 || v > 1)
+            throw new Error(`Invalid subject score ${k}: ${subjectScores[k]}`);
+    }
+    for (const k of rKeys) {
+        const v = parseFloat(renderingScores[k]);
+        if (isNaN(v) || v < 0 || v > 1)
+            throw new Error(`Invalid rendering score ${k}: ${renderingScores[k]}`);
+    }
+
+    const smi_subject = parseFloat((sKeys.reduce((sum, k) => sum + parseFloat(subjectScores[k]), 0) / 5).toFixed(4));
+    const smi_render  = parseFloat((rKeys.reduce((sum, k) => sum + parseFloat(renderingScores[k]), 0) / 5).toFixed(4));
+
+    const smi = calculateSMI(smi_subject, smi_render, integerVal, coefficients);
+    return { smi, smi_subject, smi_render, integer: integerVal };
 }
 
 // =============================================================
@@ -2415,10 +2399,12 @@ function calculateDerivedFields(record, metadata) {
     const mediumIndex = getMediumIndex(record.medium, mediumCoefficients);
     record.medium_adj_ppsi = (record.appsi > 0 && mediumIndex > 0) ? record.appsi / mediumIndex : 0;
 
-    // 7. SMI — only if both pillar scores are present (must precede Steps 8 and 9)
+    // 7. SMI — only if both pillar scores and integer are present (must precede Steps 8 and 9)
     if (record.smi_subject !== null && record.smi_subject !== undefined &&
         record.smi_render  !== null && record.smi_render  !== undefined) {
-        record.smi = calculateSMI(record.smi_subject, record.smi_render, coefficients);
+        if (record.integer === null || record.integer === undefined)
+            throw new Error('calculateDerivedFields: record.integer is missing — cannot calculate SMI.');
+        record.smi = calculateSMI(record.smi_subject, record.smi_render, record.integer, coefficients);
     } else {
         record.smi = null;
     }
@@ -2872,18 +2858,10 @@ if (parsedAnalysis.recommendedStudy && Array.isArray(parsedAnalysis.recommendedS
       strengths: parsedAnalysis.strengths,
       opportunities: parsedAnalysis.opportunities,
       recommendedStudy: parsedAnalysis.recommendedStudy || [],
-	  smi: parsedAnalysis.smi || null,
-	  diagnostics: parsedAnalysis.diagnostics || null,  
       timestamp: new Date().toISOString()
     };
 
     console.log("Sending structured art analysis response to client");
-	
-if (finalResponse.diagnostics) {
-  console.log("\n=== DIAGNOSTIC SCORES ===");
-  console.log(`Original SMI = ${finalResponse.diagnostics.originalSMI}`);
-  console.log(`Transformed SMI = ${finalResponse.diagnostics.transformedSMI}`);
-}
 	
     res.json(finalResponse);
   } catch (error) {
