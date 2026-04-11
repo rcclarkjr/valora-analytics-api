@@ -2902,13 +2902,14 @@ app.post("/api/valuation", async (req, res) => {
   try {
     console.log("Starting valuation process");
 
-    const {
+const {
       smi,
       ri,
       cli,
       size,
       targetedRI,
       subjectImageBase64,
+      skipNarrative,
       media,
       title,
       artist,
@@ -2917,6 +2918,7 @@ app.post("/api/valuation", async (req, res) => {
       width,
       temperature: requestedTemp
     } = req.body;
+	
 
     const narrativeTemperature = 0.5;
 
@@ -2928,10 +2930,11 @@ app.post("/api/valuation", async (req, res) => {
     });
 
     // ── Validate inputs ──────────────────────────────────────────────────────
-    if (!smi || !ri || !cli || !size || !targetedRI ||
-        !Array.isArray(targetedRI) || !subjectImageBase64 || !height || !width) {
+if (!smi || !ri || !cli || !size || !targetedRI ||
+        !Array.isArray(targetedRI) || (!skipNarrative && !subjectImageBase64) || !height || !width) {
       return res.status(400).json({ error: "Missing required valuation inputs." });
     }
+	
 
     const db = readDatabase();
     const allRecords    = db.records || [];
@@ -2963,34 +2966,38 @@ app.post("/api/valuation", async (req, res) => {
     const std_SMI        = parseFloat(coefficients['std_SMI']);
     const coef_SMI       = parseFloat(coefficients['coef_SMI']);
 
-    // ── Step 1: Generate AI analysis ─────────────────────────────────────────
+
+  // ── Step 1: Generate AI analysis (skipped when skipNarrative is true) ────
     let aiAnalysis = "";
-    try {
-      const promptPath = path.join(__dirname, "public", "prompts", "VALUATION_DESCRIPTION.txt");
-      const prompt = fs.readFileSync(promptPath, "utf8").trim();
-      if (prompt.length < 50) throw new Error("VALUATION_DESCRIPTION.txt not found or too short");
+    if (!skipNarrative) {
+      try {
+        const promptPath = path.join(__dirname, "public", "prompts", "VALUATION_DESCRIPTION.txt");
+        const prompt = fs.readFileSync(promptPath, "utf8").trim();
+        if (prompt.length < 50) throw new Error("VALUATION_DESCRIPTION.txt not found or too short");
 
-      const textContent = subjectDescription
-        ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"`
-        : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}`;
+        const textContent = subjectDescription
+          ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"`
+          : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}`;
 
-      const messages = [{
-        role: "user",
-        content: [
-          { type: "text", text: textContent },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subjectImageBase64}` } }
-        ]
-      }];
+        const messages = [{
+          role: "user",
+          content: [
+            { type: "text", text: textContent },
+            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subjectImageBase64}` } }
+          ]
+        }];
 
-      aiAnalysis = await callAI(messages, 300, prompt, false, narrativeTemperature);
-      console.log("AI analysis completed successfully");
-    } catch (error) {
-      console.error("Analysis failed:", error.message);
-      return res.status(500).json({
-        error: "Analysis failed",
-        details: error.response?.data?.error?.message || error.message
-      });
+        aiAnalysis = await callAI(messages, 300, prompt, false, narrativeTemperature);
+        console.log("AI analysis completed successfully");
+      } catch (error) {
+        console.error("Analysis failed:", error.message);
+        return res.status(500).json({
+          error: "Analysis failed",
+          details: error.response?.data?.error?.message || error.message
+        });
+      }
     }
+
 
     // ── Pass 1: Credibility filter — eliminate bottom pass1_cutoff_pct by stdppsi ──
     const validPool = allRecords.filter(r =>
@@ -3132,14 +3139,16 @@ app.post("/api/valuation", async (req, res) => {
 
     console.log(`Returning ${topComps.length} comps`);
 
-    res.json({
+
+res.json({
       topComps,
       metadata: {
         coefficients: db.metadata.coefficients,
         medium:        db.metadata.medium
       },
-      aiAnalysis: formatAIAnalysisForReport(aiAnalysis)
+      ...(skipNarrative ? {} : { aiAnalysis: formatAIAnalysisForReport(aiAnalysis) })
     });
+
 
   } catch (error) {
     console.error("Valuation request failed:", error.message);
