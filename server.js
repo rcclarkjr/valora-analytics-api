@@ -1338,8 +1338,6 @@ function handleApiError(error, res) {
 
 
 
-
-
 // Endpoint for Representational Index (RI) analysis
 app.post("/analyze-ri", async (req, res) => {
   try {
@@ -1347,6 +1345,7 @@ app.post("/analyze-ri", async (req, res) => {
     const {
       prompt,
       image,
+      imageType,
       artTitle,
       artistName,
       temperature: requestedTemp
@@ -1354,6 +1353,7 @@ app.post("/analyze-ri", async (req, res) => {
 
     const temperature =
       typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
+    const validImageType = imageType || "image/jpeg";
 
     if (!prompt) {
       console.log("Missing prompt in request");
@@ -1369,30 +1369,54 @@ app.post("/analyze-ri", async (req, res) => {
         .json({ error: { message: "Image is required" } });
     }
 
-    if (!OPENAI_API_KEY) {
-      console.log("Missing API key");
-      return res.status(500).json({
-        error: {
-          message: "Server configuration error: Missing API key"
-        }
-      });
-    }
-
     console.log(
       `Processing RI request for artwork: "${artTitle}" by ${artistName}`
     );
     console.log(`Prompt length: ${prompt.length} characters`);
 
+    // ================================================================================
+    // IMAGE PREPROCESSING — resize to safe API limits before sending to AI
+    // Anthropic API hard limits: 5MB per image, 8000px max dimension
+    // Claude internally downscales to ~1568px anyway — no quality benefit above that
+    // Target: max 1600px long side, JPEG quality 90, guaranteed under 5MB
+    // ================================================================================
 
+    let processedImageBase64 = image;
+    let processedImageType = validImageType;
 
+    try {
+      const sharp = require('sharp');
+      const inputBuffer = Buffer.from(image, 'base64');
 
+      console.log(`RI original image buffer size: ${(inputBuffer.length / 1024 / 1024).toFixed(2)} MB`);
 
-    // Construct the prompt with artwork information
-	const finalPrompt = prompt;  // Use exactly what frontend sent!
+      const resized = await sharp(inputBuffer)
+        .resize(1600, 1600, {
+          fit: 'inside',           // preserve aspect ratio, neither dimension exceeds 1600px
+          withoutEnlargement: true // never upscale a small image
+        })
+        .jpeg({ quality: 90 })
+        .toBuffer();
 
+      console.log(`RI processed image buffer size: ${(resized.length / 1024 / 1024).toFixed(2)} MB`);
 
+      // Safety check — if still somehow over 4.5MB, compress further
+      if (resized.length > 4.5 * 1024 * 1024) {
+        const recompressed = await sharp(resized)
+          .jpeg({ quality: 75 })
+          .toBuffer();
+        processedImageBase64 = recompressed.toString('base64');
+        console.log(`RI recompressed image buffer size: ${(recompressed.length / 1024 / 1024).toFixed(2)} MB`);
+      } else {
+        processedImageBase64 = resized.toString('base64');
+      }
 
+      processedImageType = 'image/jpeg';
 
+    } catch (sharpError) {
+      console.warn("RI sharp preprocessing failed — proceeding with original image:", sharpError.message);
+      // Fall through with original image; API call may fail if image is too large
+    }
 
     console.log("Sending request to AI for RI analysis");
 
@@ -1400,11 +1424,11 @@ app.post("/analyze-ri", async (req, res) => {
       {
         role: "user",
         content: [
-          { type: "text", text: finalPrompt },
           {
             type: "image_url",
-            image_url: { url: `data:image/jpeg;base64,${image}` }
-          }
+            image_url: { url: `data:${processedImageType};base64,${processedImageBase64}` }
+          },
+          { type: "text", text: prompt }
         ]
       }
     ];
@@ -1414,7 +1438,6 @@ app.post("/analyze-ri", async (req, res) => {
 
     let aiResponse;
     try {
-      // Request JSON response from AI (useJSON = true)
       aiResponse = await callAI(
         messages,
         2000,
