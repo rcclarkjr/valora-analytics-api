@@ -836,11 +836,6 @@ app.post("/analyze-cli", async (req, res) => {
       });
     }
 
-    if (!OPENAI_API_KEY) {
-      return res.status(500).json({
-        error: { message: "Server configuration error: Missing API key" }
-      });
-    }
 
     // Handle empty or minimal bio
     if (!artistResume || artistResume.trim().length < 10) {
@@ -948,11 +943,6 @@ app.post("/generate-career-summary", async (req, res) => {
       });
     }
 
-    if (!OPENAI_API_KEY) {
-      return res.status(500).json({
-        error: { message: "Server configuration error: Missing API key" }
-      });
-    }
 
     const summaryPrompt = `
 Based on the following artist career questionnaire responses, write a neutral and academic 1-2 sentence summary about ${artistName}'s career accomplishments.
@@ -2747,32 +2737,77 @@ app.post("/analyze-art", async (req, res) => {
     const temperature =
       typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
 
-    if (!prompt || !image || (!OPENAI_API_KEY)) {
+
+
+
+
+if (!prompt || !image) {
       return res
         .status(400)
-        .json({ error: { message: "Missing prompt, image, or API key" } });
+        .json({ error: { message: "Missing prompt or image" } });
     }
 
     // Simple placeholder replacement - no hardcoded additions
-	const finalPrompt = prompt
-		.replace("{{TITLE}}", artTitle)
-		.replace("{{ARTIST}}", artistName)
-		.replace("{{SUBJECT}}", subjectPhrase)
-		.replace("{{MEDIUM}}", medium)
-		.replace("{{INTENT}}", subjectPhrase);
+    const finalPrompt = prompt
+      .replace("{{TITLE}}", artTitle)
+      .replace("{{ARTIST}}", artistName)
+      .replace("{{SUBJECT}}", subjectPhrase)
+      .replace("{{MEDIUM}}", medium)
+      .replace("{{INTENT}}", subjectPhrase);
+
+    // ── Image preprocessing — resize to safe API limits before sending to AI ──
+    let processedImageBase64 = image;
+    let processedImageType = "image/jpeg";
+
+    try {
+      const sharp = require('sharp');
+      const inputBuffer = Buffer.from(image, 'base64');
+
+      console.log(`analyze-art original image buffer size: ${(inputBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+
+      const resized = await sharp(inputBuffer)
+        .resize(1600, 1600, {
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+        .jpeg({ quality: 90 })
+        .toBuffer();
+
+      console.log(`analyze-art processed image buffer size: ${(resized.length / 1024 / 1024).toFixed(2)} MB`);
+
+      if (resized.length > 4.5 * 1024 * 1024) {
+        const recompressed = await sharp(resized)
+          .jpeg({ quality: 75 })
+          .toBuffer();
+        processedImageBase64 = recompressed.toString('base64');
+        console.log(`analyze-art recompressed image buffer size: ${(recompressed.length / 1024 / 1024).toFixed(2)} MB`);
+      } else {
+        processedImageBase64 = resized.toString('base64');
+      }
+
+      processedImageType = 'image/jpeg';
+
+    } catch (sharpError) {
+      console.warn("analyze-art sharp preprocessing failed — proceeding with original image:", sharpError.message);
+    }
 
     const messages = [
       {
         role: "user",
         content: [
-          { type: "text", text: finalPrompt },
           {
             type: "image_url",
-            image_url: { url: `data:image/jpeg;base64,${image}` }
-          }
+            image_url: { url: `data:${processedImageType};base64,${processedImageBase64}` }
+          },
+          { type: "text", text: finalPrompt }
         ]
       }
     ];
+
+
+
+
+
 
     const systemContent =
       "You are an expert fine art analyst specializing in providing constructive feedback and refinement recommendations for artworks. Always respond with valid JSON only.";
@@ -2990,7 +3025,9 @@ if (!smi || !ri || !cli || !size || !targetedRI ||
     const coef_SMI       = parseFloat(coefficients['coef_SMI']);
 
 
-  // ── Step 1: Generate AI analysis (skipped when skipNarrative is true) ────
+
+
+// ── Step 1: Generate AI analysis (skipped when skipNarrative is true) ────
     let aiAnalysis = "";
     if (!skipNarrative) {
       try {
@@ -3002,11 +3039,47 @@ if (!smi || !ri || !cli || !size || !targetedRI ||
           ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"`
           : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}`;
 
+        // ── Image preprocessing — resize to safe API limits before sending to AI ──
+        let processedImageBase64 = subjectImageBase64;
+        let processedImageType = "image/jpeg";
+
+        try {
+          const sharp = require('sharp');
+          const inputBuffer = Buffer.from(subjectImageBase64, 'base64');
+
+          console.log(`Valuation original image buffer size: ${(inputBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+
+          const resized = await sharp(inputBuffer)
+            .resize(1600, 1600, {
+              fit: 'inside',
+              withoutEnlargement: true
+            })
+            .jpeg({ quality: 90 })
+            .toBuffer();
+
+          console.log(`Valuation processed image buffer size: ${(resized.length / 1024 / 1024).toFixed(2)} MB`);
+
+          if (resized.length > 4.5 * 1024 * 1024) {
+            const recompressed = await sharp(resized)
+              .jpeg({ quality: 75 })
+              .toBuffer();
+            processedImageBase64 = recompressed.toString('base64');
+            console.log(`Valuation recompressed image buffer size: ${(recompressed.length / 1024 / 1024).toFixed(2)} MB`);
+          } else {
+            processedImageBase64 = resized.toString('base64');
+          }
+
+          processedImageType = 'image/jpeg';
+
+        } catch (sharpError) {
+          console.warn("Valuation sharp preprocessing failed — proceeding with original image:", sharpError.message);
+        }
+
         const messages = [{
           role: "user",
           content: [
             { type: "text", text: textContent },
-            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${subjectImageBase64}` } }
+            { type: "image_url", image_url: { url: `data:${processedImageType};base64,${processedImageBase64}` } }
           ]
         }];
 
@@ -3020,6 +3093,7 @@ if (!smi || !ri || !cli || !size || !targetedRI ||
         });
       }
     }
+
 
 
     // ── Pass 1: Credibility filter — eliminate bottom pass1_cutoff_pct by stdppsi ──
@@ -3208,184 +3282,6 @@ app.get("/api/debug-export", (req, res) => {
   }
 });
 
-app.post("/api/compare-subject-comp", async (req, res) => {
-  try {
-    const {
-      subject,
-      comp,
-      temperature: requestedTemp
-    } = req.body;
-
-    const temperature =
-      typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
-
-    console.log(`Starting comparison for comp ID ${comp.recordId}`);
-
-    if (!subject || !comp) {
-      return res
-        .status(400)
-        .json({ error: { message: "Missing subject or comp data" } });
-    }
-
-    // Check for image data with detailed logging
-    if (!subject.imageBase64) {
-      console.error("Missing subject imageBase64");
-      return res
-        .status(400)
-        .json({ error: { message: "Subject must include imageBase64" } });
-    }
-
-    if (!comp.imageBase64) {
-      console.error(`Missing comp imageBase64 for ID ${comp.recordId}`);
-      return res
-        .status(400)
-        .json({ error: { message: "Comp must include imageBase64" } });
-    }
-
-    if (!OPENAI_API_KEY) {
-      return res
-        .status(500)
-        .json({ error: { message: "Missing API Key" } });
-    }
-
-    console.log(`Comparing Subject to Comp ID ${comp.recordId}`);
-
-    // Check image data format
-    if (!subject.imageBase64.match(/^[A-Za-z0-9+/=]+$/)) {
-      console.error("Subject image data is not valid base64");
-      return res.status(400).json({
-        error: { message: "Subject image data is not valid base64" }
-      });
-    }
-
-    if (!comp.imageBase64.match(/^[A-Za-z0-9+/=]+$/)) {
-      console.error(
-        `Comp ID ${comp.recordId} image data is not valid base64`
-      );
-      return res.status(400).json({
-        error: { message: "Comp image data is not valid base64" }
-      });
-    }
-
-    // Build the prompt for ChatGPT
-    const comparisonPrompt = `
-You are an expert fine art evaluator.
-
-Compare the following two artworks (Subject and Comparable) based on six aesthetic criteria.
-
-For each criterion, answer Yes if the Comparable artwork is *Superior* to the Subject; otherwise, answer No.
-
-Criteria (Answer Yes or No for each):
-1. Subject Matter Appeal
-2. Design and Composition Quality
-3. Deployment of Advanced Techniques
-4. Demonstration of Core Elements of Art
-5. Visual Engagement
-6. Emotional Resonance
-
-Respond STRICTLY in the following format:
-
-Criterion 1: Yes or No
-Criterion 2: Yes or No
-Criterion 3: Yes or No
-Criterion 4: Yes or No
-Criterion 5: Yes or No
-Criterion 6: Yes or No
-`;
-
-    // Send request to AI
-    console.log("Sending request to AI for comparison");
-
-    const messages = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: comparisonPrompt },
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:image/jpeg;base64,${subject.imageBase64}`
-            }
-          },
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:image/jpeg;base64,${comp.imageBase64}`
-            }
-          }
-        ]
-      }
-    ];
-
-    const systemContent =
-      "You are a strict fine art evaluator following exact instructions.";
-
-    const chatReply = await callAI(
-      messages,
-      200,
-      systemContent,
-      false,
-      temperature
-    );
-
-    console.log(
-      `Received comparison reply for Comp ID ${comp.recordId}:`,
-      chatReply.substring(0, 200)
-    );
-
-    // Parse results
-    const yesNoResults = chatReply.match(
-      /Criterion\s*\d+:\s*(Yes|No)/gi
-    );
-
-    if (!yesNoResults || yesNoResults.length !== 6) {
-      console.error("Invalid format received from AI comparison");
-      return res.status(500).json({
-        error: { message: "Invalid response format from AI" }
-      });
-    }
-
-    // Define criterion weights
-    const criteriaWeights = [0.2, 0.2, 0.15, 0.1, 0.15, 0.2];
-
-    let totalScore = 0;
-
-    yesNoResults.forEach((line, idx) => {
-      const answer = line.split(":")[1].trim().toLowerCase();
-      if (answer === "yes") {
-        totalScore += criteriaWeights[idx];
-      }
-    });
-
-    // Determine final result
-    const finalResult = totalScore > 0.5 ? "Superior" : "Inferior";
-    console.log(
-      `Comparison result for Comp ID ${comp.recordId}: ${finalResult} (score: ${totalScore})`
-    );
-
-    res.json({
-      totalScore: Math.round(totalScore * 100), // Return as percentage
-      finalResult: finalResult
-    });
-  } catch (error) {
-    console.error(
-      "Error in /api/compare-subject-comp:",
-      error.message
-    );
-    let errorDetails = "Unknown error";
-
-    if (error.response) {
-      errorDetails = JSON.stringify({
-        status: error.response.status,
-        data: error.response.data
-      });
-    } else if (error.message) {
-      errorDetails = error.message;
-    }
-
-    res.status(500).json({ error: { message: errorDetails } });
-  }
-});
 
 
 
@@ -3413,9 +3309,6 @@ app.post("/api/generate-narrative", async (req, res) => {
       });
     }
 
-    if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: "Missing API Key" });
-    }
 
     const temperature =
       typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
@@ -3874,10 +3767,48 @@ app.post("/api/batch-calculate-smi", async (req, res) => {
           })`
         );
 
-        // Read and convert image to base64
+
+
+
+
+
+// Read and convert image to base64
         const imagePath = path.join(imagesDir, filename);
         const imageBuffer = fs.readFileSync(imagePath);
-        const base64Image = imageBuffer.toString("base64");
+
+        // ── Image preprocessing — resize to safe API limits before sending to AI ──
+        let processedImageBase64 = imageBuffer.toString('base64');
+        let processedImageType = 'image/jpeg';
+
+        try {
+          const sharp = require('sharp');
+
+          console.log(`Batch SMI record ${recordId} original size: ${(imageBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+
+          const resized = await sharp(imageBuffer)
+            .resize(1600, 1600, {
+              fit: 'inside',
+              withoutEnlargement: true
+            })
+            .jpeg({ quality: 90 })
+            .toBuffer();
+
+          console.log(`Batch SMI record ${recordId} processed size: ${(resized.length / 1024 / 1024).toFixed(2)} MB`);
+
+          if (resized.length > 4.5 * 1024 * 1024) {
+            const recompressed = await sharp(resized)
+              .jpeg({ quality: 75 })
+              .toBuffer();
+            processedImageBase64 = recompressed.toString('base64');
+          } else {
+            processedImageBase64 = resized.toString('base64');
+          }
+
+          processedImageType = 'image/jpeg';
+
+        } catch (sharpError) {
+          console.warn(`Batch SMI record ${recordId} sharp preprocessing failed — proceeding with original:`, sharpError.message);
+        }
 
         // Prepare the prompt with minimal info since we don't have artist/title
         const finalPrompt = `Title: "Record ${recordId}"\nArtist: "Unknown"\n\n${prompt}`;
@@ -3891,12 +3822,18 @@ app.post("/api/batch-calculate-smi", async (req, res) => {
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:image/jpeg;base64,${base64Image}`
+                  url: `data:${processedImageType};base64,${processedImageBase64}`
                 }
               }
             ]
           }
         ];
+
+
+
+
+
+
 
         const systemContent =
           "You are an expert fine art analyst specializing in evaluating artistic skill mastery. Provide your response in the exact JSON format specified.";
