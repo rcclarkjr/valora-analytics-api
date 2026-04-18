@@ -4183,7 +4183,7 @@ app.post('/api/records/import', async (req, res) => {
             const newRecord = {
                 id:             maxId,
                 isActive:       true,
-                dateAdded:      new Date().toISOString(),
+                dateAdded:      incoming.dateAdded || new Date().toISOString().slice(0, 10),
                 pendingScores:  true,
                 artistName:     incoming.artistName,
                 title:          incoming.title,
