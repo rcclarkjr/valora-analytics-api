@@ -93,14 +93,18 @@ function delay(ms) {
 // ── Parse artwork URLs from a sitemap XML string ──────────────
 // Filters to Painting- URLs only.
 function parseArtworkUrlsFromSitemap(xml) {
-    const urls = [];
-    // Match all <loc> CDATA or plain text values
-    const locRegex = /<loc>[\s]*(?:<!\[CDATA\[)?(https:\/\/www\.saatchiart\.com\/art\/Painting-[^\]<\s]+)(?:\]\]>)?[\s]*<\/loc>/gi;
-    let match;
-    while ((match = locRegex.exec(xml)) !== null) {
-        urls.push(match[1].trim());
+    const entries = [];
+    // Split on <url> blocks and parse each one
+    const urlBlocks = xml.split(/<url>/i).slice(1); // first element is before any <url>
+    for (const block of urlBlocks) {
+        const locMatch = block.match(/<loc>[\s]*(?:<!\[CDATA\[)?(https:\/\/www\.saatchiart\.com\/art\/Painting-[^\]<\s]+)(?:\]\]>)?[\s]*<\/loc>/i);
+        if (!locMatch) continue;
+        const url = locMatch[1].trim();
+        const lastmodMatch = block.match(/<lastmod>([\d-]+)<\/lastmod>/i);
+        const lastmod = lastmodMatch ? lastmodMatch[1].trim() : null;
+        entries.push({ url, lastmod });
     }
-    return urls;
+    return entries;
 }
 
 // ── Extract field from __NEXT_DATA__ JSON ─────────────────────
@@ -276,32 +280,48 @@ async function scrapeArtworkPage(artworkUrl) {
         console.warn('Diagnostic write failed:', diagErr.message);
     }
     // ── END DIAGNOSTIC ────────────────────────────────────────────
-    // The fetcher returns markdown-style text, not raw HTML.
-    // Patterns are matched against the text content.
 
-    // Title — appears as "# TITLE Painting" in markdown H1.
-    // Strip trailing " Painting" (case-insensitive) from the title.
-    const titleMatch = html.match(/^#\s+(.+)$/m);
-    let rawTitle = titleMatch ? titleMatch[1].trim() : 'Missing';
-    rawTitle = rawTitle.replace(/\s+Painting\.?\s*$/i, '').trim();
-    record.title = rawTitle || 'Missing';
+    // ── Fallback: parse raw HTML ───────────────────────────────
+    // All patterns confirmed against actual Saatchi HTML.
 
-    // Artist name — appears as a markdown link immediately after the H1:
-    // [Hildegarde Handsaeme](https://www.saatchiart.com/hildegardehandsaeme "...")
-    // Pattern: markdown link whose URL is a saatchiart.com profile (single path segment)
-    const artistLinkMatch = html.match(/\[([^\]]+)\]\(https:\/\/www\.saatchiart\.com\/([a-z0-9_-]+)(?:\s+"[^"]*")?\)/i);
-    record.artistName = artistLinkMatch ? artistLinkMatch[1].trim() : 'Missing';
+    // Title + Artist — <title> tag is the most reliable single source:
+    // "Collage 3 Painting by Janet Darley | Saatchi Art"
+    const pageTitleMatch = html.match(/<title>([^<]+)<\/title>/i);
+    if (pageTitleMatch) {
+        const pageTitle = pageTitleMatch[1].trim();
+        // Artist: everything after " by " and before " | Saatchi Art"
+        const byMatch = pageTitle.match(/\sby\s+(.+?)\s*\|\s*Saatchi Art/i);
+        record.artistName = byMatch ? byMatch[1].trim() : 'Missing';
+        // Title: everything before " Painting by "
+        const titlePartMatch = pageTitle.match(/^(.+?)\s+Painting\s+by\s+/i);
+        record.title = titlePartMatch ? titlePartMatch[1].trim() : 'Missing';
+    } else {
+        record.artistName = 'Missing';
+        record.title      = 'Missing';
+    }
 
-    // Artist profile URL — from the same match
-    record.artistProfileUrl = artistLinkMatch
-        ? `https://www.saatchiart.com/${artistLinkMatch[2]}`
+    // Artist profile URL — single-path saatchiart.com hrefs, skipping known non-profile paths
+    const NON_PROFILE = /^(paintings|photography|sculpture|drawings|prints|stories|artadvisory|trade|curated-deals|cart|authentication|collections|commissions|giftcard|about-us|terms|privacy|accessibility|art|en-)/;
+    const allHrefs = [...html.matchAll(/href="https:\/\/www\.saatchiart\.com\/([a-z0-9_-]+)"/gi)];
+    const profileHref = allHrefs.find(m => !NON_PROFILE.test(m[1]));
+    record.artistProfileUrl = profileHref
+        ? `https://www.saatchiart.com/${profileHref[1]}`
         : 'Missing';
 
-    // Price — "#### $3,100" or "$ 3,100"
-    const priceMatch = html.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
-    record.price = priceMatch ? priceMatch[1].replace(/,/g, '') : 'Missing';
+    // Price — og meta tag: product:price:amount content="520"
+    const ogPriceMatch = html.match(/product:price:amount[^>]*content="([\d.]+)"/i);
+    if (ogPriceMatch) {
+        record.price = ogPriceMatch[1];
+    } else {
+        const dollarMatch = html.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
+        record.price = dollarMatch ? dollarMatch[1].replace(/,/g, '') : 'Missing';
+    }
 
-    // Dimensions — "23.6 W x 23.6 H x 1.6 D in"
+    // Image URL — og:image meta tag
+    const ogImageMatch = html.match(/og:image[^>]*content="([^"]+)"/i);
+    record.imageUrl = ogImageMatch ? ogImageMatch[1] : 'Missing';
+
+    // Dimensions — "11.8 W x 15.7 H x 0.4 D in"
     const dimMatch = html.match(/([\d.]+)\s*W\s*x\s*([\d.]+)\s*H(?:\s*x\s*([\d.]+)\s*D)?/i);
     if (dimMatch) {
         record.width  = dimMatch[1];
@@ -313,34 +333,23 @@ async function scrapeArtworkPage(artworkUrl) {
         record.depth  = 'Missing';
     }
 
-    // Medium — "Painting, Acrylic on Canvas" appears after "Mediums:" label.
-    // We want the text after the last "Mediums:" occurrence (the plain-text one,
-    // not the linked one). Pattern: "Mediums:\n\nPainting, Acrylic on Canvas"
-    const mediumMatches = [...html.matchAll(/Mediums?:\s*\n+(Painting,\s*[^\n]+)/gi)];
-    const mediumRaw = mediumMatches.length > 0
-        ? mediumMatches[mediumMatches.length - 1][1].trim()
-        : null;
-    record.medium = mapMedium(mediumRaw);
+    // Medium — "Painting, Gouache on Glass" confirmed present in HTML
+    const mediumRawMatch = html.match(/Painting,\s*([A-Za-z][^<"]{2,60}?)(?:<|"|\.(?:\s|$))/);
+    record.medium = mapMedium(mediumRawMatch ? mediumRawMatch[1].trim() : null);
 
-    // Framed — "Not Framed" → N, anything else with "Framed" → Y
-    const frameMatch = html.match(/Frame:\s*\n+([^\n]+)/i);
-    const frameText  = frameMatch ? frameMatch[1].trim() : '';
-    if (/not\s+framed/i.test(frameText)) {
+    // Framed — "Not Framed" confirmed present in HTML
+    if (/Not\s+Framed/i.test(html)) {
         record.framed = 'N';
-    } else if (/framed/i.test(frameText)) {
+    } else if (/Framed/i.test(html)) {
         record.framed = 'Y';
     } else {
         record.framed = 'Missing';
     }
 
-    // Sold — look for "sold out" badge text
-    record.lorS = /sold\s*out/i.test(html) ? 'S' : 'L';
+    // Sold status
+    record.lorS = /sold[\s-]*out/i.test(html) ? 'S' : 'L';
 
-    // Image URL — saatchiart CDN image
-    const imgMatch = html.match(/https:\/\/images\.saatchiart\.com\/[^\s)]+\.jpg/i);
-    record.imageUrl = imgMatch ? imgMatch[0] : 'Missing';
-
-    // shortDescription — always "Painting" for our filter, not worth storing
+    // shortDescription — always Painting for our filter
     record.shortDescription = 'Painting';
 
     return record;
@@ -351,19 +360,19 @@ async function main() {
     writeProgress('starting', 0, LIMIT, 'Initializing scraper...');
     console.log(`Starting Saatchi scraper — limit: ${LIMIT}`);
 
-    // Step 1: Collect artwork URLs from sitemaps until we have enough
+    // Step 1: Collect artwork entries from sitemaps until we have enough
     writeProgress('collecting', 0, LIMIT, 'Reading sitemaps to collect artwork URLs...');
-    const artworkUrls = [];
+    const artworkEntries = []; // each entry: { url, lastmod }
     let sitemapIndex = 1;
 
-    while (artworkUrls.length < LIMIT) {
+    while (artworkEntries.length < LIMIT) {
         const sitemapUrl = `https://www.saatchiart.com/sitemap-artworks-${sitemapIndex}.xml`;
         console.log(`Fetching sitemap ${sitemapIndex}...`);
         try {
             const xml = await fetchUrl(sitemapUrl);
             const found = parseArtworkUrlsFromSitemap(xml);
             console.log(`  Sitemap ${sitemapIndex}: ${found.length} painting URLs`);
-            artworkUrls.push(...found);
+            artworkEntries.push(...found);
             await delay(1000); // polite delay between sitemaps
         } catch (err) {
             console.warn(`  Sitemap ${sitemapIndex} failed: ${err.message} — stopping sitemap collection`);
@@ -372,25 +381,27 @@ async function main() {
         sitemapIndex++;
     }
 
-    const urlsToProcess = artworkUrls.slice(0, LIMIT);
-    console.log(`Collected ${urlsToProcess.length} artwork URLs to scrape`);
+    const entriesToProcess = artworkEntries.slice(0, LIMIT);
+    console.log(`Collected ${entriesToProcess.length} artwork URLs to scrape`);
 
-    if (urlsToProcess.length === 0) {
+    if (entriesToProcess.length === 0) {
         writeProgress('error', 0, LIMIT, 'No artwork URLs found in sitemaps.');
         process.exit(1);
     }
 
     // Step 2: Scrape each artwork page
     const results = [];
-    for (let i = 0; i < urlsToProcess.length; i++) {
-        const url = urlsToProcess[i];
+    for (let i = 0; i < entriesToProcess.length; i++) {
+        const { url, lastmod } = entriesToProcess[i];
         const current = i + 1;
-        writeProgress('scraping', current, urlsToProcess.length,
-            `Scraping artwork ${current} of ${urlsToProcess.length}...`);
-        console.log(`[${current}/${urlsToProcess.length}] ${url}`);
+        writeProgress('scraping', current, entriesToProcess.length,
+            `Scraping artwork ${current} of ${entriesToProcess.length}...`);
+        console.log(`[${current}/${entriesToProcess.length}] ${url}`);
 
         try {
             const record = await scrapeArtworkPage(url);
+            // Store lastmod as dateAdded — reflects Saatchi's last modification date
+            record.dateAdded = lastmod || new Date().toISOString().slice(0, 10);
             results.push(record);
         } catch (err) {
             console.error(`  FAILED: ${err.message}`);
@@ -398,12 +409,13 @@ async function main() {
                 locationURL:   url,
                 website:       'Saatchi Art',
                 scrapeError:   err.message,
-                pendingScores: true
+                pendingScores: true,
+                dateAdded:     lastmod || new Date().toISOString().slice(0, 10)
             });
         }
 
         // Polite delay between artwork pages — 1.5 seconds
-        if (i < urlsToProcess.length - 1) await delay(1500);
+        if (i < entriesToProcess.length - 1) await delay(1500);
     }
 
     // Step 3: Write staging file
