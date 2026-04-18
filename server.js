@@ -9,8 +9,9 @@ const mime = require("mime-types");
 const sharp = require("sharp");
 const archiver = require("archiver");
 const unzipper = require("unzipper");
-
-
+const { spawn } = require('child_process');
+const STAGING_PATH  = path.join(__dirname, 'scraper_output', 'saatchi_staging.json');
+const PROGRESS_PATH = path.join(__dirname, 'scraper_output', 'saatchi_progress.json');
 
 // Used by /analyze-art endpoint to validate AI-returned study factors
 const VALID_FACTOR_NAMES = [
@@ -3969,6 +3970,302 @@ app.post("/api/batch-calculate-smi", async (req, res) => {
     });
   }
 });
+
+
+
+
+
+
+
+
+
+// =============================================================
+// SERVER.JS ADDITIONS — Paste these three endpoints into
+// server.js after your existing routes.
+// Also add at the top of server.js with other requires:
+//   const { spawn } = require('child_process');
+// =============================================================
+
+
+
+// Active scrape job tracker (in-memory, one job at a time)
+let activeScrapeJob = null;
+
+
+// ── POST /api/scrape/start ────────────────────────────────────
+// Starts the scraper as a child process.
+// Body: { limit: 25 }
+// Returns: { jobId, status: 'started' }
+app.post('/api/scrape/start', (req, res) => {
+    const limit = parseInt(req.body.limit);
+    if (isNaN(limit) || limit < 1) {
+        return res.status(400).json({ error: 'limit must be a positive integer.' });
+    }
+
+    if (activeScrapeJob && activeScrapeJob.status === 'running') {
+        return res.status(409).json({ error: 'A scrape job is already running. Wait for it to complete.' });
+    }
+
+    const jobId   = Date.now().toString();
+    const scraper = path.join(__dirname, 'scraper_saatchi.js');
+
+    // Clear old progress file before starting
+    const outputDir = path.join(__dirname, 'scraper_output');
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+    fs.writeFileSync(PROGRESS_PATH, JSON.stringify({
+        status: 'starting', current: 0, total: limit, message: 'Launching scraper...'
+    }));
+
+    const child = spawn('node', [scraper, '--limit', String(limit)], {
+        detached: false,
+        stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    activeScrapeJob = { jobId, status: 'running', pid: child.pid, limit };
+
+    child.stdout.on('data', d => console.log('[scraper]', d.toString().trim()));
+    child.stderr.on('data', d => console.error('[scraper ERR]', d.toString().trim()));
+
+    child.on('close', (code) => {
+        if (activeScrapeJob && activeScrapeJob.jobId === jobId) {
+            activeScrapeJob.status = code === 0 ? 'complete' : 'error';
+        }
+        console.log(`Scraper process exited with code ${code}`);
+    });
+
+    res.json({ jobId, status: 'started', limit });
+});
+
+
+// ── GET /api/scrape/status/:jobId ─────────────────────────────
+// Polls scrape progress. UI calls this every 5 seconds.
+// Returns the contents of saatchi_progress.json.
+app.get('/api/scrape/status/:jobId', (req, res) => {
+    if (!activeScrapeJob || activeScrapeJob.jobId !== req.params.jobId) {
+        return res.status(404).json({ error: 'Job not found.' });
+    }
+
+    if (!fs.existsSync(PROGRESS_PATH)) {
+        return res.json({ status: 'starting', current: 0, total: activeScrapeJob.limit, message: 'Starting...' });
+    }
+
+    try {
+        const progress = JSON.parse(fs.readFileSync(PROGRESS_PATH, 'utf8'));
+        res.json(progress);
+    } catch {
+        res.json({ status: 'running', current: 0, total: activeScrapeJob.limit, message: 'Working...' });
+    }
+});
+
+
+// ── POST /api/records/import ──────────────────────────────────
+// Imports reviewed staging records into the database.
+// Body: { records: [ ...array of reviewed staging records... ] }
+//
+// Duplicate logic:
+//   1. Primary:   exact locationURL match → update price, lorS, framed only
+//   2. Secondary: normalized artistName + title match → flag, skip, require manual review
+//   3. No match:  insert as new record with pendingScores: true
+//
+// calculateDerivedFields is NOT called here.
+// It will be called during the subsequent Batch SMI/RI run.
+// =============================================================
+app.post('/api/records/import', async (req, res) => {
+    try {
+        if (!Array.isArray(req.body.records) || req.body.records.length === 0) {
+            return res.status(400).json({ error: 'records array is required and must not be empty.' });
+        }
+
+        const data = readDatabase();
+
+        const report = {
+            imported:           0,
+            updated:            [],   // { id, artistName, title, changes: { field: { from, to } } }
+            probableDuplicates: [],   // { artistName, title, locationURL, reason }
+            errors:             [],   // { locationURL, error }
+            skipped:            0
+        };
+
+        // Pre-build lookup maps from existing records
+        const byLocationUrl = new Map();
+        const byNameTitle   = new Map();
+
+        for (const r of data.records) {
+            if (r.locationURL) {
+                byLocationUrl.set(r.locationURL.trim().toLowerCase(), r);
+            }
+            const nameTitle = normalizeNameTitle(r.artistName, r.title);
+            if (nameTitle) byNameTitle.set(nameTitle, r);
+        }
+
+        // Compute next available ID
+        let maxId = data.records.length > 0
+            ? data.records.reduce((max, r) => {
+                const id = Number(r.id);
+                return isNaN(id) ? max : Math.max(max, id);
+              }, 0)
+            : 0;
+
+        for (const incoming of req.body.records) {
+            // Skip records that failed to scrape entirely
+            if (incoming.scrapeError) {
+                report.errors.push({
+                    locationURL: incoming.locationURL || 'Missing',
+                    error: incoming.scrapeError
+                });
+                report.skipped++;
+                continue;
+            }
+
+            // Validate minimum required fields
+            const missing = [];
+            if (!incoming.artistName || incoming.artistName === 'Missing') missing.push('artistName');
+            if (!incoming.title      || incoming.title      === 'Missing') missing.push('title');
+            if (!incoming.height     || incoming.height     === 'Missing') missing.push('height');
+            if (!incoming.width      || incoming.width      === 'Missing') missing.push('width');
+            if (!incoming.price      || incoming.price      === 'Missing') missing.push('price');
+
+            if (missing.length > 0) {
+                report.errors.push({
+                    locationURL: incoming.locationURL || 'Missing',
+                    error: `Missing required fields: ${missing.join(', ')}`
+                });
+                report.skipped++;
+                continue;
+            }
+
+            const incomingKey = incoming.locationURL
+                ? incoming.locationURL.trim().toLowerCase()
+                : null;
+
+            // ── Primary duplicate check: locationURL exact match ──
+            if (incomingKey && byLocationUrl.has(incomingKey)) {
+                const existing = byLocationUrl.get(incomingKey);
+                const changes  = {};
+
+                const updateableFields = ['price', 'lorS', 'framed'];
+                for (const field of updateableFields) {
+                    if (incoming[field] !== undefined &&
+                        incoming[field] !== 'Missing' &&
+                        String(incoming[field]) !== String(existing[field])) {
+                        changes[field] = { from: existing[field], to: incoming[field] };
+                        existing[field] = incoming[field];
+                    }
+                }
+
+                if (Object.keys(changes).length > 0) {
+                    report.updated.push({
+                        id:         existing.id,
+                        artistName: existing.artistName,
+                        title:      existing.title,
+                        changes
+                    });
+                }
+                // Whether or not fields changed, it's a duplicate — do not insert
+                continue;
+            }
+
+            // ── Secondary duplicate check: normalized name + title ──
+            const incomingNameTitle = normalizeNameTitle(incoming.artistName, incoming.title);
+            if (incomingNameTitle && byNameTitle.has(incomingNameTitle)) {
+                report.probableDuplicates.push({
+                    artistName:  incoming.artistName,
+                    title:       incoming.title,
+                    locationURL: incoming.locationURL || 'Missing',
+                    reason:      'Artist name + title match existing record (URL did not match)'
+                });
+                report.skipped++;
+                continue;
+            }
+
+            // ── No duplicate — insert as new record ───────────────
+            maxId++;
+            const newRecord = {
+                id:             maxId,
+                isActive:       true,
+                dateAdded:      new Date().toISOString(),
+                pendingScores:  true,
+                artistName:     incoming.artistName,
+                title:          incoming.title,
+                height:         incoming.height,
+                width:          incoming.width,
+                depth:          incoming.depth  || 'Missing',
+                price:          incoming.price,
+                medium:         incoming.medium  || 'Missing',
+                framed:         incoming.framed  || 'Missing',
+                lorS:           incoming.lorS    || 'L',
+                shortDescription: incoming.shortDescription || 'Missing',
+                locationURL:    incoming.locationURL || 'Missing',
+                website:        'Saatchi Art',
+                imageUrl:       incoming.imageUrl || 'Missing',
+                artistProfileUrl: incoming.artistProfileUrl || 'Missing',
+                // Score fields — all null, filled in during Batch SMI/RI
+                smi_subject:    null,
+                smi_render:     null,
+                cli:            null,
+                ri:             null,
+                integer:        null,
+                gate1_score:    null,
+                gate2_score:    null,
+                smi:            null,
+                ssi:            null,
+                lssi:           null,
+                aop:            null,
+                aoppsi:         null,
+                appsi:          null,
+                medium_adj_ppsi: null,
+                cli_adj_ppsi:   null,
+                smi_adj_ppsi:   null,
+                stdppsi:        null
+            };
+
+            data.records.push(newRecord);
+
+            // Update lookup maps so duplicates within this same batch are caught
+            if (incoming.locationURL) {
+                byLocationUrl.set(incoming.locationURL.trim().toLowerCase(), newRecord);
+            }
+            if (incomingNameTitle) {
+                byNameTitle.set(incomingNameTitle, newRecord);
+            }
+
+            report.imported++;
+        }
+
+        writeDatabase(data);
+
+        res.json({
+            success: true,
+            report
+        });
+
+    } catch (error) {
+        console.error('Import error:', error.message, error.stack);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+// ── Normalize artist last name + title for secondary dup check ─
+function normalizeNameTitle(artistName, title) {
+    if (!artistName || !title) return null;
+    // Use last word of artistName as last name approximation
+    const parts    = artistName.trim().split(/\s+/);
+    const lastName = parts[parts.length - 1].toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normTitle = title.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!lastName || !normTitle) return null;
+    return `${lastName}::${normTitle}`;
+}
+
+
+
+
+
+
+
+
+
+
 
 // Helper function to trigger batch processing (optional - for testing)
 app.get("/api/start-batch-smi", (req, res) => {
