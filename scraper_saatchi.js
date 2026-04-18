@@ -185,8 +185,9 @@ async function scrapeArtworkPage(artworkUrl) {
             const artwork = props?.artwork || props?.artworkData || props?.data?.artwork || null;
 
             if (artwork) {
-                // Title
-                record.title = artwork.title || artwork.name || 'Missing';
+                // Title — strip trailing " Painting" appended by Saatchi
+                const rawTitle = (artwork.title || artwork.name || '').replace(/\s+Painting\.?\s*$/i, '').trim();
+                record.title = rawTitle || 'Missing';
 
                 // Artist
                 const artist = artwork.artist || artwork.artistData || {};
@@ -256,21 +257,33 @@ async function scrapeArtworkPage(artworkUrl) {
         }
     }
 
-    // ── Fallback: parse HTML directly ─────────────────────────
-    // Title — H1
-    const titleMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
-    record.title = titleMatch ? titleMatch[1].trim() : 'Missing';
+    // ── Fallback: parse rendered markdown/text content ────────
+    // The fetcher returns markdown-style text, not raw HTML.
+    // Patterns are matched against the text content.
 
-    // Artist name — look for common patterns
-    const artistMatch = html.match(/itemprop="name"[^>]*>([^<]+)<\/[a-z]+>/i) ||
-                        html.match(/class="[^"]*artist[^"]*name[^"]*"[^>]*>([^<]+)<\/[a-z]+>/i);
-    record.artistName = artistMatch ? artistMatch[1].trim() : 'Missing';
+    // Title — appears as "# TITLE Painting" in markdown H1.
+    // Strip trailing " Painting" (case-insensitive) from the title.
+    const titleMatch = html.match(/^#\s+(.+)$/m);
+    let rawTitle = titleMatch ? titleMatch[1].trim() : 'Missing';
+    rawTitle = rawTitle.replace(/\s+Painting\.?\s*$/i, '').trim();
+    record.title = rawTitle || 'Missing';
 
-    // Price — look for $ amount
+    // Artist name — appears as a markdown link immediately after the H1:
+    // [Hildegarde Handsaeme](https://www.saatchiart.com/hildegardehandsaeme "...")
+    // Pattern: markdown link whose URL is a saatchiart.com profile (single path segment)
+    const artistLinkMatch = html.match(/\[([^\]]+)\]\(https:\/\/www\.saatchiart\.com\/([a-z0-9_-]+)(?:\s+"[^"]*")?\)/i);
+    record.artistName = artistLinkMatch ? artistLinkMatch[1].trim() : 'Missing';
+
+    // Artist profile URL — from the same match
+    record.artistProfileUrl = artistLinkMatch
+        ? `https://www.saatchiart.com/${artistLinkMatch[2]}`
+        : 'Missing';
+
+    // Price — "#### $3,100" or "$ 3,100"
     const priceMatch = html.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
     record.price = priceMatch ? priceMatch[1].replace(/,/g, '') : 'Missing';
 
-    // Dimensions — look for "W x H" pattern in inches
+    // Dimensions — "23.6 W x 23.6 H x 1.6 D in"
     const dimMatch = html.match(/([\d.]+)\s*W\s*x\s*([\d.]+)\s*H(?:\s*x\s*([\d.]+)\s*D)?/i);
     if (dimMatch) {
         record.width  = dimMatch[1];
@@ -282,30 +295,35 @@ async function scrapeArtworkPage(artworkUrl) {
         record.depth  = 'Missing';
     }
 
-    // Medium
-    const mediumMatch = html.match(/Materials?[^:]*:\s*<[^>]+>([^<]+)</i) ||
-                        html.match(/Medium[^:]*:\s*<[^>]+>([^<]+)</i);
-    record.medium = mapMedium(mediumMatch ? mediumMatch[1] : null);
+    // Medium — "Painting, Acrylic on Canvas" appears after "Mediums:" label.
+    // We want the text after the last "Mediums:" occurrence (the plain-text one,
+    // not the linked one). Pattern: "Mediums:\n\nPainting, Acrylic on Canvas"
+    const mediumMatches = [...html.matchAll(/Mediums?:\s*\n+(Painting,\s*[^\n]+)/gi)];
+    const mediumRaw = mediumMatches.length > 0
+        ? mediumMatches[mediumMatches.length - 1][1].trim()
+        : null;
+    record.medium = mapMedium(mediumRaw);
 
-    // Category from breadcrumb
-    const breadcrumbMatch = html.match(/breadcrumb[^>]*>[\s\S]*?Painting[^<]*<\/[a-z]+>/i);
-    record.shortDescription = breadcrumbMatch ? 'Painting' : 'Missing';
+    // Framed — "Not Framed" → N, anything else with "Framed" → Y
+    const frameMatch = html.match(/Frame:\s*\n+([^\n]+)/i);
+    const frameText  = frameMatch ? frameMatch[1].trim() : '';
+    if (/not\s+framed/i.test(frameText)) {
+        record.framed = 'N';
+    } else if (/framed/i.test(frameText)) {
+        record.framed = 'Y';
+    } else {
+        record.framed = 'Missing';
+    }
 
-    // Framed
-    record.framed = /framed/i.test(html) ? 'Y' : 'Missing';
+    // Sold — look for "sold out" badge text
+    record.lorS = /sold\s*out/i.test(html) ? 'S' : 'L';
 
-    // Sold
-    record.lorS = /sold\s*out|is\s*sold/i.test(html) ? 'S' : 'L';
-
-    // Image URL — look for images.saatchiart.com
-    const imgMatch = html.match(/https:\/\/images\.saatchiart\.com\/[^\s"']+\.jpg/i);
+    // Image URL — saatchiart CDN image
+    const imgMatch = html.match(/https:\/\/images\.saatchiart\.com\/[^\s)]+\.jpg/i);
     record.imageUrl = imgMatch ? imgMatch[0] : 'Missing';
 
-    // Artist profile URL
-    const profileMatch = html.match(/href="(\/[a-z0-9_-]+\/[a-z0-9_-]+)"[^>]*class="[^"]*artist/i);
-    record.artistProfileUrl = profileMatch
-        ? 'https://www.saatchiart.com' + profileMatch[1]
-        : 'Missing';
+    // shortDescription — always "Painting" for our filter, not worth storing
+    record.shortDescription = 'Painting';
 
     return record;
 }
