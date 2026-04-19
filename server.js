@@ -4002,17 +4002,17 @@ app.post("/api/batch-calculate-smi", async (req, res) => {
 
 
 
-
-
-
 // =============================================================
-// SERVER.JS ADDITIONS — Paste these three endpoints into
-// server.js after your existing routes.
+// SERVER.JS ADDITIONS — Paste these endpoints into server.js
+// after your existing routes.
+//
 // Also add at the top of server.js with other requires:
 //   const { spawn } = require('child_process');
+//
+// Also add after the requires:
+//   const STAGING_PATH  = path.join(__dirname, 'scraper_output', 'saatchi_staging.json');
+//   const PROGRESS_PATH = path.join(__dirname, 'scraper_output', 'saatchi_progress.json');
 // =============================================================
-
-
 
 // Active scrape job tracker (in-memory, one job at a time)
 let activeScrapeJob = null;
@@ -4020,20 +4020,17 @@ let activeScrapeJob = null;
 
 // ── POST /api/scrape/start ────────────────────────────────────
 // Starts the scraper as a child process.
-// Body: { limit: 25 }
+// Body: { limit: 25, skip: 0 }
 // Returns: { jobId, status: 'started' }
 app.post('/api/scrape/start', (req, res) => {
     const limit = parseInt(req.body.limit);
-
-
-if (isNaN(limit) || limit < 1) {
-    return res.status(400).json({ error: 'limit must be a positive integer.' });
-}
-const skip = req.body.skip !== undefined ? parseInt(req.body.skip) : 0;
-if (isNaN(skip) || skip < 0) {
-    return res.status(400).json({ error: 'skip must be a non-negative integer.' });
-}
-
+    if (isNaN(limit) || limit < 1) {
+        return res.status(400).json({ error: 'limit must be a positive integer.' });
+    }
+    const skip = req.body.skip !== undefined ? parseInt(req.body.skip) : 0;
+    if (isNaN(skip) || skip < 0) {
+        return res.status(400).json({ error: 'skip must be a non-negative integer.' });
+    }
 
     if (activeScrapeJob && activeScrapeJob.status === 'running') {
         return res.status(409).json({ error: 'A scrape job is already running. Wait for it to complete.' });
@@ -4049,12 +4046,12 @@ if (isNaN(skip) || skip < 0) {
         status: 'starting', current: 0, total: limit, message: 'Launching scraper...'
     }));
 
-	const child = spawn('node', [scraper, '--limit', String(limit), '--skip', String(skip)], {
+    const child = spawn('node', [scraper, '--limit', String(limit), '--skip', String(skip)], {
         detached: false,
         stdio: ['ignore', 'pipe', 'pipe']
     });
 
-	activeScrapeJob = { jobId, status: 'running', pid: child.pid, limit, skip };
+    activeScrapeJob = { jobId, status: 'running', pid: child.pid, limit, skip };
 
     child.stdout.on('data', d => console.log('[scraper]', d.toString().trim()));
     child.stderr.on('data', d => console.error('[scraper ERR]', d.toString().trim()));
@@ -4066,13 +4063,12 @@ if (isNaN(skip) || skip < 0) {
         console.log(`Scraper process exited with code ${code}`);
     });
 
-    res.json({ jobId, status: 'started', limit });
+    res.json({ jobId, status: 'started', limit, skip });
 });
 
 
 // ── GET /api/scrape/status/:jobId ─────────────────────────────
 // Polls scrape progress. UI calls this every 5 seconds.
-// Returns the contents of saatchi_progress.json.
 app.get('/api/scrape/status/:jobId', (req, res) => {
     if (!activeScrapeJob || activeScrapeJob.jobId !== req.params.jobId) {
         return res.status(404).json({ error: 'Job not found.' });
@@ -4111,14 +4107,14 @@ app.post('/api/records/import', async (req, res) => {
 
         const data = readDatabase();
 
-	const report = {
-		imported:           0,
-		updated:            [],
-		unchanged:          0,
-		probableDuplicates: [],
-		errors:             [],
-		skipped:            0
-	};
+        const report = {
+            imported:           0,
+            updated:            [],   // { id, artistName, title, changes: { field: { from, to } } }
+            unchanged:          0,    // duplicates found but no fields changed
+            probableDuplicates: [],   // { artistName, title, locationURL, reason }
+            errors:             [],   // { locationURL, error }
+            skipped:            0
+        };
 
         // Pre-build lookup maps from existing records
         const byLocationUrl = new Map();
@@ -4187,7 +4183,7 @@ app.post('/api/records/import', async (req, res) => {
                     }
                 }
 
-			if (Object.keys(changes).length > 0) {
+                if (Object.keys(changes).length > 0) {
                     report.updated.push({
                         id:         existing.id,
                         artistName: existing.artistName,
@@ -4235,6 +4231,7 @@ app.post('/api/records/import', async (req, res) => {
                 website:          'Saatchi Art',
                 imageUrl:         incoming.imageUrl         || 'Missing',
                 artistProfileUrl: incoming.artistProfileUrl || 'Missing',
+                artistBio:        incoming.artistBio        || null,
                 // Score fields — all null, filled in during Batch SMI/RI
                 smi_subject:      null,
                 smi_render:       null,
@@ -4307,9 +4304,8 @@ app.post('/api/records/import', async (req, res) => {
 // ── Normalize artist last name + title for secondary dup check ─
 function normalizeNameTitle(artistName, title) {
     if (!artistName || !title) return null;
-    // Use last word of artistName as last name approximation
-    const parts    = artistName.trim().split(/\s+/);
-    const lastName = parts[parts.length - 1].toLowerCase().replace(/[^a-z0-9]/g, '');
+    const parts     = artistName.trim().split(/\s+/);
+    const lastName  = parts[parts.length - 1].toLowerCase().replace(/[^a-z0-9]/g, '');
     const normTitle = title.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     if (!lastName || !normTitle) return null;
     return `${lastName}::${normTitle}`;
@@ -4318,21 +4314,52 @@ function normalizeNameTitle(artistName, title) {
 
 
 
+
 // =============================================================
 // POST /api/batch/process-record
-// Server-side batch processing for SMI and RI.
+// Server-side batch processing for SMI, RI, and CLI.
 // Image is read directly from disk — never sent through the browser.
 // Prompts are read directly from disk — no HTTP round-trip.
 //
-// Body: { recordId: 230, mode: 'smi' | 'ri' | 'smi-ri' }
+// Body: { recordId: 230, mode: { smi: true, ri: true, cli: true } }
 //
 // Returns:
 // {
 //   recordId,
-//   smi, smi_subject, smi_render, integer, gate1_score, gate2_score,  // if mode includes smi
-//   ri                                                                  // if mode includes ri
+//   smi, smi_subject, smi_render, integer, gate1_score, gate2_score,  // if mode.smi
+//   ri,                                                                 // if mode.ri
+//   cli                                                                 // if mode.cli and artistBio present
 // }
 // =============================================================
+
+// ── CLI calculation — pure math, no AI needed for final score ─
+function calculateCLI(questionnaire) {
+    const weights = {
+        education:     0.10,
+        exhibitions:   0.25,
+        awards:        0.15,
+        commissions:   0.10,
+        collections:   0.15,
+        publications:  0.15,
+        institutional: 0.10
+    };
+    const scores = { high: 5.0, mid: 3.0, none: 1.0 };
+
+    let totalScore  = 0;
+    let totalWeight = 0;
+
+    for (const [category, weight] of Object.entries(weights)) {
+        if (questionnaire[category]) {
+            const score = scores[questionnaire[category]] || 1.0;
+            totalScore  += score * weight;
+            totalWeight += weight;
+        }
+    }
+
+    const cli = totalWeight > 0 ? totalScore / totalWeight : 1.0;
+    return Math.round(cli * 100) / 100;
+}
+
 app.post('/api/batch/process-record', async (req, res) => {
     try {
         const { recordId, mode } = req.body;
@@ -4340,8 +4367,13 @@ app.post('/api/batch/process-record', async (req, res) => {
         if (!recordId || isNaN(parseInt(recordId))) {
             return res.status(400).json({ error: 'recordId is required and must be a valid integer.' });
         }
-        if (!mode || !['smi', 'ri', 'smi-ri'].includes(mode)) {
-            return res.status(400).json({ error: 'mode must be smi, ri, or smi-ri.' });
+
+        // mode is now an object: { smi: bool, ri: bool, cli: bool }
+        if (!mode || typeof mode !== 'object') {
+            return res.status(400).json({ error: 'mode must be an object with smi, ri, cli boolean properties.' });
+        }
+        if (!mode.smi && !mode.ri && !mode.cli) {
+            return res.status(400).json({ error: 'At least one of smi, ri, cli must be true in mode.' });
         }
 
         const id = parseInt(recordId);
@@ -4355,49 +4387,45 @@ app.post('/api/batch/process-record', async (req, res) => {
 
         if (!record.title)      throw new Error(`Record ${id} is missing title`);
         if (!record.artistName) throw new Error(`Record ${id} is missing artistName`);
-        if (!record.medium && (mode === 'smi' || mode === 'smi-ri')) {
+        if (mode.smi && !record.medium) {
             throw new Error(`Record ${id} is missing medium — required for SMI`);
-        }
-
-        // ── Load image from disk ──────────────────────────────
-        const imagePath = path.join('/mnt/data/images', `record_${id}.jpg`);
-        if (!fs.existsSync(imagePath)) {
-            throw new Error(`Record ${id}: image not found at ${imagePath}. Cannot process without an image.`);
-        }
-
-        const rawImageBuffer = fs.readFileSync(imagePath);
-
-        // ── Preprocess image with sharp (shared by SMI and RI) ─
-        let processedImageBase64;
-        try {
-            const resized = await sharp(rawImageBuffer)
-                .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
-                .jpeg({ quality: 90 })
-                .toBuffer();
-
-            if (resized.length > 4.5 * 1024 * 1024) {
-                const recompressed = await sharp(resized).jpeg({ quality: 75 }).toBuffer();
-                processedImageBase64 = recompressed.toString('base64');
-            } else {
-                processedImageBase64 = resized.toString('base64');
-            }
-            console.log(`Record ${id}: image preprocessed (${(processedImageBase64.length / 1024).toFixed(0)}kb base64)`);
-        } catch (sharpError) {
-            console.warn(`Record ${id}: sharp preprocessing failed — using original:`, sharpError.message);
-            processedImageBase64 = rawImageBuffer.toString('base64');
         }
 
         const result = { recordId: id };
 
+        // ── Load and preprocess image (needed for SMI and RI) ─
+        let processedImageBase64 = null;
+        if (mode.smi || mode.ri) {
+            const imagePath = path.join('/mnt/data/images', `record_${id}.jpg`);
+            if (!fs.existsSync(imagePath)) {
+                throw new Error(`Record ${id}: image not found at ${imagePath}. Cannot process SMI/RI without an image.`);
+            }
+
+            const rawImageBuffer = fs.readFileSync(imagePath);
+
+            try {
+                const resized = await sharp(rawImageBuffer)
+                    .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+                    .jpeg({ quality: 90 })
+                    .toBuffer();
+
+                processedImageBase64 = (resized.length > 4.5 * 1024 * 1024)
+                    ? (await sharp(resized).jpeg({ quality: 75 }).toBuffer()).toString('base64')
+                    : resized.toString('base64');
+
+                console.log(`Record ${id}: image preprocessed (${(processedImageBase64.length / 1024).toFixed(0)}kb base64)`);
+            } catch (sharpError) {
+                console.warn(`Record ${id}: sharp preprocessing failed — using original:`, sharpError.message);
+                processedImageBase64 = rawImageBuffer.toString('base64');
+            }
+        }
+
         // ── SMI ───────────────────────────────────────────────
-        if (mode === 'smi' || mode === 'smi-ri') {
+        if (mode.smi) {
             console.log(`Record ${id}: running SMI...`);
 
-            // Read prompt directly from disk
             const smiPromptPath = path.join(__dirname, 'public', 'prompts', 'SMI_prompt.txt');
-            if (!fs.existsSync(smiPromptPath)) {
-                throw new Error('SMI_prompt.txt not found on disk.');
-            }
+            if (!fs.existsSync(smiPromptPath)) throw new Error('SMI_prompt.txt not found on disk.');
             const smiPromptRaw = fs.readFileSync(smiPromptPath, 'utf8');
 
             const fullSmiPrompt = `Medium: ${record.medium}
@@ -4431,7 +4459,6 @@ CRITICAL EVALUATION RULES:
             }
 
             const { integer, gate1_score, gate2_score, subject_scores, rendering_scores } = smiAiResponse;
-
             const integerVal = parseInt(integer);
             if (isNaN(integerVal) || integerVal < 1 || integerVal > 5) {
                 throw new Error(`Record ${id}: SMI returned invalid integer: ${integer}`);
@@ -4448,7 +4475,6 @@ CRITICAL EVALUATION RULES:
                 if (!subject_scores || !rendering_scores) {
                     throw new Error(`Record ${id}: SMI response missing pillar scores`);
                 }
-
                 const coefficients = data.metadata.coefficients || {};
                 let smiResult;
                 try {
@@ -4456,7 +4482,6 @@ CRITICAL EVALUATION RULES:
                 } catch (smiError) {
                     throw new Error(`Record ${id}: SMI calculation failed — ${smiError.message}`);
                 }
-
                 result.smi         = smiResult.smi;
                 result.smi_subject = smiResult.smi_subject;
                 result.smi_render  = smiResult.smi_render;
@@ -4464,19 +4489,15 @@ CRITICAL EVALUATION RULES:
                 result.gate1_score = (integerVal === 3 || integerVal === 4) ? parseInt(gate1_score) : 0;
                 result.gate2_score = (integerVal === 3 || integerVal === 4) ? parseInt(gate2_score) : 0;
             }
-
             console.log(`Record ${id}: SMI=${result.smi}, integer=${result.integer}`);
         }
 
         // ── RI ────────────────────────────────────────────────
-        if (mode === 'ri' || mode === 'smi-ri') {
+        if (mode.ri) {
             console.log(`Record ${id}: running RI...`);
 
-            // Read prompt directly from disk
             const riPromptPath = path.join(__dirname, 'public', 'prompts', 'RI_prompt.txt');
-            if (!fs.existsSync(riPromptPath)) {
-                throw new Error('RI_prompt.txt not found on disk.');
-            }
+            if (!fs.existsSync(riPromptPath)) throw new Error('RI_prompt.txt not found on disk.');
             const riPrompt = fs.readFileSync(riPromptPath, 'utf8');
 
             const riSystemContent = 'You are an expert fine art analyst specializing in evaluating representational accuracy. Respond with ONLY valid JSON.';
@@ -4498,17 +4519,57 @@ CRITICAL EVALUATION RULES:
                 throw new Error(`Record ${id}: RI AI call failed — ${err.message}`);
             }
 
-            if (!riAiResponse.ri_score) {
-                throw new Error(`Record ${id}: RI response missing ri_score`);
-            }
-
+            if (!riAiResponse.ri_score) throw new Error(`Record ${id}: RI response missing ri_score`);
             const ri = parseInt(riAiResponse.ri_score);
-            if (isNaN(ri) || ri < 1 || ri > 5) {
-                throw new Error(`Record ${id}: RI returned invalid score: ${riAiResponse.ri_score}`);
-            }
+            if (isNaN(ri) || ri < 1 || ri > 5) throw new Error(`Record ${id}: RI returned invalid score: ${riAiResponse.ri_score}`);
 
             result.ri = ri;
             console.log(`Record ${id}: RI=${result.ri}`);
+        }
+
+        // ── CLI ───────────────────────────────────────────────
+        if (mode.cli) {
+            if (!record.artistBio || record.artistBio.trim().length < 10) {
+                // Skip silently — use existing CLI value
+                console.log(`Record ${id}: CLI skipped — no artistBio. Using existing CLI value.`);
+                result.cli = record.cli || null;
+            } else {
+                console.log(`Record ${id}: running CLI...`);
+
+                const cliPromptPath = path.join(__dirname, 'public', 'prompts', 'CLI_prompt.txt');
+                if (!fs.existsSync(cliPromptPath)) throw new Error('CLI_prompt.txt not found on disk.');
+                const cliPrompt = fs.readFileSync(cliPromptPath, 'utf8');
+
+                const cliMessages = [
+                    {
+                        role: 'user',
+                        content: `Artist: "${record.artistName}"\n\nArtist Career Information:\n${record.artistBio}\n\n${cliPrompt}`
+                    }
+                ];
+
+                const cliSystemContent = 'You are an expert art career analyst. Analyze the artist\'s bio and respond with only the requested JSON format.';
+
+                let cliAiResponse;
+                try {
+                    cliAiResponse = await callAI(cliMessages, 3000, cliSystemContent, true, DEFAULT_TEMPERATURE);
+                } catch (err) {
+                    throw new Error(`Record ${id}: CLI AI call failed — ${err.message}`);
+                }
+
+                const requiredFields = ['education', 'exhibitions', 'awards', 'commissions', 'collections', 'publications', 'institutional'];
+                const missingFields  = requiredFields.filter(f => !cliAiResponse[f]);
+                if (missingFields.length > 0) {
+                    throw new Error(`Record ${id}: CLI response missing fields: ${missingFields.join(', ')}`);
+                }
+
+                const cli = calculateCLI(cliAiResponse);
+                if (isNaN(cli) || cli < 1.0 || cli > 5.0) {
+                    throw new Error(`Record ${id}: CLI calculated invalid value: ${cli}`);
+                }
+
+                result.cli = cli;
+                console.log(`Record ${id}: CLI=${result.cli}`);
+            }
         }
 
         res.json(result);
@@ -4518,6 +4579,7 @@ CRITICAL EVALUATION RULES:
         res.status(500).json({ error: error.message });
     }
 });
+
 
 
 
