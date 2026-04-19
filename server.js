@@ -741,6 +741,28 @@ app.get("/api/records/:id/full-image", (req, res) => {
   }
 });
 
+app.get("/api/records/:id/full-image-base64", (req, res) => {
+  try {
+    const recordId = parseInt(req.params.id);
+    if (isNaN(recordId)) {
+      return res.status(400).json({ error: "Invalid record ID" });
+    }
+    const imagePath = path.join("/mnt/data/images", `record_${recordId}.jpg`);
+    if (!fs.existsSync(imagePath)) {
+      return res.status(404).json({ error: "Full image not found" });
+    }
+    const imageBuffer = fs.readFileSync(imagePath);
+    const base64 = imageBuffer.toString('base64');
+    res.json({ base64, imageType: "image/jpeg" });
+  } catch (error) {
+    console.error("Error serving full image as base64:", error);
+    res.status(500).json({ error: "Failed to serve image" });
+  }
+});
+
+
+
+
 // Generic endpoint for serving prompts - more maintainable approach
 app.get("/prompts/:calculatorType", (req, res) => {
   const { calculatorType } = req.params;
