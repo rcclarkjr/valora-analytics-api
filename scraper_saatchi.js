@@ -17,12 +17,21 @@ const path  = require('path');
 const args  = process.argv.slice(2);
 const limitIndex = args.indexOf('--limit');
 if (limitIndex === -1 || args[limitIndex + 1] === undefined) {
-    console.error('ERROR: --limit N is required. Example: node scraper_saatchi.js --limit 25');
+    console.error('ERROR: --limit N is required. Example: node scraper_saatchi.js --limit 25 --skip 0');
     process.exit(1);
 }
 const LIMIT = parseInt(args[limitIndex + 1], 10);
 if (isNaN(LIMIT) || LIMIT < 1) {
     console.error('ERROR: --limit must be a positive integer.');
+    process.exit(1);
+}
+
+const skipIndex = args.indexOf('--skip');
+const SKIP = (skipIndex !== -1 && args[skipIndex + 1] !== undefined)
+    ? parseInt(args[skipIndex + 1], 10)
+    : 0;
+if (isNaN(SKIP) || SKIP < 0) {
+    console.error('ERROR: --skip must be a non-negative integer.');
     process.exit(1);
 }
 
@@ -365,7 +374,7 @@ async function main() {
     const artworkEntries = []; // each entry: { url, lastmod }
     let sitemapIndex = 1;
 
-    while (artworkEntries.length < LIMIT) {
+    while (artworkEntries.length < LIMIT + SKIP) {
         const sitemapUrl = `https://www.saatchiart.com/sitemap-artworks-${sitemapIndex}.xml`;
         console.log(`Fetching sitemap ${sitemapIndex}...`);
         try {
@@ -381,8 +390,9 @@ async function main() {
         sitemapIndex++;
     }
 
-    const entriesToProcess = artworkEntries.slice(0, LIMIT);
-    console.log(`Collected ${entriesToProcess.length} artwork URLs to scrape`);
+    // Apply skip then limit
+    const entriesToProcess = artworkEntries.slice(SKIP, SKIP + LIMIT);
+    console.log(`Collected ${artworkEntries.length} URLs total, skipping ${SKIP}, processing ${entriesToProcess.length}`);
 
     if (entriesToProcess.length === 0) {
         writeProgress('error', 0, LIMIT, 'No artwork URLs found in sitemaps.');

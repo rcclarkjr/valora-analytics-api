@@ -3998,9 +3998,16 @@ let activeScrapeJob = null;
 // Returns: { jobId, status: 'started' }
 app.post('/api/scrape/start', (req, res) => {
     const limit = parseInt(req.body.limit);
-    if (isNaN(limit) || limit < 1) {
-        return res.status(400).json({ error: 'limit must be a positive integer.' });
-    }
+
+
+if (isNaN(limit) || limit < 1) {
+    return res.status(400).json({ error: 'limit must be a positive integer.' });
+}
+const skip = req.body.skip !== undefined ? parseInt(req.body.skip) : 0;
+if (isNaN(skip) || skip < 0) {
+    return res.status(400).json({ error: 'skip must be a non-negative integer.' });
+}
+
 
     if (activeScrapeJob && activeScrapeJob.status === 'running') {
         return res.status(409).json({ error: 'A scrape job is already running. Wait for it to complete.' });
@@ -4016,12 +4023,12 @@ app.post('/api/scrape/start', (req, res) => {
         status: 'starting', current: 0, total: limit, message: 'Launching scraper...'
     }));
 
-    const child = spawn('node', [scraper, '--limit', String(limit)], {
+	const child = spawn('node', [scraper, '--limit', String(limit), '--skip', String(skip)], {
         detached: false,
         stdio: ['ignore', 'pipe', 'pipe']
     });
 
-    activeScrapeJob = { jobId, status: 'running', pid: child.pid, limit };
+	activeScrapeJob = { jobId, status: 'running', pid: child.pid, limit, skip };
 
     child.stdout.on('data', d => console.log('[scraper]', d.toString().trim()));
     child.stderr.on('data', d => console.error('[scraper ERR]', d.toString().trim()));
