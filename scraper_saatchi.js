@@ -270,25 +270,7 @@ async function scrapeArtworkPage(artworkUrl) {
         }
     }
 
-    // ── DIAGNOSTIC: dump first 3000 chars of raw HTML to a file ──
-    // Remove this block once patterns are confirmed working.
-    try {
-        const diagPath = path.join(OUTPUT_DIR, 'scraper_diag.txt');
-        fs.writeFileSync(diagPath,
-            `URL: ${artworkUrl}\n\n--- HTML START ---\n${html.slice(0, 3000)}\n--- HTML END ---\n\n` +
-            `--- SEARCH FOR KEY TERMS ---\n` +
-            `H1 match: ${JSON.stringify(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]?.slice(0,100))}\n` +
-            `Artist link match: ${JSON.stringify(html.match(/href="https:\/\/www\.saatchiart\.com\/([a-z0-9_-]+)"[^>]*>([^<]+)<\/a>/i)?.[0]?.slice(0,100))}\n` +
-            `Medium match: ${JSON.stringify(html.match(/Painting,\s*[A-Za-z][^<\n]{2,60}/)?.[0])}\n` +
-            `Price match: ${JSON.stringify(html.match(/\$\s*([\d,]+)/)?.[0])}\n` +
-            `Dim match: ${JSON.stringify(html.match(/([\d.]+)\s*W\s*x\s*([\d.]+)\s*H/i)?.[0])}\n` +
-            `Frame match: ${JSON.stringify(html.match(/Not\s+Framed|Framed/i)?.[0])}\n`
-        );
-        console.log(`DIAGNOSTIC written to ${diagPath}`);
-    } catch (diagErr) {
-        console.warn('Diagnostic write failed:', diagErr.message);
-    }
-    // ── END DIAGNOSTIC ────────────────────────────────────────────
+
 
     // ── Fallback: parse raw HTML ───────────────────────────────
     // All patterns confirmed against actual Saatchi HTML.
