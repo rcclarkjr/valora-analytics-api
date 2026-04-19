@@ -4087,13 +4087,14 @@ app.post('/api/records/import', async (req, res) => {
 
         const data = readDatabase();
 
-        const report = {
-            imported:           0,
-            updated:            [],   // { id, artistName, title, changes: { field: { from, to } } }
-            probableDuplicates: [],   // { artistName, title, locationURL, reason }
-            errors:             [],   // { locationURL, error }
-            skipped:            0
-        };
+	const report = {
+		imported:           0,
+		updated:            [],
+		unchanged:          0,
+		probableDuplicates: [],
+		errors:             [],
+		skipped:            0
+	};
 
         // Pre-build lookup maps from existing records
         const byLocationUrl = new Map();
@@ -4162,13 +4163,15 @@ app.post('/api/records/import', async (req, res) => {
                     }
                 }
 
-                if (Object.keys(changes).length > 0) {
+			if (Object.keys(changes).length > 0) {
                     report.updated.push({
                         id:         existing.id,
                         artistName: existing.artistName,
                         title:      existing.title,
                         changes
                     });
+                } else {
+                    report.unchanged++;
                 }
                 continue;
             }
