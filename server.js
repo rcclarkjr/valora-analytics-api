@@ -4318,7 +4318,206 @@ function normalizeNameTitle(artistName, title) {
 
 
 
+// =============================================================
+// POST /api/batch/process-record
+// Server-side batch processing for SMI and RI.
+// Image is read directly from disk — never sent through the browser.
+// Prompts are read directly from disk — no HTTP round-trip.
+//
+// Body: { recordId: 230, mode: 'smi' | 'ri' | 'smi-ri' }
+//
+// Returns:
+// {
+//   recordId,
+//   smi, smi_subject, smi_render, integer, gate1_score, gate2_score,  // if mode includes smi
+//   ri                                                                  // if mode includes ri
+// }
+// =============================================================
+app.post('/api/batch/process-record', async (req, res) => {
+    try {
+        const { recordId, mode } = req.body;
 
+        if (!recordId || isNaN(parseInt(recordId))) {
+            return res.status(400).json({ error: 'recordId is required and must be a valid integer.' });
+        }
+        if (!mode || !['smi', 'ri', 'smi-ri'].includes(mode)) {
+            return res.status(400).json({ error: 'mode must be smi, ri, or smi-ri.' });
+        }
+
+        const id = parseInt(recordId);
+
+        // ── Load record from database ─────────────────────────
+        const data = readDatabase();
+        const record = data.records.find(r => r.id === id);
+        if (!record) {
+            return res.status(404).json({ error: `Record ${id} not found.` });
+        }
+
+        if (!record.title)      throw new Error(`Record ${id} is missing title`);
+        if (!record.artistName) throw new Error(`Record ${id} is missing artistName`);
+        if (!record.medium && (mode === 'smi' || mode === 'smi-ri')) {
+            throw new Error(`Record ${id} is missing medium — required for SMI`);
+        }
+
+        // ── Load image from disk ──────────────────────────────
+        const imagePath = path.join('/mnt/data/images', `record_${id}.jpg`);
+        if (!fs.existsSync(imagePath)) {
+            throw new Error(`Record ${id}: image not found at ${imagePath}. Cannot process without an image.`);
+        }
+
+        const rawImageBuffer = fs.readFileSync(imagePath);
+
+        // ── Preprocess image with sharp (shared by SMI and RI) ─
+        let processedImageBase64;
+        try {
+            const resized = await sharp(rawImageBuffer)
+                .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+                .jpeg({ quality: 90 })
+                .toBuffer();
+
+            if (resized.length > 4.5 * 1024 * 1024) {
+                const recompressed = await sharp(resized).jpeg({ quality: 75 }).toBuffer();
+                processedImageBase64 = recompressed.toString('base64');
+            } else {
+                processedImageBase64 = resized.toString('base64');
+            }
+            console.log(`Record ${id}: image preprocessed (${(processedImageBase64.length / 1024).toFixed(0)}kb base64)`);
+        } catch (sharpError) {
+            console.warn(`Record ${id}: sharp preprocessing failed — using original:`, sharpError.message);
+            processedImageBase64 = rawImageBuffer.toString('base64');
+        }
+
+        const result = { recordId: id };
+
+        // ── SMI ───────────────────────────────────────────────
+        if (mode === 'smi' || mode === 'smi-ri') {
+            console.log(`Record ${id}: running SMI...`);
+
+            // Read prompt directly from disk
+            const smiPromptPath = path.join(__dirname, 'public', 'prompts', 'SMI_prompt.txt');
+            if (!fs.existsSync(smiPromptPath)) {
+                throw new Error('SMI_prompt.txt not found on disk.');
+            }
+            const smiPromptRaw = fs.readFileSync(smiPromptPath, 'utf8');
+
+            const fullSmiPrompt = `Medium: ${record.medium}
+(Note: Evaluate the subject and rendering considering what was achieved with this medium. Some mediums make certain techniques easier or harder. The quality of what was achieved in the image is the only measure — the prestige or historical associations of the medium play no role in the evaluation.)
+
+${smiPromptRaw}`;
+
+            const smiSystemContent = `You are an expert fine art analyst evaluating artwork for relative collector market value. Analyze the artwork and return your evaluation in valid JSON format only.
+
+CRITICAL EVALUATION RULES:
+1. Evaluate only what you observe in this image. Every artwork is assessed entirely on its own merits.
+2. If you recognize this artwork or its artist, set that recognition aside completely. The historical reputation, critical standing, fame, or importance of the artist or work must play no role in your evaluation. Evaluate what you see, not what you know.
+3. Do not reference any other works by this artist, their broader practice, or their development over time.
+4. The title and artist name provided are for identification only. Do not use them to infer anything about the work's significance or the artist's stature.`;
+
+            const smiMessages = [
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${processedImageBase64}` } },
+                        { type: 'text', text: fullSmiPrompt }
+                    ]
+                }
+            ];
+
+            let smiAiResponse;
+            try {
+                smiAiResponse = await callAI(smiMessages, 1000, smiSystemContent, true, DEFAULT_TEMPERATURE);
+            } catch (err) {
+                throw new Error(`Record ${id}: SMI AI call failed — ${err.message}`);
+            }
+
+            const { integer, gate1_score, gate2_score, subject_scores, rendering_scores } = smiAiResponse;
+
+            const integerVal = parseInt(integer);
+            if (isNaN(integerVal) || integerVal < 1 || integerVal > 5) {
+                throw new Error(`Record ${id}: SMI returned invalid integer: ${integer}`);
+            }
+
+            if (integerVal === 5) {
+                result.smi         = 5.00;
+                result.smi_subject = null;
+                result.smi_render  = null;
+                result.integer     = 5;
+                result.gate1_score = 0;
+                result.gate2_score = 0;
+            } else {
+                if (!subject_scores || !rendering_scores) {
+                    throw new Error(`Record ${id}: SMI response missing pillar scores`);
+                }
+
+                const coefficients = data.metadata.coefficients || {};
+                let smiResult;
+                try {
+                    smiResult = calculateSMI_fromScores(subject_scores, rendering_scores, coefficients, integerVal);
+                } catch (smiError) {
+                    throw new Error(`Record ${id}: SMI calculation failed — ${smiError.message}`);
+                }
+
+                result.smi         = smiResult.smi;
+                result.smi_subject = smiResult.smi_subject;
+                result.smi_render  = smiResult.smi_render;
+                result.integer     = integerVal;
+                result.gate1_score = (integerVal === 3 || integerVal === 4) ? parseInt(gate1_score) : 0;
+                result.gate2_score = (integerVal === 3 || integerVal === 4) ? parseInt(gate2_score) : 0;
+            }
+
+            console.log(`Record ${id}: SMI=${result.smi}, integer=${result.integer}`);
+        }
+
+        // ── RI ────────────────────────────────────────────────
+        if (mode === 'ri' || mode === 'smi-ri') {
+            console.log(`Record ${id}: running RI...`);
+
+            // Read prompt directly from disk
+            const riPromptPath = path.join(__dirname, 'public', 'prompts', 'RI_prompt.txt');
+            if (!fs.existsSync(riPromptPath)) {
+                throw new Error('RI_prompt.txt not found on disk.');
+            }
+            const riPrompt = fs.readFileSync(riPromptPath, 'utf8');
+
+            const riSystemContent = 'You are an expert fine art analyst specializing in evaluating representational accuracy. Respond with ONLY valid JSON.';
+
+            const riMessages = [
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${processedImageBase64}` } },
+                        { type: 'text', text: riPrompt }
+                    ]
+                }
+            ];
+
+            let riAiResponse;
+            try {
+                riAiResponse = await callAI(riMessages, 2000, riSystemContent, true, DEFAULT_TEMPERATURE);
+            } catch (err) {
+                throw new Error(`Record ${id}: RI AI call failed — ${err.message}`);
+            }
+
+            if (!riAiResponse.ri_score) {
+                throw new Error(`Record ${id}: RI response missing ri_score`);
+            }
+
+            const ri = parseInt(riAiResponse.ri_score);
+            if (isNaN(ri) || ri < 1 || ri > 5) {
+                throw new Error(`Record ${id}: RI returned invalid score: ${riAiResponse.ri_score}`);
+            }
+
+            result.ri = ri;
+            console.log(`Record ${id}: RI=${result.ri}`);
+        }
+
+        res.json(result);
+
+    } catch (error) {
+        console.error(`Batch process-record error:`, error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
 
 
 
