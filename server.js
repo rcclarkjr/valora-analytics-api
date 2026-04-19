@@ -728,8 +728,10 @@ app.get("/api/records/:id/full-image", (req, res) => {
     }
 
     // Set appropriate headers
-    res.setHeader("Content-Type", "image/jpeg");
-    res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 24 hours
+	res.setHeader("Content-Type", "image/jpeg");
+	res.setHeader("Cache-Control", "public, max-age=86400");
+	res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+	res.setHeader("Access-Control-Allow-Credentials", "true");
 
     // Send the file
     res.sendFile(imagePath);
