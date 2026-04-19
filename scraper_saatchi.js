@@ -438,6 +438,7 @@ async function scrapeArtistProfile(profileUrl) {
 }
 
 // ── Main ──────────────────────────────────────────────────────
+async function main() {
     writeProgress('starting', 0, LIMIT, 'Initializing scraper...');
     console.log(`Starting Saatchi scraper — limit: ${LIMIT}`);
 
