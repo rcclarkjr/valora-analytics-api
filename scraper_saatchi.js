@@ -432,8 +432,9 @@ async function main() {
     fs.writeFileSync(STAGING_PATH, JSON.stringify(results, null, 2));
     console.log(`Staging file written: ${STAGING_PATH}`);
 
-    writeProgress('complete', urlsToProcess.length, urlsToProcess.length,
-        `Scrape complete — ${results.length} records written to staging.`, results);
+writeProgress('complete', entriesToProcess.length, entriesToProcess.length,
+    `Scrape complete — ${results.length} records written to staging.`, results);
+
 
     console.log(`Done. ${results.length} records scraped.`);
 }
