@@ -398,36 +398,61 @@ function fetchImageAsBase64(url) {
     });
 }
 // ── Scrape artist bio from Saatchi artist profile page ────────
-// Returns bio text string, or null if not found.
+// Extracts About, Education, Exhibitions, and Recognition text.
+// Returns concatenated text string, or null if nothing useful found.
 // Resolves without throwing — a missing bio is not fatal.
 async function scrapeArtistProfile(profileUrl) {
     if (!profileUrl || profileUrl === 'Missing') return null;
     try {
         const html = await fetchUrl(profileUrl);
 
-        // Artist bio appears in the page as a paragraph of text.
-        // The <title> pattern: "Artist Name | Saatchi Art"
-        // The bio text appears after the artist name heading in the HTML.
-        // We extract from the og:description meta tag as the most reliable source —
-        // it contains a clean summary of the artist bio without HTML markup.
-        const ogDescMatch = html.match(/og:description[^>]*content="([^"]{20,})"/i);
-        if (ogDescMatch) {
-            const bio = ogDescMatch[1]
-                .replace(/&amp;/g, '&')
-                .replace(/&quot;/g, '"')
-                .replace(/&#39;/g, "'")
-                .replace(/&lt;/g, '<')
-                .replace(/&gt;/g, '>')
-                .trim();
-            if (bio.length > 20) return bio;
+        // The profile page renders sections as labeled blocks in the HTML.
+        // We extract text between known section markers.
+        // Sections appear as: content between one heading and the next hr or heading.
+
+        // Strip all HTML tags to get clean text
+        const text = html
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[\s\S]*?<\/style>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+
+        const sections = [];
+
+        // Extract each labeled section using regex on the cleaned text
+        const sectionPatterns = [
+            { label: 'About',       pattern: /ABOUT\s+([\s\S]+?)(?:EDUCATION|EXHIBITIONS|RECOGNITION|---|\n{3}|$)/i },
+            { label: 'Education',   pattern: /EDUCATION\s+([\s\S]+?)(?:EXHIBITIONS|RECOGNITION|ABOUT|---|\n{3}|$)/i },
+            { label: 'Exhibitions', pattern: /EXHIBITIONS\s+([\s\S]+?)(?:RECOGNITION|EDUCATION|ABOUT|---|\n{3}|$)/i },
+            { label: 'Recognition', pattern: /RECOGNITION\s+([\s\S]+?)(?:EDUCATION|EXHIBITIONS|ABOUT|---|\n{3}|$)/i },
+        ];
+
+        for (const { label, pattern } of sectionPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                const content = match[1].trim().slice(0, 1000); // cap each section at 1000 chars
+                if (content.length > 20) {
+                    sections.push(`${label}: ${content}`);
+                }
+            }
         }
 
-        // Fallback: look for a long text block that appears to be a bio
-        // Artist bios on Saatchi are typically 100-500 words
-        const bioMatch = html.match(/"about"\s*:\s*"([^"]{100,})"/i) ||
-                         html.match(/class="[^"]*bio[^"]*"[^>]*>([^<]{100,})</i);
-        if (bioMatch) {
-            return bioMatch[1].replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim();
+        if (sections.length > 0) {
+            return sections.join('\n\n');
+        }
+
+        // Fallback: look for a substantial paragraph of text near the artist name
+        // The bio often appears as a long paragraph early in the page
+        const paragraphMatch = text.match(/(?:Belgian|French|American|British|German|Spanish|Italian|Chinese|Japanese|Korean|Canadian|Australian|Brazilian|Dutch|Swedish|Norwegian|Danish|Finnish|Polish|Russian|Israeli|Indian|Mexican|Argentine|Colombian)\s+[\w\s,]{50,500}/i);
+        if (paragraphMatch) {
+            return paragraphMatch[0].trim();
         }
 
         return null;
