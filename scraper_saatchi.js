@@ -250,10 +250,16 @@ async function scrapeArtworkPage(artworkUrl) {
                     record.framed = 'Missing';
                 }
 
-                // Sold status
-                const soldRaw = artwork.isSoldOut || artwork.sold ||
-                    artwork.products?.[0]?.isSoldOut || null;
-                record.lorS = (soldRaw === true) ? 'S' : 'L';
+                // Sold status — use og:availability as primary source
+                const ogAvailMatch = html.match(/og:availability[^>]*content="([^"]+)"/i) ||
+                                     html.match(/content="([^"]+)"[^>]*og:availability/i);
+                if (ogAvailMatch) {
+                    record.lorS = ogAvailMatch[1].toLowerCase() === 'instock' ? 'L' : 'S';
+                } else {
+                    const soldRaw = artwork.isSoldOut || artwork.sold ||
+                        artwork.products?.[0]?.isSoldOut || null;
+                    record.lorS = (soldRaw === true) ? 'S' : 'L';
+                }
 
                 // Image URL
                 record.imageUrl = artwork.artworkImage?.imageUrl ||
@@ -269,26 +275,6 @@ async function scrapeArtworkPage(artworkUrl) {
             console.warn(`__NEXT_DATA__ parse failed for ${artworkUrl}: ${e.message}`);
         }
     }
-
-    // ── DIAGNOSTIC: dump first 3000 chars of raw HTML to a file ──
-    // Remove this block once patterns are confirmed working.
-    try {
-        const diagPath = path.join(OUTPUT_DIR, 'scraper_diag.txt');
-        fs.writeFileSync(diagPath,
-            `URL: ${artworkUrl}\n\n--- HTML START ---\n${html.slice(0, 3000)}\n--- HTML END ---\n\n` +
-            `--- SEARCH FOR KEY TERMS ---\n` +
-            `H1 match: ${JSON.stringify(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]?.slice(0,100))}\n` +
-            `Artist link match: ${JSON.stringify(html.match(/href="https:\/\/www\.saatchiart\.com\/([a-z0-9_-]+)"[^>]*>([^<]+)<\/a>/i)?.[0]?.slice(0,100))}\n` +
-            `Medium match: ${JSON.stringify(html.match(/Painting,\s*[A-Za-z][^<\n]{2,60}/)?.[0])}\n` +
-            `Price match: ${JSON.stringify(html.match(/\$\s*([\d,]+)/)?.[0])}\n` +
-            `Dim match: ${JSON.stringify(html.match(/([\d.]+)\s*W\s*x\s*([\d.]+)\s*H/i)?.[0])}\n` +
-            `Frame match: ${JSON.stringify(html.match(/Not\s+Framed|Framed/i)?.[0])}\n`
-        );
-        console.log(`DIAGNOSTIC written to ${diagPath}`);
-    } catch (diagErr) {
-        console.warn('Diagnostic write failed:', diagErr.message);
-    }
-    // ── END DIAGNOSTIC ────────────────────────────────────────────
 
     // ── Fallback: parse raw HTML ───────────────────────────────
     // All patterns confirmed against actual Saatchi HTML.
@@ -355,8 +341,14 @@ async function scrapeArtworkPage(artworkUrl) {
         record.framed = 'Missing';
     }
 
-    // Sold status
-    record.lorS = /sold[\s-]*out/i.test(html) ? 'S' : 'L';
+    // Sold status — use og:availability meta tag (most reliable)
+    const ogAvailMatch = html.match(/og:availability[^>]*content="([^"]+)"/i) ||
+                         html.match(/content="([^"]+)"[^>]*og:availability/i);
+    if (ogAvailMatch) {
+        record.lorS = ogAvailMatch[1].toLowerCase() === 'instock' ? 'L' : 'S';
+    } else {
+        record.lorS = /sold[\s-]*out/i.test(html) ? 'S' : 'L';
+    }
 
     // shortDescription — always Painting for our filter
     record.shortDescription = 'Painting';
