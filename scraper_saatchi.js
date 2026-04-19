@@ -253,7 +253,7 @@ async function scrapeArtworkPage(artworkUrl) {
                 // Sold status
                 const soldRaw = artwork.isSoldOut || artwork.sold ||
                     artwork.products?.[0]?.isSoldOut || null;
-                record.lorS = (soldRaw === true || soldRaw === 'S') ? 'S' : 'L';
+                record.lorS = (soldRaw === true) ? 'S' : 'L';
 
                 // Image URL
                 record.imageUrl = artwork.artworkImage?.imageUrl ||
