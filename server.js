@@ -4073,11 +4073,11 @@ app.get('/api/scrape/status/:jobId', (req, res) => {
 //
 // Duplicate logic:
 //   1. Primary:   exact locationURL match → update price, lorS, framed only
-//   2. Secondary: normalized artistName + title match → flag, skip, require manual review
+//   2. Secondary: normalized artistName + title match → flag, skip, manual review
 //   3. No match:  insert as new record with pendingScores: true
 //
-// calculateDerivedFields is NOT called here.
-// It will be called during the subsequent Batch SMI/RI run.
+// Option B: images fetched from Saatchi CDN at import time via axios.
+// calculateDerivedFields is NOT called here — runs during Batch SMI/RI.
 // =============================================================
 app.post('/api/records/import', async (req, res) => {
     try {
@@ -4116,6 +4116,7 @@ app.post('/api/records/import', async (req, res) => {
             : 0;
 
         for (const incoming of req.body.records) {
+
             // Skip records that failed to scrape entirely
             if (incoming.scrapeError) {
                 report.errors.push({
@@ -4147,13 +4148,12 @@ app.post('/api/records/import', async (req, res) => {
                 ? incoming.locationURL.trim().toLowerCase()
                 : null;
 
-            // ── Primary duplicate check: locationURL exact match ──
+            // ── Primary duplicate check: exact locationURL match ──
             if (incomingKey && byLocationUrl.has(incomingKey)) {
                 const existing = byLocationUrl.get(incomingKey);
                 const changes  = {};
 
-                const updateableFields = ['price', 'lorS', 'framed'];
-                for (const field of updateableFields) {
+                for (const field of ['price', 'lorS', 'framed']) {
                     if (incoming[field] !== undefined &&
                         incoming[field] !== 'Missing' &&
                         String(incoming[field]) !== String(existing[field])) {
@@ -4170,7 +4170,6 @@ app.post('/api/records/import', async (req, res) => {
                         changes
                     });
                 }
-                // Whether or not fields changed, it's a duplicate — do not insert
                 continue;
             }
 
@@ -4187,50 +4186,76 @@ app.post('/api/records/import', async (req, res) => {
                 continue;
             }
 
-            // ── No duplicate — insert as new record ───────────────
+            // ── No duplicate — build and insert new record ────────
             maxId++;
+
             const newRecord = {
-                id:             maxId,
-                isActive:       true,
-                dateAdded:      incoming.dateAdded || new Date().toISOString().slice(0, 10),
-                pendingScores:  true,
-                artistName:     incoming.artistName,
-                title:          incoming.title,
-                height:         incoming.height,
-                width:          incoming.width,
-                depth:          incoming.depth  || 'Missing',
-                price:          incoming.price,
-                medium:         incoming.medium  || 'Missing',
-                framed:         incoming.framed  || 'Missing',
-                lorS:           incoming.lorS    || 'L',
+                id:               maxId,
+                isActive:         true,
+                dateAdded:        incoming.dateAdded || new Date().toISOString().slice(0, 10),
+                pendingScores:    true,
+                artistName:       incoming.artistName,
+                title:            incoming.title,
+                height:           incoming.height,
+                width:            incoming.width,
+                depth:            incoming.depth            || 'Missing',
+                price:            incoming.price,
+                medium:           incoming.medium           || 'Missing',
+                framed:           incoming.framed           || 'Missing',
+                lorS:             incoming.lorS             || 'L',
                 shortDescription: incoming.shortDescription || 'Missing',
-                locationURL:    incoming.locationURL || 'Missing',
-                website:        'Saatchi Art',
-                imageUrl:       incoming.imageUrl || 'Missing',
+                locationURL:      incoming.locationURL      || 'Missing',
+                website:          'Saatchi Art',
+                imageUrl:         incoming.imageUrl         || 'Missing',
                 artistProfileUrl: incoming.artistProfileUrl || 'Missing',
                 // Score fields — all null, filled in during Batch SMI/RI
-                smi_subject:    null,
-                smi_render:     null,
-                cli:            null,
-                ri:             null,
-                integer:        null,
-                gate1_score:    null,
-                gate2_score:    null,
-                smi:            null,
-                ssi:            null,
-                lssi:           null,
-                aop:            null,
-                aoppsi:         null,
-                appsi:          null,
-                medium_adj_ppsi: null,
-                cli_adj_ppsi:   null,
-                smi_adj_ppsi:   null,
-                stdppsi:        null
+                smi_subject:      null,
+                smi_render:       null,
+                cli:              null,
+                ri:               null,
+                integer:          null,
+                gate1_score:      null,
+                gate2_score:      null,
+                smi:              null,
+                ssi:              null,
+                lssi:             null,
+                aop:              null,
+                aoppsi:           null,
+                appsi:            null,
+                medium_adj_ppsi:  null,
+                cli_adj_ppsi:     null,
+                smi_adj_ppsi:     null,
+                stdppsi:          null
             };
+
+            // ── Option B: fetch image from Saatchi CDN at import time ──
+            if (incoming.imageUrl && incoming.imageUrl !== 'Missing') {
+                try {
+                    const imgResponse = await axios.get(incoming.imageUrl, {
+                        responseType: 'arraybuffer',
+                        timeout: 15000,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Referer': 'https://www.saatchiart.com/'
+                        }
+                    });
+                    const imageBuffer = Buffer.from(imgResponse.data);
+                    const imagePath = path.join('/mnt/data/images', `record_${maxId}.jpg`);
+                    await sharp(imageBuffer).jpeg({ quality: 90 }).toFile(imagePath);
+                    const thumbnailBuffer = await sharp(imageBuffer)
+                        .resize(120, 120, { fit: 'inside' })
+                        .jpeg({ quality: 70 })
+                        .toBuffer();
+                    newRecord.thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
+                    console.log(`Image saved for imported record ${maxId}`);
+                } catch (imgError) {
+                    console.error(`Image fetch/processing failed for record ${maxId}:`, imgError.message);
+                }
+            }
 
             data.records.push(newRecord);
 
-            // Update lookup maps so duplicates within this same batch are caught
+            // Update lookup maps so duplicates within this batch are caught
             if (incoming.locationURL) {
                 byLocationUrl.set(incoming.locationURL.trim().toLowerCase(), newRecord);
             }
@@ -4243,10 +4268,7 @@ app.post('/api/records/import', async (req, res) => {
 
         writeDatabase(data);
 
-        res.json({
-            success: true,
-            report
-        });
+        res.json({ success: true, report });
 
     } catch (error) {
         console.error('Import error:', error.message, error.stack);
