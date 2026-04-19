@@ -270,7 +270,25 @@ async function scrapeArtworkPage(artworkUrl) {
         }
     }
 
-
+    // ── DIAGNOSTIC: dump first 3000 chars of raw HTML to a file ──
+    // Remove this block once patterns are confirmed working.
+    try {
+        const diagPath = path.join(OUTPUT_DIR, 'scraper_diag.txt');
+        fs.writeFileSync(diagPath,
+            `URL: ${artworkUrl}\n\n--- HTML START ---\n${html.slice(0, 3000)}\n--- HTML END ---\n\n` +
+            `--- SEARCH FOR KEY TERMS ---\n` +
+            `H1 match: ${JSON.stringify(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]?.slice(0,100))}\n` +
+            `Artist link match: ${JSON.stringify(html.match(/href="https:\/\/www\.saatchiart\.com\/([a-z0-9_-]+)"[^>]*>([^<]+)<\/a>/i)?.[0]?.slice(0,100))}\n` +
+            `Medium match: ${JSON.stringify(html.match(/Painting,\s*[A-Za-z][^<\n]{2,60}/)?.[0])}\n` +
+            `Price match: ${JSON.stringify(html.match(/\$\s*([\d,]+)/)?.[0])}\n` +
+            `Dim match: ${JSON.stringify(html.match(/([\d.]+)\s*W\s*x\s*([\d.]+)\s*H/i)?.[0])}\n` +
+            `Frame match: ${JSON.stringify(html.match(/Not\s+Framed|Framed/i)?.[0])}\n`
+        );
+        console.log(`DIAGNOSTIC written to ${diagPath}`);
+    } catch (diagErr) {
+        console.warn('Diagnostic write failed:', diagErr.message);
+    }
+    // ── END DIAGNOSTIC ────────────────────────────────────────────
 
     // ── Fallback: parse raw HTML ───────────────────────────────
     // All patterns confirmed against actual Saatchi HTML.
@@ -346,8 +364,80 @@ async function scrapeArtworkPage(artworkUrl) {
     return record;
 }
 
+// ── Fetch an image URL and return as base64 data URI ─────────
+function fetchImageAsBase64(url) {
+    return new Promise((resolve) => {
+        const req = https.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://www.saatchiart.com/'
+            }
+        }, (res) => {
+            if (res.statusCode !== 200) {
+                console.warn(`Image fetch failed HTTP ${res.statusCode}: ${url}`);
+                return resolve(null);
+            }
+            const chunks = [];
+            res.on('data', chunk => chunks.push(chunk));
+            res.on('end', () => {
+                const buffer = Buffer.concat(chunks);
+                const contentType = res.headers['content-type'] || 'image/jpeg';
+                const mimeType = contentType.split(';')[0].trim();
+                resolve(`data:${mimeType};base64,${buffer.toString('base64')}`);
+            });
+        });
+        req.on('error', (err) => {
+            console.warn(`Image fetch error: ${err.message} — ${url}`);
+            resolve(null);
+        });
+        req.setTimeout(15000, () => {
+            req.destroy();
+            console.warn(`Image fetch timeout: ${url}`);
+            resolve(null);
+        });
+    });
+}
+// ── Scrape artist bio from Saatchi artist profile page ────────
+// Returns bio text string, or null if not found.
+// Resolves without throwing — a missing bio is not fatal.
+async function scrapeArtistProfile(profileUrl) {
+    if (!profileUrl || profileUrl === 'Missing') return null;
+    try {
+        const html = await fetchUrl(profileUrl);
+
+        // Artist bio appears in the page as a paragraph of text.
+        // The <title> pattern: "Artist Name | Saatchi Art"
+        // The bio text appears after the artist name heading in the HTML.
+        // We extract from the og:description meta tag as the most reliable source —
+        // it contains a clean summary of the artist bio without HTML markup.
+        const ogDescMatch = html.match(/og:description[^>]*content="([^"]{20,})"/i);
+        if (ogDescMatch) {
+            const bio = ogDescMatch[1]
+                .replace(/&amp;/g, '&')
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'")
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .trim();
+            if (bio.length > 20) return bio;
+        }
+
+        // Fallback: look for a long text block that appears to be a bio
+        // Artist bios on Saatchi are typically 100-500 words
+        const bioMatch = html.match(/"about"\s*:\s*"([^"]{100,})"/i) ||
+                         html.match(/class="[^"]*bio[^"]*"[^>]*>([^<]{100,})</i);
+        if (bioMatch) {
+            return bioMatch[1].replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim();
+        }
+
+        return null;
+    } catch (err) {
+        console.warn(`  Artist profile fetch failed (${profileUrl}): ${err.message}`);
+        return null;
+    }
+}
+
 // ── Main ──────────────────────────────────────────────────────
-async function main() {
     writeProgress('starting', 0, LIMIT, 'Initializing scraper...');
     console.log(`Starting Saatchi scraper — limit: ${LIMIT}`);
 
@@ -394,6 +484,33 @@ async function main() {
             const record = await scrapeArtworkPage(url);
             // Store lastmod as dateAdded — reflects Saatchi's last modification date
             record.dateAdded = lastmod || new Date().toISOString().slice(0, 10);
+
+            // Fetch image and store as base64 for processing at import time
+            if (record.imageUrl && record.imageUrl !== 'Missing') {
+                console.log(`  Fetching image...`);
+                const imageBase64 = await fetchImageAsBase64(record.imageUrl);
+                if (imageBase64) {
+                    record.imageBase64 = imageBase64;
+                    console.log(`  Image fetched (${Math.round(imageBase64.length / 1024)}kb)`);
+                } else {
+                    console.warn(`  Image fetch failed — will import without image`);
+                }
+            }
+
+            // Fetch artist bio from profile page
+            if (record.artistProfileUrl && record.artistProfileUrl !== 'Missing') {
+                console.log(`  Fetching artist bio...`);
+                const bio = await scrapeArtistProfile(record.artistProfileUrl);
+                record.artistBio = bio || null;
+                if (bio) {
+                    console.log(`  Artist bio fetched (${bio.length} chars)`);
+                } else {
+                    console.warn(`  Artist bio not found`);
+                }
+            } else {
+                record.artistBio = null;
+            }
+
             results.push(record);
         } catch (err) {
             console.error(`  FAILED: ${err.message}`);
@@ -410,13 +527,15 @@ async function main() {
         if (i < entriesToProcess.length - 1) await delay(1500);
     }
 
-    // Step 3: Write staging file
+    // Step 3: Write staging file (full data including imageBase64)
     fs.writeFileSync(STAGING_PATH, JSON.stringify(results, null, 2));
     console.log(`Staging file written: ${STAGING_PATH}`);
 
-writeProgress('complete', entriesToProcess.length, entriesToProcess.length,
-    `Scrape complete — ${results.length} records written to staging.`, results);
+    // Strip imageBase64 from progress results — UI doesn't need it, keeps payload small
+    const resultsForUI = results.map(({ imageBase64, ...rest }) => rest);
 
+    writeProgress('complete', entriesToProcess.length, entriesToProcess.length,
+        `Scrape complete — ${results.length} records written to staging.`, resultsForUI);
 
     console.log(`Done. ${results.length} records scraped.`);
 }
