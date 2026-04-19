@@ -2103,6 +2103,13 @@ app.get('/api/records/page/:pageNumber', (req, res) => {
   }
 });
 
+888888888888888888888888888888888888888888888888888888888888888888888888888888888888
+
+
+
+
+
+
 app.post('/api/records/batch-delete', (req, res) => {
   try {
     const { recordIds } = req.body;
@@ -2114,9 +2121,18 @@ app.post('/api/records/batch-delete', (req, res) => {
     const deletedCount = initialCount - updatedRecords.length;
     
     // ✅ CORRECT: Update the records array in the data object
-    data.records = updatedRecords;
-    data.metadata.lastUpdated = new Date().toISOString(); // Also update timestamp
+data.records = updatedRecords;
+    data.metadata.lastUpdated = new Date().toISOString();
     writeDatabase(data);
+
+    // Delete image files for removed records
+    recordIds.forEach(id => {
+        const imagePath = path.join('/mnt/data/images', `record_${id}.jpg`);
+        if (fs.existsSync(imagePath)) {
+            fs.unlinkSync(imagePath);
+            console.log(`Deleted image file: ${imagePath}`);
+        }
+    });
     
     console.log(`✅ Batch deleted ${deletedCount} records: ${recordIds.join(', ')}`);
     res.json({ 
@@ -2144,15 +2160,27 @@ app.delete("/api/records/:id", (req, res) => {
       return res.status(404).json({ error: "Record not found" });
     }
 
-    data.records.splice(index, 1);
+data.records.splice(index, 1);
     writeDatabase(data);
 
+    // Delete image file for removed record
+    const imagePath = path.join('/mnt/data/images', `record_${recordId}.jpg`);
+    if (fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+        console.log(`Deleted image file: ${imagePath}`);
+    }
+
     res.json({ message: "Record permanently deleted" });
+	
   } catch (error) {
     console.error("Error deleting record:", error.message);
     res.status(500).json({ error: "Failed to delete record." });
   }
 });
+
+
+
+
 
 app.get("/api/coefficients/calculate", (req, res) => {
   try {
