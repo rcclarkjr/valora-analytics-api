@@ -1470,29 +1470,81 @@ app.post("/analyze-ri", async (req, res) => {
       });
     }
 
-    // Validate JSON structure
-    if (!aiResponse.ri_score || !aiResponse.category || !aiResponse.analysis) {
-      console.error("Invalid RI response structure from AI");
+    // Validate all required fields are present
+    const requiredRiFields = ['ri_integer', 'ri_decimal', 'ri_score', 'category', 'subject_category', 'analysis', 'ri_explanation', 'subject_explanation', 'summary'];
+    for (const field of requiredRiFields) {
+      if (aiResponse[field] === undefined || aiResponse[field] === null) {
+        console.error(`RI response missing required field: ${field}`);
+        return res.status(500).json({
+          error: { message: `AI returned incomplete response — missing field: ${field}` }
+        });
+      }
+    }
+
+    // Validate analysis sub-fields
+    const requiredAnalysisFields = ['subject_recognizability', 'fidelity_to_reality', 'perspective_depth', 'detail_texture', 'real_world_reference'];
+    for (const field of requiredAnalysisFields) {
+      if (!aiResponse.analysis[field]) {
+        console.error(`RI analysis object missing field: ${field}`);
+        return res.status(500).json({
+          error: { message: `AI returned incomplete analysis — missing field: ${field}` }
+        });
+      }
+    }
+
+    // Validate ri_integer is 1–5
+    const riInteger = parseInt(aiResponse.ri_integer);
+    if (isNaN(riInteger) || riInteger < 1 || riInteger > 5) {
+      console.error(`Invalid ri_integer: ${aiResponse.ri_integer}`);
       return res.status(500).json({
-        error: { message: "AI returned invalid response structure" }
+        error: { message: `AI returned invalid ri_integer: ${aiResponse.ri_integer}. Must be 1–5.` }
       });
     }
 
-    // Validate RI score is between 1-5
-    if (aiResponse.ri_score < 1 || aiResponse.ri_score > 5) {
-      console.error(`Invalid RI score: ${aiResponse.ri_score}`);
+    // Validate ri_decimal
+    const riDecimal = parseInt(aiResponse.ri_decimal);
+    if (isNaN(riDecimal) || riDecimal < 0 || riDecimal > 9) {
+      console.error(`Invalid ri_decimal: ${aiResponse.ri_decimal}`);
       return res.status(500).json({
-        error: {
-          message: `Invalid RI score: ${aiResponse.ri_score}. Must be between 1-5`
-        }
+        error: { message: `AI returned invalid ri_decimal: ${aiResponse.ri_decimal}. Must be 0–9.` }
+      });
+    }
+
+    // Enforce business rules: integer 1 or 2 → decimal must be 0; integer 3–5 → decimal must be 1–9
+    if (riInteger <= 2 && riDecimal !== 0) {
+      console.error(`Business rule violation: ri_integer=${riInteger} requires ri_decimal=0, got ${riDecimal}`);
+      return res.status(500).json({
+        error: { message: `Invalid RI combination: integer ${riInteger} requires decimal 0 (no subject category), but AI returned decimal ${riDecimal}.` }
+      });
+    }
+    if (riInteger >= 3 && riDecimal === 0) {
+      console.error(`Business rule violation: ri_integer=${riInteger} requires ri_decimal 1–9, got 0`);
+      return res.status(500).json({
+        error: { message: `Invalid RI combination: integer ${riInteger} requires a subject category (decimal 1–9), but AI returned decimal 0.` }
+      });
+    }
+
+    // Validate ri_score matches integer and decimal
+    const riScore = parseFloat(aiResponse.ri_score);
+    const expectedScore = parseFloat(`${riInteger}.${riDecimal}`);
+    if (Math.abs(riScore - expectedScore) > 0.001) {
+      console.error(`ri_score ${riScore} does not match ri_integer ${riInteger} and ri_decimal ${riDecimal}`);
+      return res.status(500).json({
+        error: { message: `AI returned inconsistent RI values: ri_score ${riScore} does not match ri_integer ${riInteger} and ri_decimal ${riDecimal}.` }
       });
     }
 
     // Convert JSON to markdown format for frontend
+    const subjectLine = riInteger >= 3
+      ? `**Subject Category:** ${aiResponse.subject_category}`
+      : `**Subject Category:** None (abstract — no dominant subject)`;
+
     const markdownReport = `
-## Representational Index (RI): ${aiResponse.ri_score}
+## Representational Index
 
 **Category:** ${aiResponse.category}
+
+${subjectLine}
 
 ### Summary
 ${aiResponse.summary.trim()}
@@ -1514,15 +1566,23 @@ ${aiResponse.analysis.detail_texture}
 #### Real-World Reference
 ${aiResponse.analysis.real_world_reference}
 
-### Explanation
-${aiResponse.explanation}
+### RI Score Explanation
+${aiResponse.ri_explanation}
+
+### Subject Category Explanation
+${aiResponse.subject_explanation}
+
+<div class="final-smi"><h2>Representational Index (RI): ${riScore.toFixed(1)}</h2></div>
 `;
 
     console.log("Sending RI analysis response to client");
     res.json({
       analysis: markdownReport.trim(),
-      ri_score: aiResponse.ri_score,
-      category: aiResponse.category
+      ri_score:         riScore,
+      ri_integer:       riInteger,
+      ri_decimal:       riDecimal,
+      category:         aiResponse.category,
+      subject_category: aiResponse.subject_category
     });
   } catch (error) {
     console.error("Unexpected error in RI analysis:", error);
@@ -1751,7 +1811,7 @@ app.get("/api/stats", (req, res) => {
     // Find records missing required fields
     const incompleteRecords = [];
     data.records.forEach(record => {
-      const requiredFields = ['ri', 'cli', 'ssi', 'aop', 'appsi', 'stdppsi'];
+      const requiredFields = ['ri_integer', 'ri_decimal', 'cli', 'ssi', 'aop', 'appsi', 'stdppsi'];
       const missingFields = [];
       requiredFields.forEach(field => {
         const value = record[field];
@@ -2520,7 +2580,8 @@ app.post("/api/records", async (req, res) => {
         const smiSubject = req.body.smi_subject !== undefined ? parseFloat(req.body.smi_subject) : undefined;
         const smiRender  = req.body.smi_render  !== undefined ? parseFloat(req.body.smi_render)  : undefined;
         const cli        = req.body.cli         !== undefined ? parseFloat(req.body.cli)         : undefined;
-        const ri         = req.body.ri          !== undefined ? parseInt(req.body.ri)            : undefined;
+        const riInteger  = req.body.ri_integer  !== undefined ? parseInt(req.body.ri_integer)    : undefined;
+        const riDecimal  = req.body.ri_decimal  !== undefined ? parseInt(req.body.ri_decimal)    : undefined;
 
         if (smiSubject === undefined || isNaN(smiSubject) || smiSubject < 0 || smiSubject > 1) {
             return res.status(400).json({ error: 'SMI Subject Score (smi_subject) is required (0.00 to 1.00). Please calculate this value using the SMI Calculator before adding a record.' });
@@ -2531,8 +2592,17 @@ app.post("/api/records", async (req, res) => {
         if (cli === undefined || isNaN(cli) || cli < 1.0 || cli > 5.0) {
             return res.status(400).json({ error: 'Career Level Index (cli) is required (1.00 to 5.00). Please calculate this value using the CLI Calculator before adding a record.' });
         }
-        if (ri === undefined || isNaN(ri) || ri < 1 || ri > 5 || !Number.isInteger(ri)) {
-            return res.status(400).json({ error: 'Representational Index (ri) is required (integer 1 to 5). Please calculate this value using the RI Calculator before adding a record.' });
+        if (riInteger === undefined || isNaN(riInteger) || riInteger < 1 || riInteger > 5) {
+            return res.status(400).json({ error: 'RI Integer (ri_integer) is required (1 to 5). Please calculate this value using the RI Calculator before adding a record.' });
+        }
+        if (riDecimal === undefined || isNaN(riDecimal) || riDecimal < 0 || riDecimal > 9) {
+            return res.status(400).json({ error: 'RI Decimal (ri_decimal) is required (0 to 9). Please calculate this value using the RI Calculator before adding a record.' });
+        }
+        if (riInteger <= 2 && riDecimal !== 0) {
+            return res.status(400).json({ error: `RI validation failed: ri_integer ${riInteger} requires ri_decimal 0, got ${riDecimal}.` });
+        }
+        if (riInteger >= 3 && riDecimal === 0) {
+            return res.status(400).json({ error: `RI validation failed: ri_integer ${riInteger} requires ri_decimal 1–9, got 0.` });
         }
 
         const maxId = data.records.length > 0
@@ -2553,7 +2623,8 @@ app.post("/api/records", async (req, res) => {
             smi_subject: parseFloat(smiSubject),
             smi_render:  parseFloat(smiRender),
             cli:         parseFloat(cli),
-            ri:          parseInt(ri)
+            ri_integer:  parseInt(riInteger),
+            ri_decimal:  parseInt(riDecimal)
         };
 
         // Run all derived field calculations in sequence
@@ -2631,10 +2702,26 @@ app.put("/api/records/:id", async (req, res) => {
             if (isNaN(v) || v < 1.0 || v > 5.0) return res.status(400).json({ error: 'cli must be 1.00 to 5.00' });
             updatedRecord.cli = v;
         }
-        if (req.body.ri !== undefined) {
-            const v = parseInt(req.body.ri);
-            if (isNaN(v) || v < 1 || v > 5) return res.status(400).json({ error: 'ri must be integer 1 to 5' });
-            updatedRecord.ri = v;
+        if (req.body.ri_integer !== undefined || req.body.ri_decimal !== undefined) {
+            if (req.body.ri_integer === undefined || req.body.ri_decimal === undefined) {
+                return res.status(400).json({ error: 'ri_integer and ri_decimal must both be provided together.' });
+            }
+            const riInt = parseInt(req.body.ri_integer);
+            const riDec = parseInt(req.body.ri_decimal);
+            if (isNaN(riInt) || riInt < 1 || riInt > 5) {
+                return res.status(400).json({ error: 'ri_integer must be 1 to 5.' });
+            }
+            if (isNaN(riDec) || riDec < 0 || riDec > 9) {
+                return res.status(400).json({ error: 'ri_decimal must be 0 to 9.' });
+            }
+            if (riInt <= 2 && riDec !== 0) {
+                return res.status(400).json({ error: `RI validation failed: ri_integer ${riInt} requires ri_decimal 0, got ${riDec}.` });
+            }
+            if (riInt >= 3 && riDec === 0) {
+                return res.status(400).json({ error: `RI validation failed: ri_integer ${riInt} requires ri_decimal 1–9, got 0.` });
+            }
+            updatedRecord.ri_integer = riInt;
+            updatedRecord.ri_decimal = riDec;
         }
 
         // Remove old field names to keep database clean
@@ -3017,7 +3104,8 @@ app.post("/api/valuation", async (req, res) => {
 
 const {
       smi,
-      ri,
+      ri_integer,
+      ri_decimal,
       cli,
       size,
       targetedRI,
@@ -3036,14 +3124,16 @@ const {
     const narrativeTemperature = 0.5;
 
     console.log("Valuation inputs:", {
-      smi, ri, cli, size,
+      smi, ri_integer, ri_decimal, cli, size,
       targetedRI: Array.isArray(targetedRI) ? targetedRI : "Not an array",
       hasSubjectImage: !!subjectImageBase64,
       media, title, artist, subjectDescription, height, width
     });
 
     // ── Validate inputs ──────────────────────────────────────────────────────
-if (!smi || !ri || !cli || !size || !targetedRI ||
+    if (!smi || ri_integer === undefined || ri_integer === null ||
+        ri_decimal === undefined || ri_decimal === null ||
+        !cli || !size || !targetedRI ||
         !Array.isArray(targetedRI) || (!skipNarrative && !subjectImageBase64) || !height || !width) {
       return res.status(400).json({ error: "Missing required valuation inputs." });
     }
@@ -3153,10 +3243,11 @@ if (!smi || !ri || !cli || !size || !targetedRI ||
 
     // ── Pass 1: Credibility filter — eliminate bottom pass1_cutoff_pct by stdppsi ──
     const validPool = allRecords.filter(r =>
-      typeof r.stdppsi === "number" && r.stdppsi > 0 &&
-      typeof r.smi     === "number" &&
-      typeof r.cli     === "number" &&
-      r.ri !== undefined &&
+      typeof r.stdppsi    === "number" && r.stdppsi > 0 &&
+      typeof r.smi        === "number" &&
+      typeof r.cli        === "number" &&
+      r.ri_integer !== undefined && r.ri_integer !== null &&
+      r.ri_decimal !== undefined && r.ri_decimal !== null &&
       r.thumbnailBase64 && r.artistName && r.title &&
       r.height && r.width && r.medium && r.price && r.framed !== undefined
     );
@@ -3179,7 +3270,7 @@ if (!smi || !ri || !cli || !size || !targetedRI ||
     }
 
     // ── Pass 2: Style filter — RI bracket ────────────────────────────────────
-    const afterPass2 = afterPass1.filter(r => targetedRI.includes(Number(r.ri)));
+    const afterPass2 = afterPass1.filter(r => targetedRI.includes(Number(r.ri_integer)));
 
     console.log(`Pass 2: ${afterPass2.length} records within RI bracket [${targetedRI.join(", ")}]`);
 
@@ -3275,7 +3366,8 @@ if (!smi || !ri || !cli || !size || !targetedRI ||
       framed:          r.framed,
       smi:             r.smi,
       cli:             r.cli,
-      ri:              r.ri,
+      ri_integer:      r.ri_integer,
+      ri_decimal:      r.ri_decimal,
       medium:          r.medium,
       artistName:      r.artistName,
       title:           r.title,
@@ -3471,32 +3563,30 @@ app.get("/api/debug-record/:id", (req, res) => {
       id: record.id,
       isActive: record.isActive,
       metrics: {
-        smi: record.smi,
-        ri: record.ri,
-        cli: record.cli,
-        appsi: record.appsi
+        smi:        record.smi,
+        ri_integer: record.ri_integer,
+        ri_decimal: record.ri_decimal,
+        cli:        record.cli,
+        appsi:      record.appsi
       },
       types: {
-        smi_type: typeof record.smi,
-        ri_type: typeof record.ri,
-        cli_type: typeof record.cli,
-        appsi_type: typeof record.appsi
+        smi_type:        typeof record.smi,
+        ri_integer_type: typeof record.ri_integer,
+        ri_decimal_type: typeof record.ri_decimal,
+        cli_type:        typeof record.cli,
+        appsi_type:      typeof record.appsi
       },
       valid: {
         smi_valid:
-          record.smi !== undefined &&
-          record.smi !== null &&
-          !isNaN(record.smi),
-        ri_valid:
-          record.ri !== undefined && record.ri !== null && !isNaN(record.ri),
+          record.smi !== undefined && record.smi !== null && !isNaN(record.smi),
+        ri_integer_valid:
+          record.ri_integer !== undefined && record.ri_integer !== null && !isNaN(record.ri_integer),
+        ri_decimal_valid:
+          record.ri_decimal !== undefined && record.ri_decimal !== null && !isNaN(record.ri_decimal),
         cli_valid:
-          record.cli !== undefined &&
-          record.cli !== null &&
-          !isNaN(record.cli),
+          record.cli !== undefined && record.cli !== null && !isNaN(record.cli),
         appsi_valid:
-          record.appsi !== undefined &&
-          record.appsi !== null &&
-          !isNaN(record.appsi)
+          record.appsi !== undefined && record.appsi !== null && !isNaN(record.appsi)
       }
     });
   } catch (error) {
@@ -4264,7 +4354,8 @@ app.post('/api/records/import', async (req, res) => {
                 smi_subject:      null,
                 smi_render:       null,
                 cli:              null,
-                ri:               null,
+                ri_integer:       null,
+                ri_decimal:       null,
                 integer:          null,
                 gate1_score:      null,
                 gate2_score:      null,
@@ -4547,12 +4638,35 @@ CRITICAL EVALUATION RULES:
                 throw new Error(`Record ${id}: RI AI call failed — ${err.message}`);
             }
 
-            if (!riAiResponse.ri_score) throw new Error(`Record ${id}: RI response missing ri_score`);
-            const ri = parseInt(riAiResponse.ri_score);
-            if (isNaN(ri) || ri < 1 || ri > 5) throw new Error(`Record ${id}: RI returned invalid score: ${riAiResponse.ri_score}`);
+            // Validate all required RI fields
+            const requiredRiFields = ['ri_integer', 'ri_decimal', 'ri_score', 'category', 'subject_category'];
+            for (const field of requiredRiFields) {
+                if (riAiResponse[field] === undefined || riAiResponse[field] === null) {
+                    throw new Error(`Record ${id}: RI response missing required field: ${field}`);
+                }
+            }
 
-            result.ri = ri;
-            console.log(`Record ${id}: RI=${result.ri}`);
+            const riInteger = parseInt(riAiResponse.ri_integer);
+            if (isNaN(riInteger) || riInteger < 1 || riInteger > 5) {
+                throw new Error(`Record ${id}: RI returned invalid ri_integer: ${riAiResponse.ri_integer}. Must be 1–5.`);
+            }
+
+            const riDecimal = parseInt(riAiResponse.ri_decimal);
+            if (isNaN(riDecimal) || riDecimal < 0 || riDecimal > 9) {
+                throw new Error(`Record ${id}: RI returned invalid ri_decimal: ${riAiResponse.ri_decimal}. Must be 0–9.`);
+            }
+
+            // Enforce business rules
+            if (riInteger <= 2 && riDecimal !== 0) {
+                throw new Error(`Record ${id}: RI business rule violation — integer ${riInteger} requires decimal 0, got ${riDecimal}.`);
+            }
+            if (riInteger >= 3 && riDecimal === 0) {
+                throw new Error(`Record ${id}: RI business rule violation — integer ${riInteger} requires decimal 1–9, got 0.`);
+            }
+
+            result.ri_integer = riInteger;
+            result.ri_decimal = riDecimal;
+            console.log(`Record ${id}: RI=${riInteger}.${riDecimal}`);
         }
 
         // ── CLI ───────────────────────────────────────────────
