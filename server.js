@@ -1536,40 +1536,23 @@ app.post("/analyze-ri", async (req, res) => {
 
     // Convert JSON to markdown format for frontend
     const subjectLine = riInteger >= 3
-      ? `**Subject Category:** ${aiResponse.subject_category}`
-      : `**Subject Category:** None (abstract — no dominant subject)`;
+      ? `**Subject:** ${aiResponse.subject_category}`
+      : `**Subject:** None (abstract — no dominant subject)`;
 
     const markdownReport = `
 ## Representational Index
 
-**Category:** ${aiResponse.category}
+**RI Category:** ${aiResponse.category}
 
 ${subjectLine}
 
 ### Summary
 ${aiResponse.summary.trim()}
 
-## Analysis
-
-#### Subject Recognizability
-${aiResponse.analysis.subject_recognizability}
-
-#### Fidelity to Reality
-${aiResponse.analysis.fidelity_to_reality}
-
-#### Perspective & Depth
-${aiResponse.analysis.perspective_depth}
-
-#### Detail & Texture
-${aiResponse.analysis.detail_texture}
-
-#### Real-World Reference
-${aiResponse.analysis.real_world_reference}
-
-### RI Score Explanation
+### RI Category Explanation
 ${aiResponse.ri_explanation}
 
-### Subject Category Explanation
+### Subject Classification
 ${aiResponse.subject_explanation}
 
 <div class="final-smi"><h2>Representational Index (RI): ${riScore.toFixed(1)}</h2></div>
