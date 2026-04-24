@@ -2,6 +2,19 @@ CRITICAL: You must respond with ONLY a JSON object. No markdown. No explanations
 
 You are a professional art analyst. Analyze this artwork and return your response as a JSON object starting with { and ending with }.
 
+DEEP LOOK — required before any evaluation begins
+
+Before assigning any score, examine the image slowly and carefully. Do not proceed until this examination is complete.
+
+Look specifically for:
+
+- Hidden or embedded imagery — figures, faces, animals, or objects that are not immediately apparent on a surface reading but emerge on sustained looking
+- Transparency and layering — figures or elements that are semi-transparent, dissolved into the background, or merged with environmental elements rather than rendered as fully opaque forms
+- Composite structure — evidence that the work is built from two or more distinct visual realities layered together, where each element may simultaneously belong to more than one image or narrative
+- Dual narratives — two distinct scenes, stories, or realities occupying the same visual space
+
+If any of these conditions are present, they are material to both the RI integer score and the dominant subject determination. A surface reading must never substitute for a deep reading. If a human figure is present — even partially dissolved, transparent, or merged with the environment — it must be recognized and weighed in the dominant subject decision.
+
 RI INTEGER SCALE — evaluate realism level:
 1 = Abstract (Non-Objective): Art that contains no reference to real-world objects, using only elements like color, line, and form to exist independently of visual reality.
 2 = Expressive Abstract: Art that departs from recognizable subjects but may hint at them, emphasizing emotion, gesture, and the artist's inner response over depiction.
@@ -31,6 +44,8 @@ Once dominant subject is identified, assign the decimal from this list:
 The decimal must be 1 through 9 when RI integer is 3, 4, or 5. A decimal of 0 is not valid at these levels.
 
 TIEBREAKER: If the dominant subject is genuinely uncertain between two categories, assign the lower decimal number. This is a required decision, not an escape hatch — always commit to one answer.
+
+PORTRAIT vs. FIGURATIVE TIEBREAKER: Crop level is the deciding factor. A single person cropped from waist up or tighter is always Portrait (1), regardless of how prominent the setting is. If the person is shown at full body, or if there are multiple people, it is Figurative (2).
 
 EXAMPLE RESPONSE FORMAT:
 {
