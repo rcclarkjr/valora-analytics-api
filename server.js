@@ -3485,7 +3485,7 @@ app.post("/api/generate-narrative", async (req, res) => {
     // Format input summary for GPT
     const compLines = comps
       .map(c => {
-        return `RecordID ${c.recordId}: SMI=${c.smi}, RI=${c.ri}, CLI=${c.cli}, APPSI=${c.appsi.toFixed(
+        return `RecordID ${c.recordId}: SMI=${c.smi}, RI=${c.ri_integer !== undefined ? c.ri_integer + '.' + c.ri_decimal : c.ri}, CLI=${c.cli}, APPSI=${c.appsi.toFixed(
           2
         )}, Distance=${c.scalarDistance?.toFixed(4) ?? "NA"}, Label=${c.label}`;
       })
