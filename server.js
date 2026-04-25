@@ -1833,14 +1833,18 @@ app.get("/api/stats", (req, res) => {
     // Find records missing required fields
     const incompleteRecords = [];
     data.records.forEach(record => {
-      const requiredFields = ['ri_integer', 'ri_decimal', 'cli', 'ssi', 'aop', 'appsi', 'stdppsi'];
-      const missingFields = [];
-      requiredFields.forEach(field => {
-        const value = record[field];
-        if (value === null || value === undefined || value === 0) {
-          missingFields.push(field);
-        }
-      });
+
+	const requiredFields = ['ri_integer', 'ri_decimal', 'cli', 'ssi', 'aop', 'appsi', 'stdppsi'];
+	const missingFields = [];
+	requiredFields.forEach(field => {
+		const value = record[field];
+		if (field === 'ri_decimal') {
+			if (value === null || value === undefined) missingFields.push(field);
+		} else {
+			if (value === null || value === undefined || value === 0) missingFields.push(field);
+		}
+	});
+	  
       if (missingFields.length > 0) {
         incompleteRecords.push(record.id);
       }
