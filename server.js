@@ -1533,10 +1533,7 @@ app.post("/analyze-ri", async (req, res) => {
 
 ${subjectLine}
 
-### Summary
-${aiResponse.summary.trim()}
-
-### RI Category Explanation
+### Analysis
 ${aiResponse.ri_explanation}
 
 <div class="final-smi"><h2>Representational Index (RI): ${riScore.toFixed(1)}</h2></div>
