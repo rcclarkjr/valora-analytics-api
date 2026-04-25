@@ -4576,8 +4576,8 @@ CRITICAL EVALUATION RULES:
         if (mode.ri) {
             console.log(`Record ${id}: running RI...`);
 
-            const riPromptPath = path.join(__dirname, 'public', 'prompts', 'RI_prompt.txt');
-            if (!fs.existsSync(riPromptPath)) throw new Error('RI_prompt.txt not found on disk.');
+            const riPromptPath = path.join(__dirname, 'public', 'prompts', 'RI_decimal_prompt.txt');
+            if (!fs.existsSync(riPromptPath)) throw new Error('RI_decimal_prompt.txt not found on disk.');
             const riPrompt = fs.readFileSync(riPromptPath, 'utf8');
 
             const riSystemContent = 'You are an expert fine art analyst specializing in evaluating representational accuracy. Respond with ONLY valid JSON.';
