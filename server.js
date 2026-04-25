@@ -1527,8 +1527,6 @@ app.post("/analyze-ri", async (req, res) => {
       : `<p class="ri-meta"><strong>Subject:</strong> None (abstract — no subject category applies)</p>`;
 
     const markdownReport = `
-## Representational Index
-
 <p class="ri-meta"><strong>RI Category:</strong> ${aiResponse.category}</p>
 ${subjectLine}
 
