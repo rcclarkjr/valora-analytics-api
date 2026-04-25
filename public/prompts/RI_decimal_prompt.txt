@@ -33,7 +33,7 @@ Once dominant subject is identified, assign the decimal from this list:
 
 1 = Portrait: The dominant subject is a single person, AND that person is cropped from the waist up or with any tighter framing (chest, shoulders, or head only).
 2 = Figurative: The dominant subject is people, AND the work does not qualify as Portrait — meaning the single person is cropped below the waist, or there are multiple people as the primary focus.
-3 = Landscape: Nature scenes where land is the dominant element — includes mountains, valleys, fields, forests, and scenes containing lakes, rivers, or ponds where the land context dominates.
+3 = Landscape: Nature scenes where land is the dominant element — includes mountains, valleys, fields, forests, and scenes containing lakes, rivers, or ponds where the land context dominates. Also includes sky and celestial scenes — if the artwork depicts predominantly sky, stars, a night sky, celestial bodies, or atmospheric phenomena where no land, water, or recognizable subject dominates, classify as Landscape. The sky and stars are a natural environment and share the essential character of landscape even when no horizon or land is visible.
 4 = Seascape: A large body of water dominates — ocean, bay, or a lake so vast the opposite shore is not visible on the horizon. May include docks, boats, figures, or expansive sky, but open water is unmistakably the primary subject.
 5 = Cityscape: Urban environments — buildings, streets, skyscrapers, architectural scenes, cobblestone streets flanked by structures.
 6 = Floral
