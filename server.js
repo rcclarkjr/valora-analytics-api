@@ -1676,6 +1676,67 @@ function calculateRSquared(points, constant, exponent) {
 // DATA ACCESS ENDPOINTS
 // ====================================================
 
+// ====================================================
+// ONE-TIME MIGRATION: ri (integer) → ri_integer + ri_decimal
+// Safe to run multiple times — skips records already migrated.
+// After running, execute the batch routine to populate ri_decimal
+// with correct subject category values via RI_decimal_prompt.txt.
+// ====================================================
+app.post('/api/admin/migrate-ri', (req, res) => {
+  try {
+    const data = readDatabase();
+    const report = {
+      migrated:  0,   // had old ri, now have ri_integer + ri_decimal
+      skipped:   0,   // already had ri_integer — not touched
+      flagged:   []   // had neither ri nor ri_integer — needs manual review
+    };
+
+    data.records.forEach(record => {
+      // Already migrated — skip
+      if (record.ri_integer !== undefined && record.ri_integer !== null) {
+        report.skipped++;
+        return;
+      }
+
+      // Has old ri integer — migrate it
+      if (record.ri !== undefined && record.ri !== null) {
+        const riInt = parseInt(record.ri);
+        if (isNaN(riInt) || riInt < 1 || riInt > 5) {
+          report.flagged.push({ id: record.id, reason: `Invalid ri value: ${record.ri}` });
+          return;
+        }
+        record.ri_integer = riInt;
+        record.ri_decimal = 0;   // placeholder — batch routine will fill correct decimal
+        report.migrated++;
+        return;
+      }
+
+      // Neither ri nor ri_integer — flag for manual review
+      report.flagged.push({ id: record.id, reason: 'No ri or ri_integer field found' });
+    });
+
+    if (report.migrated > 0) {
+      data.metadata.lastUpdated = new Date().toISOString();
+      writeDatabase(data);
+    }
+
+    console.log(`RI migration complete: migrated=${report.migrated}, skipped=${report.skipped}, flagged=${report.flagged.length}`);
+
+    res.json({
+      success: true,
+      message: `Migration complete. Run the batch routine to populate ri_decimal with correct subject categories.`,
+      migrated:  report.migrated,
+      skipped:   report.skipped,
+      flagged:   report.flagged.length,
+      flaggedRecords: report.flagged
+    });
+
+  } catch (error) {
+    console.error('RI migration error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/admin/create-backup', async (req, res) => {
   try {
     const dbPath = '/mnt/data/art_database.json';
