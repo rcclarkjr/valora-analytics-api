@@ -1365,6 +1365,7 @@ app.post("/analyze-ri", async (req, res) => {
       imageType,
       artTitle,
       artistName,
+      userDecimal,
       temperature: requestedTemp
     } = req.body;
 
@@ -1386,10 +1387,21 @@ app.post("/analyze-ri", async (req, res) => {
         .json({ error: { message: "Image is required" } });
     }
 
+    // Validate userDecimal — must be 0–9 integer provided by user from dropdown
+    if (userDecimal === undefined || userDecimal === null) {
+      console.log("Missing userDecimal in request");
+      return res.status(400).json({ error: { message: "Subject category selection is required" } });
+    }
+    const userDecimalInt = parseInt(userDecimal);
+    if (isNaN(userDecimalInt) || userDecimalInt < 0 || userDecimalInt > 9) {
+      console.log(`Invalid userDecimal: ${userDecimal}`);
+      return res.status(400).json({ error: { message: "Invalid subject category selection" } });
+    }
+
     console.log(
       `Processing RI request for artwork: "${artTitle}" by ${artistName}`
     );
-    console.log(`Prompt length: ${prompt.length} characters`);
+    console.log(`Prompt length: ${prompt.length} characters, userDecimal: ${userDecimalInt}`);
 
     // ================================================================================
     // IMAGE PREPROCESSING — resize to safe API limits before sending to AI
@@ -1470,24 +1482,13 @@ app.post("/analyze-ri", async (req, res) => {
       });
     }
 
-    // Validate all required fields are present
-    const requiredRiFields = ['ri_integer', 'ri_decimal', 'ri_score', 'category', 'subject_category', 'analysis', 'ri_explanation', 'subject_explanation', 'summary'];
+    // Validate required AI response fields
+    const requiredRiFields = ['ri_integer', 'category', 'summary', 'ri_explanation'];
     for (const field of requiredRiFields) {
       if (aiResponse[field] === undefined || aiResponse[field] === null) {
         console.error(`RI response missing required field: ${field}`);
         return res.status(500).json({
           error: { message: `AI returned incomplete response — missing field: ${field}` }
-        });
-      }
-    }
-
-    // Validate analysis sub-fields
-    const requiredAnalysisFields = ['subject_recognizability', 'fidelity_to_reality', 'perspective_depth', 'detail_texture', 'real_world_reference'];
-    for (const field of requiredAnalysisFields) {
-      if (!aiResponse.analysis[field]) {
-        console.error(`RI analysis object missing field: ${field}`);
-        return res.status(500).json({
-          error: { message: `AI returned incomplete analysis — missing field: ${field}` }
         });
       }
     }
@@ -1501,43 +1502,29 @@ app.post("/analyze-ri", async (req, res) => {
       });
     }
 
-    // Validate ri_decimal
-    const riDecimal = parseInt(aiResponse.ri_decimal);
-    if (isNaN(riDecimal) || riDecimal < 0 || riDecimal > 9) {
-      console.error(`Invalid ri_decimal: ${aiResponse.ri_decimal}`);
-      return res.status(500).json({
-        error: { message: `AI returned invalid ri_decimal: ${aiResponse.ri_decimal}. Must be 0–9.` }
-      });
-    }
+    // Apply business rule: if integer <= 2, force decimal to 0 regardless of user selection
+    const riDecimal = riInteger <= 2 ? 0 : userDecimalInt;
+    const riScore = parseFloat(`${riInteger}.${riDecimal}`);
 
-    // Enforce business rules: integer 1 or 2 → decimal must be 0; integer 3–5 → decimal must be 1–9
-    if (riInteger <= 2 && riDecimal !== 0) {
-      console.error(`Business rule violation: ri_integer=${riInteger} requires ri_decimal=0, got ${riDecimal}`);
-      return res.status(500).json({
-        error: { message: `Invalid RI combination: integer ${riInteger} requires decimal 0 (no subject category), but AI returned decimal ${riDecimal}.` }
-      });
-    }
-    if (riInteger >= 3 && riDecimal === 0) {
-      console.error(`Business rule violation: ri_integer=${riInteger} requires ri_decimal 1–9, got 0`);
-      return res.status(500).json({
-        error: { message: `Invalid RI combination: integer ${riInteger} requires a subject category (decimal 1–9), but AI returned decimal 0.` }
-      });
-    }
-
-    // Validate ri_score matches integer and decimal
-    const riScore = parseFloat(aiResponse.ri_score);
-    const expectedScore = parseFloat(`${riInteger}.${riDecimal}`);
-    if (Math.abs(riScore - expectedScore) > 0.001) {
-      console.error(`ri_score ${riScore} does not match ri_integer ${riInteger} and ri_decimal ${riDecimal}`);
-      return res.status(500).json({
-        error: { message: `AI returned inconsistent RI values: ri_score ${riScore} does not match ri_integer ${riInteger} and ri_decimal ${riDecimal}.` }
-      });
-    }
+    // Subject category lookup for display
+    const subjectCategoryMap = {
+      0: 'None (abstract)',
+      1: 'Portrait',
+      2: 'Figurative',
+      3: 'Landscape',
+      4: 'Seascape',
+      5: 'Cityscape',
+      6: 'Floral',
+      7: 'Still Life',
+      8: 'Geometric / Patterns',
+      9: 'Animals'
+    };
+    const subjectCategoryName = subjectCategoryMap[riDecimal];
 
     // Convert JSON to markdown format for frontend
     const subjectLine = riInteger >= 3
-      ? `**Subject:** ${aiResponse.subject_category}`
-      : `**Subject:** None (abstract — no dominant subject)`;
+      ? `**Subject:** ${subjectCategoryName}`
+      : `**Subject:** None (abstract — no subject category applies)`;
 
     const markdownReport = `
 ## Representational Index
@@ -1552,20 +1539,17 @@ ${aiResponse.summary.trim()}
 ### RI Category Explanation
 ${aiResponse.ri_explanation}
 
-### Subject Classification
-${aiResponse.subject_explanation}
-
 <div class="final-smi"><h2>Representational Index (RI): ${riScore.toFixed(1)}</h2></div>
 `;
 
-    console.log("Sending RI analysis response to client");
+    console.log(`Sending RI analysis response: integer=${riInteger}, decimal=${riDecimal}, score=${riScore}`);
     res.json({
-      analysis: markdownReport.trim(),
+      analysis:         markdownReport.trim(),
       ri_score:         riScore,
       ri_integer:       riInteger,
       ri_decimal:       riDecimal,
       category:         aiResponse.category,
-      subject_category: aiResponse.subject_category
+      subject_category: subjectCategoryName
     });
   } catch (error) {
     console.error("Unexpected error in RI analysis:", error);
