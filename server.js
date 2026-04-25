@@ -1523,14 +1523,13 @@ app.post("/analyze-ri", async (req, res) => {
 
     // Convert JSON to markdown format for frontend
     const subjectLine = riInteger >= 3
-      ? `**Subject:** ${subjectCategoryName}`
-      : `**Subject:** None (abstract — no subject category applies)`;
+      ? `<p class="ri-meta"><strong>Subject:</strong> ${subjectCategoryName}</p>`
+      : `<p class="ri-meta"><strong>Subject:</strong> None (abstract — no subject category applies)</p>`;
 
     const markdownReport = `
 ## Representational Index
 
-**RI Category:** ${aiResponse.category}
-
+<p class="ri-meta"><strong>RI Category:</strong> ${aiResponse.category}</p>
 ${subjectLine}
 
 ### Analysis
