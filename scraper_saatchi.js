@@ -141,6 +141,19 @@ function stripHtml(str) {
     return str.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// ── Detect foreign-language bio ───────────────────────────────
+// Returns true if the bio contains a significant proportion of
+// non-Latin characters (Cyrillic, Arabic, CJK, Hebrew, Devanagari,
+// Thai, Greek, etc.). Threshold: >15% of all letters are non-Latin.
+// A null or empty bio is also considered non-English.
+function isForeignLanguageBio(bio) {
+    if (!bio || bio.trim().length === 0) return true;
+    const letters = bio.match(/\p{L}/gu);
+    if (!letters || letters.length === 0) return true;
+    const nonLatin = letters.filter(ch => !/\p{Script=Latin}/u.test(ch));
+    return (nonLatin.length / letters.length) > 0.15;
+}
+
 // ── Map Saatchi medium text to our finite list ────────────────
 const MEDIUM_MAP = [
     { pattern: /oil\s+over\s+acrylic/i,           value: 'Oil over Acrylic' },
@@ -529,6 +542,20 @@ async function main() {
                 record.artistBio = null;
             }
 
+            // ── Skip records with no bio or a foreign-language bio ────
+            // A null bio produces CLI = 1.0. A foreign-language bio causes
+            // the scoring questionnaire to answer at the lowest level,
+            // also producing CLI = 1.0. Skip both cases here to avoid
+            // wasting import and scoring resources.
+            if (record.artistBio === null) {
+                console.warn(`  SKIPPED — no artist bio found: ${url}`);
+                continue;
+            }
+            if (isForeignLanguageBio(record.artistBio)) {
+                console.warn(`  SKIPPED — foreign-language bio detected: ${url}`);
+                continue;
+            }
+
             results.push(record);
         } catch (err) {
             console.error(`  FAILED: ${err.message}`);
@@ -552,10 +579,12 @@ async function main() {
     // Strip imageBase64 from progress results — UI doesn't need it, keeps payload small
     const resultsForUI = results.map(({ imageBase64, ...rest }) => rest);
 
+    const skippedCount = entriesToProcess.length - results.length;
+    const skippedNote  = skippedCount > 0 ? ` (${skippedCount} skipped — no bio or foreign language)` : '';
     writeProgress('complete', entriesToProcess.length, entriesToProcess.length,
-        `Scrape complete — ${results.length} records written to staging.`, resultsForUI);
+        `Scrape complete — ${results.length} records written to staging${skippedNote}.`, resultsForUI);
 
-    console.log(`Done. ${results.length} records scraped.`);
+    console.log(`Done. ${results.length} records scraped, ${skippedCount} skipped.`);
 }
 
 main().catch(err => {

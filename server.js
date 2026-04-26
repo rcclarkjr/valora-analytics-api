@@ -2838,6 +2838,47 @@ app.post("/api/metadata/remove-obsolete-fields", (req, res) => {
     }
 });
 
+// DELETE /api/records/remove-cli1 — Permanently delete all records where cli === 1.0
+// Called from the "Remove CLI 1.0 Records" nav item in the maintenance app.
+// Also triggered automatically after each Batch SMI/RI/CLI run when updateDatabase is true.
+// Deletes the full-size image file from disk alongside each removed database record.
+// Returns: { deletedCount: N }
+app.delete("/api/records/remove-cli1", (req, res) => {
+    try {
+        const data = readDatabase();
+
+        const toDelete = data.records.filter(r =>
+            r.cli !== null && r.cli !== undefined && parseFloat(r.cli) === 1.0
+        );
+
+        if (toDelete.length === 0) {
+            console.log("remove-cli1: no records with CLI = 1.0 found.");
+            return res.json({ deletedCount: 0 });
+        }
+
+        const idsToDelete = toDelete.map(r => r.id);
+        data.records = data.records.filter(r => !idsToDelete.includes(r.id));
+        data.metadata.lastUpdated = new Date().toISOString();
+        writeDatabase(data);
+
+        // Delete image files for removed records
+        idsToDelete.forEach(id => {
+            const imagePath = path.join('/mnt/data/images', `record_${id}.jpg`);
+            if (fs.existsSync(imagePath)) {
+                fs.unlinkSync(imagePath);
+                console.log(`remove-cli1: deleted image file ${imagePath}`);
+            }
+        });
+
+        console.log(`remove-cli1: deleted ${toDelete.length} record(s) with CLI = 1.0 (IDs: ${idsToDelete.join(', ')})`);
+        res.json({ deletedCount: toDelete.length });
+
+    } catch (error) {
+        console.error("Error in remove-cli1:", error.message);
+        res.status(500).json({ error: "Failed to remove CLI 1.0 records", details: error.message });
+    }
+});
+
 // POST /api/coefficients — Save metadata and recalculate all derived fields
 app.post("/api/coefficients", (req, res) => {
     try {
