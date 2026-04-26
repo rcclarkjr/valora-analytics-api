@@ -3326,31 +3326,31 @@ app.post("/api/valuation", async (req, res) => {
       const z = (r.appsi - appsiMean) / appsiStdDev;
       return z >= zFilterThreshold;
     });
-    filterCounts.push({ label: 'After Z-filter', count: pool.length });
+    filterCounts.push({ label: 'After outliers filter', count: pool.length });
     console.log(`Step 5 — Z-filter (threshold=${zFilterThreshold}, mean=${appsiMean.toFixed(4)}, stddev=${appsiStdDev.toFixed(4)}): ${pool.length} records`);
     if (pool.length < targetQuantity) {
       throw new Error(`Insufficient comps after Z-filter: ${pool.length} records remain.`);
     }
 
-    // ── Step 6: SMI proximity — reduce to targetRangeHigh by nearest SMI ────────
-    // Sort pool by absolute SMI distance from subject, keep top targetRangeHigh.
-    pool = pool
-      .map(r => ({ ...r, _smiDist: Math.abs(r.smi - smi) }))
-      .sort((a, b) => a._smiDist - b._smiDist)
-      .slice(0, targetRangeHigh)
-      .map(({ _smiDist, ...r }) => r);
-    filterCounts.push({ label: 'After SMI filter', count: pool.length });
-    console.log(`Step 6 — SMI proximity: kept ${pool.length} nearest by |smi - ${smi}|`);
-
-    // ── Step 7: SSI proximity — reduce to targetQuantity by nearest SSI ──────
-    // Sort Step 6 survivors by absolute SSI distance from subject, keep top targetQuantity.
+    // ── Step 6: SSI proximity — reduce to targetRangeHigh by nearest SSI ────────
+    // Sort pool by absolute SSI distance from subject, keep top targetRangeHigh.
     pool = pool
       .map(r => ({ ...r, _ssiDist: Math.abs(r.ssi - subjectSSI) }))
       .sort((a, b) => a._ssiDist - b._ssiDist)
-      .slice(0, targetQuantity)
+      .slice(0, targetRangeHigh)
       .map(({ _ssiDist, ...r }) => r);
     filterCounts.push({ label: 'After size filter', count: pool.length });
-    console.log(`Step 7 — SSI proximity: kept ${pool.length} nearest by |ssi - ${subjectSSI}|`);
+    console.log(`Step 6 — SSI proximity: kept ${pool.length} nearest by |ssi - ${subjectSSI}|`);
+
+    // ── Step 7: SMI proximity — reduce to targetQuantity by nearest SMI ──────
+    // Sort Step 6 survivors by absolute SMI distance from subject, keep top targetQuantity.
+    pool = pool
+      .map(r => ({ ...r, _smiDist: Math.abs(r.smi - smi) }))
+      .sort((a, b) => a._smiDist - b._smiDist)
+      .slice(0, targetQuantity)
+      .map(({ _smiDist, ...r }) => r);
+    filterCounts.push({ label: 'After SMI filter', count: pool.length });
+    console.log(`Step 7 — SMI proximity: kept ${pool.length} nearest by |smi - ${smi}|`);
 
     // ── Phase 1 complete ──────────────────────────────────────────────────────
     console.log(`Phase 1 complete: ${pool.length} records in final pool (target range: ${targetQuantity}–${targetRangeHigh})`);
