@@ -1834,7 +1834,7 @@ app.get("/api/stats", (req, res) => {
     const incompleteRecords = [];
     data.records.forEach(record => {
 
-	const requiredFields = ['ri_integer', 'ri_decimal', 'cli', 'ssi', 'aop', 'appsi', 'stdppsi'];
+	const requiredFields = ['ri_integer', 'ri_decimal', 'cli', 'ssi', 'aop', 'aoppsi', 'appsi'];
 	const missingFields = [];
 	requiredFields.forEach(field => {
 		const value = record[field];
@@ -2529,31 +2529,23 @@ function calculateSMI_fromScores(subjectScores, renderingScores, coefficients, i
 // =============================================================
 function calculateDerivedFields(record, metadata) {
     const coefficients = metadata.coefficients || {};
-    const mediumCoefficients = metadata.medium || {};
 
     // 1. SSI
     const height = parseFloat(record.height) || 0;
     const width  = parseFloat(record.width)  || 0;
     record.ssi = height * width;
 
-    // 2. LSSI
-    record.lssi = record.ssi > 0 ? Math.log(record.ssi) : 0;
-
-    // 3. AOP -- frame value is deducted if present
+    // 2. AOP — frame value is deducted if framed
     const price = parseFloat(record.price) || 0;
     record.aop = calculateAOP(price, record.framed || 'N', coefficients);
 
-    // 4. AOPPSI -- Art Only Price per SI is calculated
+    // 3. AOPPSI — Art Only Price per square inch
     record.aoppsi = (record.ssi > 0 && record.aop > 0) ? record.aop / record.ssi : 0;
 
-    // 5. APPSI -- AOPPSI is normalized to a size of 200 square inches
+    // 4. APPSI — AOPPSI normalized to 200 square inches using size curve
     record.appsi = calculateAPPSI(record.ssi, record.aop, coefficients);
 
-    // 6. medium_adj_ppsi — appsi divided by medium index (oil = 1.0) ... normalized to oil
-    const mediumIndex = getMediumIndex(record.medium, mediumCoefficients);
-    record.medium_adj_ppsi = (record.appsi > 0 && mediumIndex > 0) ? record.appsi / mediumIndex : 0;
-
-    // 7. SMI — only if both pillar scores and integer are present (must precede Steps 8 and 9)
+    // 5. SMI — only if both pillar scores and integer are present
     if (record.smi_subject !== null && record.smi_subject !== undefined &&
         record.smi_render  !== null && record.smi_render  !== undefined) {
         if (record.integer === null || record.integer === undefined)
@@ -2562,24 +2554,6 @@ function calculateDerivedFields(record, metadata) {
     } else {
         record.smi = null;
     }
-
-    // 8. cli_adj_ppsi — medium_adj_ppsi adjusted for distance of this record's CLI from std_CLI
-    const std_CLI  = coefficients['std_CLI'];
-    const coef_CLI = coefficients['coef_CLI'];
-    if (std_CLI === undefined)  throw new Error('calculateDerivedFields: std_CLI is missing from metadata coefficients.');
-    if (coef_CLI === undefined) throw new Error('calculateDerivedFields: coef_CLI is missing from metadata coefficients.');
-    if (record.cli === undefined || record.cli === null) throw new Error('calculateDerivedFields: record.cli is missing — cannot calculate cli_adj_ppsi.');
-    record.cli_adj_ppsi = record.medium_adj_ppsi + ((parseFloat(std_CLI) - record.cli) * parseFloat(coef_CLI));
-
-    // 9. smi_adj_ppsi — cli_adj_ppsi adjusted for distance of this record's SMI from std_SMI
-    //    stdppsi is set equal to smi_adj_ppsi so the rest of the app continues to use stdppsi unchanged
-    const std_SMI  = coefficients['std_SMI'];
-    const coef_SMI = coefficients['coef_SMI'];
-    if (std_SMI === undefined)  throw new Error('calculateDerivedFields: std_SMI is missing from metadata coefficients.');
-    if (coef_SMI === undefined) throw new Error('calculateDerivedFields: coef_SMI is missing from metadata coefficients.');
-    if (record.smi === undefined || record.smi === null) throw new Error('calculateDerivedFields: record.smi is missing — cannot calculate smi_adj_ppsi.');
-    record.smi_adj_ppsi = record.cli_adj_ppsi + ((parseFloat(std_SMI) - record.smi) * parseFloat(coef_SMI));
-    record.stdppsi      = record.smi_adj_ppsi;
 
     return record;
 }
@@ -2870,7 +2844,9 @@ app.post("/api/coefficients", (req, res) => {
         const data = readDatabase();
 
         // Validate numeric coefficient fields before saving
-        const numericFields = ['coef_size_constant', 'coef_size_exponent', 'coef_frame_constant', 'coef_frame_exponent'];
+        const numericFields = ['coef_size_constant', 'coef_size_exponent', 'coef_frame_constant', 'coef_frame_exponent',
+                               'target_quantity', 'target_multiple', 'z_filter_threshold',
+                               'cli_bracket_size', 'ssi_filter_start_pct', 'ssi_filter_step_pct'];
         for (const field of numericFields) {
             if (req.body[field] !== undefined) {
                 const v = parseFloat(req.body[field]);
@@ -3182,13 +3158,11 @@ app.post("/api/valuation", async (req, res) => {
   try {
     console.log("Starting valuation process");
 
-const {
+    const {
       smi,
       ri_integer,
       ri_decimal,
       cli,
-      size,
-      targetedRI,
       subjectImageBase64,
       skipNarrative,
       media,
@@ -3196,63 +3170,207 @@ const {
       artist,
       subjectDescription,
       height,
-      width,
-      temperature: requestedTemp
+      width
     } = req.body;
-	
 
     const narrativeTemperature = 0.5;
 
     console.log("Valuation inputs:", {
-      smi, ri_integer, ri_decimal, cli, size,
-      targetedRI: Array.isArray(targetedRI) ? targetedRI : "Not an array",
+      smi, ri_integer, ri_decimal, cli,
       hasSubjectImage: !!subjectImageBase64,
       media, title, artist, subjectDescription, height, width
     });
 
-    // ── Validate inputs ──────────────────────────────────────────────────────
-    if (!smi || ri_integer === undefined || ri_integer === null ||
-        ri_decimal === undefined || ri_decimal === null ||
-        !cli || !size || !targetedRI ||
-        !Array.isArray(targetedRI) || (!skipNarrative && !subjectImageBase64) || !height || !width) {
-      return res.status(400).json({ error: "Missing required valuation inputs." });
-    }
-	
+    // ── Validate inputs ───────────────────────────────────────────────────────
+    if (smi === undefined || smi === null) throw new Error("Missing required input: smi");
+    if (ri_integer === undefined || ri_integer === null) throw new Error("Missing required input: ri_integer");
+    if (ri_decimal === undefined || ri_decimal === null) throw new Error("Missing required input: ri_decimal");
+    if (cli === undefined || cli === null) throw new Error("Missing required input: cli");
+    if (!height) throw new Error("Missing required input: height");
+    if (!width) throw new Error("Missing required input: width");
+    if (!media) throw new Error("Missing required input: media");
+    if (!skipNarrative && !subjectImageBase64) throw new Error("Missing required input: subjectImageBase64");
 
-    const db = readDatabase();
-    const allRecords    = db.records || [];
-    const coefficients  = db.metadata.coefficients;
-    const mediumTable   = db.metadata.medium;
+    const db           = readDatabase();
+    const allRecords   = db.records || [];
+    const coefficients = db.metadata.coefficients;
+    const mediumTable  = db.metadata.medium;
 
-    // Confirm all required metadata fields are present — no fallbacks
+    // ── Validate required metadata fields — no fallbacks ─────────────────────
     const requiredCoefs = [
       'coef_size_constant', 'coef_size_exponent',
-      'pass3_top_quantity', 'pass1_cutoff_pct',
-      'std_CLI', 'coef_CLI', 'std_SMI', 'coef_SMI',
+      'coef_frame_constant', 'coef_frame_exponent',
+      'target_quantity', 'target_multiple',
+      'z_filter_threshold',
+      'cli_bracket_size',
+      'ssi_filter_start_pct', 'ssi_filter_step_pct',
       'coef_A', 'coef_B', 'coef_C'
     ];
     for (const field of requiredCoefs) {
       if (coefficients[field] === undefined || coefficients[field] === null) {
-        console.error(`Missing required metadata field: ${field}`);
-        return res.status(500).json({
-          error: `Server configuration error: metadata field "${field}" is missing. Please contact support@valoraanalytics.com`
-        });
+        throw new Error(`Server configuration error: metadata field "${field}" is missing.`);
       }
     }
 
-    const sizeConstant   = parseFloat(coefficients['coef_size_constant']);
-    const sizeExponent   = parseFloat(coefficients['coef_size_exponent']);
-    const pass3Qty       = parseInt(coefficients['pass3_top_quantity']);
-    const pass1Cutoff    = parseFloat(coefficients['pass1_cutoff_pct']);
-    const std_CLI        = parseFloat(coefficients['std_CLI']);
-    const coef_CLI       = parseFloat(coefficients['coef_CLI']);
-    const std_SMI        = parseFloat(coefficients['std_SMI']);
-    const coef_SMI       = parseFloat(coefficients['coef_SMI']);
+    const targetQuantity   = parseInt(coefficients['target_quantity']);
+    const targetMultiple   = parseFloat(coefficients['target_multiple']);
+    const targetRangeHigh  = targetQuantity * targetMultiple;
+    const zFilterThreshold = parseFloat(coefficients['z_filter_threshold']);
+    const cliBracketSize   = parseFloat(coefficients['cli_bracket_size']);
+    const ssiStartPct      = parseFloat(coefficients['ssi_filter_start_pct']);
+    const ssiStepPct       = parseFloat(coefficients['ssi_filter_step_pct']);
+    const subjectSSI       = parseFloat(height) * parseFloat(width);
 
+    // filterCounts collects {label, count} for each step — returned to frontend for funnel display
+    const filterCounts = [{ label: 'Database', count: allRecords.length }];
 
+    // ── Valid pool: records with all fields required for filtering and display ─
+    let pool = allRecords.filter(r =>
+      typeof r.appsi      === "number" && r.appsi  > 0 &&
+      typeof r.aop        === "number" && r.aop    > 0 &&
+      typeof r.ssi        === "number" && r.ssi    > 0 &&
+      typeof r.smi        === "number" &&
+      typeof r.cli        === "number" &&
+      r.ri_integer !== undefined && r.ri_integer !== null &&
+      r.ri_decimal !== undefined && r.ri_decimal !== null &&
+      r.thumbnailBase64 && r.artistName && r.title &&
+      r.height && r.width && r.medium && r.price && r.framed !== undefined
+    );
 
+    console.log(`Valid pool: ${pool.length} records with all required fields`);
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient valid records in database: ${pool.length} found, ${targetQuantity} required.`);
+    }
 
-// ── Step 1: Generate AI analysis (skipped when skipNarrative is true) ────
+    // ── Step 1: RI Integer bracket — ±1, clamped 1–5 ─────────────────────────
+    const riMin = Math.max(1, ri_integer - 1);
+    const riMax = Math.min(5, ri_integer + 1);
+    pool = pool.filter(r => r.ri_integer >= riMin && r.ri_integer <= riMax);
+    filterCounts.push({ label: 'After RI bracket', count: pool.length });
+    console.log(`Step 1 — RI bracket [${riMin}–${riMax}]: ${pool.length} records`);
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after RI bracket filter: ${pool.length} records remain.`);
+    }
+
+    // ── Step 2: Medium filter — hard-coded map ────────────────────────────────
+    // Oil → Oil only | Acrylic → Acrylic only | anything else → all except Oil
+    if (media === 'Oil') {
+      pool = pool.filter(r => r.medium === 'Oil');
+    } else if (media === 'Acrylic') {
+      pool = pool.filter(r => r.medium === 'Acrylic');
+    } else {
+      pool = pool.filter(r => r.medium !== 'Oil');
+    }
+    filterCounts.push({ label: 'After medium filter', count: pool.length });
+    console.log(`Step 2 — Medium filter (subject: ${media}): ${pool.length} records`);
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after medium filter: ${pool.length} records remain.`);
+    }
+
+    // ── Step 3: Subject category filter — hard-coded ri_decimal map ───────────
+    // Special rule for Portrait (1): all 1s + up to equal count of random 2s
+    const subjectDecimal = parseInt(ri_decimal);
+    const decimalMap = {
+      0: [0],
+      1: 'portrait_special',
+      2: [2],
+      3: [3, 4, 5],
+      4: [3, 4, 5],
+      5: [3, 4, 5],
+      6: [6, 7, 9, 3],
+      7: [6, 7, 9, 3],
+      8: [8, 0],
+      9: [6, 7, 9, 3]
+    };
+    const decimalRule = decimalMap[subjectDecimal];
+    if (decimalRule === undefined) {
+      throw new Error(`No subject category mapping found for ri_decimal: ${subjectDecimal}`);
+    }
+
+    if (decimalRule === 'portrait_special') {
+      const portraits   = pool.filter(r => parseInt(r.ri_decimal) === 1);
+      const figuratives = pool.filter(r => parseInt(r.ri_decimal) === 2);
+      const maxFig      = portraits.length;
+      const shuffled    = figuratives.sort(() => Math.random() - 0.5).slice(0, maxFig);
+      pool = [...portraits, ...shuffled];
+      console.log(`Step 3 — Subject filter (Portrait special): ${portraits.length} portraits + ${shuffled.length} figuratives = ${pool.length} records`);
+    } else {
+      pool = pool.filter(r => decimalRule.includes(parseInt(r.ri_decimal)));
+      console.log(`Step 3 — Subject filter (ri_decimal=${subjectDecimal}, allowed: [${decimalRule.join(',')}]): ${pool.length} records`);
+    }
+    filterCounts.push({ label: 'After subject filter', count: pool.length });
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after subject category filter: ${pool.length} records remain.`);
+    }
+
+    // ── Step 4: CLI bracket — conditional ─────────────────────────────────────
+    // Only apply if the resulting pool would still exceed targetRangeHigh
+    const cliLow   = Math.max(1, cli - cliBracketSize);
+    const cliHigh  = Math.min(5, cli + cliBracketSize);
+    const afterCLI = pool.filter(r => r.cli >= cliLow && r.cli <= cliHigh);
+    if (afterCLI.length > targetRangeHigh) {
+      pool = afterCLI;
+      filterCounts.push({ label: 'After CLI bracket', count: pool.length });
+      console.log(`Step 4 — CLI bracket [${cliLow.toFixed(2)}–${cliHigh.toFixed(2)}]: ${pool.length} records (applied)`);
+    } else {
+      console.log(`Step 4 — CLI bracket: skipped (would reduce pool to ${afterCLI.length}, at or within target range)`);
+    }
+
+    // ── Step 5: Z-filter — eliminate low-tail APPSI outliers ─────────────────
+    const appsiValues = pool.map(r => r.appsi);
+    const appsiMean   = appsiValues.reduce((sum, v) => sum + v, 0) / appsiValues.length;
+    const appsiStdDev = Math.sqrt(
+      appsiValues.reduce((sum, v) => sum + Math.pow(v - appsiMean, 2), 0) / appsiValues.length
+    );
+    pool = pool.filter(r => {
+      const z = (r.appsi - appsiMean) / appsiStdDev;
+      return z >= zFilterThreshold;
+    });
+    filterCounts.push({ label: 'After Z-filter', count: pool.length });
+    console.log(`Step 5 — Z-filter (threshold=${zFilterThreshold}, mean=${appsiMean.toFixed(4)}, stddev=${appsiStdDev.toFixed(4)}): ${pool.length} records`);
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after Z-filter: ${pool.length} records remain.`);
+    }
+
+    // ── Step 6: SSI size filter — iterative tightening ───────────────────────
+    // Always runs. Tighten until pool is within target range or backing out
+    // one step would drop below targetQuantity.
+    let ssiPct  = ssiStartPct;
+    let ssiPool = pool.filter(r => {
+      const lo = subjectSSI * (1 - ssiPct);
+      const hi = subjectSSI * (1 + ssiPct);
+      return r.ssi >= lo && r.ssi <= hi;
+    });
+    console.log(`Step 6 — SSI filter start (±${(ssiPct * 100).toFixed(1)}%): ${ssiPool.length} records`);
+
+    if (ssiPool.length >= targetQuantity) {
+      while (ssiPool.length > targetRangeHigh) {
+        const nextPct     = ssiPct * (1 - ssiStepPct);
+        const nextSsiPool = pool.filter(r => {
+          const lo = subjectSSI * (1 - nextPct);
+          const hi = subjectSSI * (1 + nextPct);
+          return r.ssi >= lo && r.ssi <= hi;
+        });
+        if (nextSsiPool.length < targetQuantity) {
+          console.log(`Step 6 — SSI tighten to ±${(nextPct * 100).toFixed(1)}% would drop to ${nextSsiPool.length} — backing out, keeping ${ssiPool.length}`);
+          break;
+        }
+        ssiPct  = nextPct;
+        ssiPool = nextSsiPool;
+        console.log(`Step 6 — SSI tightened to ±${(ssiPct * 100).toFixed(1)}%: ${ssiPool.length} records`);
+      }
+      pool = ssiPool;
+    } else {
+      console.log(`Step 6 — SSI filter start would drop pool to ${ssiPool.length} (below targetQuantity ${targetQuantity}) — SSI filter skipped`);
+    }
+    filterCounts.push({ label: 'After size filter', count: pool.length });
+    console.log(`Step 6 — SSI filter final pool: ${pool.length} records`);
+
+    // ── Phase 1 complete ──────────────────────────────────────────────────────
+    console.log(`Phase 1 complete: ${pool.length} records in final pool (target range: ${targetQuantity}–${targetRangeHigh})`);
+    filterCounts.forEach(fc => console.log(`  ${fc.label}: ${fc.count}`));
+
+    // ── Generate AI narrative ─────────────────────────────────────────────────
     let aiAnalysis = "";
     if (!skipNarrative) {
       try {
@@ -3264,38 +3382,26 @@ const {
           ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"`
           : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}`;
 
-        // ── Image preprocessing — resize to safe API limits before sending to AI ──
         let processedImageBase64 = subjectImageBase64;
-        let processedImageType = "image/jpeg";
+        let processedImageType   = "image/jpeg";
 
         try {
-          const sharp = require('sharp');
+          const sharp       = require('sharp');
           const inputBuffer = Buffer.from(subjectImageBase64, 'base64');
-
           console.log(`Valuation original image buffer size: ${(inputBuffer.length / 1024 / 1024).toFixed(2)} MB`);
-
           const resized = await sharp(inputBuffer)
-            .resize(1600, 1600, {
-              fit: 'inside',
-              withoutEnlargement: true
-            })
+            .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
             .jpeg({ quality: 90 })
             .toBuffer();
-
           console.log(`Valuation processed image buffer size: ${(resized.length / 1024 / 1024).toFixed(2)} MB`);
-
           if (resized.length > 4.5 * 1024 * 1024) {
-            const recompressed = await sharp(resized)
-              .jpeg({ quality: 75 })
-              .toBuffer();
+            const recompressed = await sharp(resized).jpeg({ quality: 75 }).toBuffer();
             processedImageBase64 = recompressed.toString('base64');
             console.log(`Valuation recompressed image buffer size: ${(recompressed.length / 1024 / 1024).toFixed(2)} MB`);
           } else {
             processedImageBase64 = resized.toString('base64');
           }
-
           processedImageType = 'image/jpeg';
-
         } catch (sharpError) {
           console.warn("Valuation sharp preprocessing failed — proceeding with original image:", sharpError.message);
         }
@@ -3319,130 +3425,14 @@ const {
       }
     }
 
-
-
-    // ── Pass 1: Credibility filter — eliminate bottom pass1_cutoff_pct by stdppsi ──
-    const validPool = allRecords.filter(r =>
-      typeof r.stdppsi    === "number" && r.stdppsi > 0 &&
-      typeof r.smi        === "number" &&
-      typeof r.cli        === "number" &&
-      r.ri_integer !== undefined && r.ri_integer !== null &&
-      r.ri_decimal !== undefined && r.ri_decimal !== null &&
-      r.thumbnailBase64 && r.artistName && r.title &&
-      r.height && r.width && r.medium && r.price && r.framed !== undefined
-    );
-
-    console.log(`Pass 1: ${validPool.length} records with valid stdppsi before credibility cut`);
-
-    if (validPool.length === 0) {
-      return res.status(400).json({ error: "No records with valid STDPPSI found in database." });
-    }
-
-    const sortedByStdppsi = [...validPool].sort((a, b) => a.stdppsi - b.stdppsi);
-    const cutoffIndex     = Math.floor(sortedByStdppsi.length * pass1Cutoff);
-    const cutoffValue     = sortedByStdppsi[cutoffIndex].stdppsi;
-    const afterPass1      = validPool.filter(r => r.stdppsi >= cutoffValue);
-
-    console.log(`Pass 1: cutoff stdppsi=${cutoffValue.toFixed(4)}, ${afterPass1.length} records remain after eliminating bottom ${(pass1Cutoff * 100).toFixed(0)}%`);
-
-    if (afterPass1.length === 0) {
-      return res.status(400).json({ error: "No records survived the Pass 1 credibility filter." });
-    }
-
-    // ── Pass 2: Style filter — RI bracket ────────────────────────────────────
-    const afterPass2 = afterPass1.filter(r => targetedRI.includes(Number(r.ri_integer)));
-
-    console.log(`Pass 2: ${afterPass2.length} records within RI bracket [${targetedRI.join(", ")}]`);
-
-    if (afterPass2.length === 0) {
-      return res.status(400).json({
-        error: "No comparable records found within the RI bracket after credibility filtering.",
-        details: { targetedRI, afterPass1Count: afterPass1.length }
-      });
-    }
-
-    // ── Pass 3A: CLI proximity — keep top 2 × pass3Qty by |comp.cli - subject.cli| ──
-    // Primary quality filter: ensures every candidate entering Pass 3B is in the
-    // subject's career tier. Ties on CLI distance are broken by SMI distance ascending.
-
-    const pass3AQty = 2 * pass3Qty;
-
-    const withCliDist = afterPass2.map(r => ({
-      ...r,
-      cliDist: Math.abs(r.cli - cli),
-      smiDist: Math.abs(r.smi - smi)
-    }));
-
-    const sortedByCli = [...withCliDist].sort((a, b) =>
-      a.cliDist !== b.cliDist
-        ? a.cliDist - b.cliDist
-        : a.smiDist - b.smiDist   // tiebreaker: SMI distance ascending
-    );
-    const afterPass3A = sortedByCli.slice(0, pass3AQty);
-
-    console.log(`Pass 3A: ${afterPass2.length} RI-qualified comps → top ${afterPass3A.length} by CLI proximity (tiebreak: SMI proximity)`);
-    afterPass3A.forEach((c, i) => console.log(
-      `  3A #${i+1}: ID=${c.id}, CLI=${c.cli} (dist=${c.cliDist.toFixed(2)}), SMI=${c.smi} (dist=${c.smiDist.toFixed(2)})`
-    ));
-
-    // ── Pass 3B: SMI proximity — keep top pass3Qty by |comp.smi - subject.smi| ──
-    // Secondary quality filter: refines within the CLI-qualified pool.
-    // Ties on SMI distance are broken by CLI distance ascending.
-
-    const sortedBySmi = [...afterPass3A].sort((a, b) =>
-      a.smiDist !== b.smiDist
-        ? a.smiDist - b.smiDist
-        : a.cliDist - b.cliDist   // tiebreaker: CLI distance ascending
-    );
-    const afterPass3B = sortedBySmi.slice(0, pass3Qty);
-
-    console.log(`Pass 3B: ${afterPass3A.length} CLI-qualified comps → top ${afterPass3B.length} by SMI proximity (tiebreak: CLI proximity)`);
-    afterPass3B.forEach((c, i) => console.log(
-      `  3B #${i+1}: ID=${c.id}, SMI=${c.smi} (dist=${c.smiDist.toFixed(2)}), CLI=${c.cli} (dist=${c.cliDist.toFixed(2)})`
-    ));
-
-    // ── Pass 3C: Full adjustment — unwind standards, apply subject attributes ──
-    // All pass3Qty survivors receive the full price adjustment. adjPrice and adjPct
-    // are returned to the frontend for weighted reconciliation — they are NOT used
-    // here to further reduce the pool.
-
-    const subjectSSI        = height * width;
-    const predictAt200      = sizeConstant * Math.pow(Math.log(200), sizeExponent);
-    const predictAtSubject  = sizeConstant * Math.pow(Math.log(subjectSSI), sizeExponent);
-    const subjectMediumIdx  = mediumTable[media] !== undefined
-      ? parseFloat(mediumTable[media])
-      : (() => { throw new Error(`No medium index found for subject medium: ${media}`); })();
-
-    const topN = afterPass3B.map(r => {
-      // Step 1: unwind SMI standard → apply subject SMI
-      const ppsi_1 = r.stdppsi + ((smi - std_SMI) * coef_SMI);
-
-      // Step 2: unwind CLI standard → apply subject CLI
-      const ppsi_2 = ppsi_1 + ((cli - std_CLI) * coef_CLI);
-
-      // Step 3: apply subject medium
-      const ppsi_3 = ppsi_2 * subjectMediumIdx;
-
-      // Step 4: apply subject size via residual method
-      const residualFactor = (ppsi_3 - predictAt200) / predictAt200;
-      const ppsi_4         = predictAtSubject * (1 + residualFactor);
-
-      // Step 5: convert to price
-      const adjPrice = Math.max(10, ppsi_4 * subjectSSI);
-      const adjPct   = Math.abs((adjPrice - r.price) / r.price);
-
-      return { ...r, adjPrice, adjPct };
-    });
-
-    console.log(`Pass 3C: ${topN.length} comps fully adjusted — returning to frontend for weighted reconciliation`);
-    topN.forEach((c, i) => console.log(
-      `  3C #${i+1}: ID=${c.id}, adjPct=${(c.adjPct * 100).toFixed(2)}%, adjPrice=${c.adjPrice.toFixed(2)}, CLI=${c.cli}, SMI=${c.smi}`
-    ));
-
-    // ── Build topComps response ───────────────────────────────────────────────
+    // ── Build topComps response — Phase 2 TBD ────────────────────────────────
+    // Returns full Phase 1 pool. Phase 2 (sorting, adjustment, pricing) replaces this.
     const buildComp = r => ({
       id:              r.id,
-      stdppsi:         r.stdppsi,
+      aop:             r.aop,
+      aoppsi:          r.aoppsi,
+      appsi:           r.appsi,
+      ssi:             r.ssi,
       framed:          r.framed,
       smi:             r.smi,
       cli:             r.cli,
@@ -3454,25 +3444,21 @@ const {
       height:          r.height,
       width:           r.width,
       price:           r.price,
-      adjPrice:        r.adjPrice,
-      adjPct:          r.adjPct,
       thumbnailBase64: r.thumbnailBase64
     });
 
-    const topComps = topN.map(buildComp);
+    const topComps = pool.map(buildComp);
+    console.log(`Returning ${topComps.length} comps to frontend`);
 
-    console.log(`Returning ${topComps.length} comps`);
-
-
-res.json({
+    res.json({
       topComps,
+      filterCounts,
       metadata: {
         coefficients: db.metadata.coefficients,
         medium:        db.metadata.medium
       },
       ...(skipNarrative ? {} : { aiAnalysis: formatAIAnalysisForReport(aiAnalysis) })
     });
-
 
   } catch (error) {
     console.error("Valuation request failed:", error.message);
@@ -3751,52 +3737,7 @@ app.post("/api/debug-clean-images", (req, res) => {
   }
 });
 
-app.post("/api/records/calculate-lssi", (req, res) => {
-  try {
-    const data = readDatabase();
 
-    // Track records updated
-    let recordsUpdated = 0;
-    let recordsWithErrors = 0;
-
-    // Update LSSI for all records
-    data.records.forEach(record => {
-      try {
-        // Skip records without size
-        if (!record.size || isNaN(record.size) || record.size <= 0) {
-          recordsWithErrors++;
-          return;
-        }
-
-        // Calculate or update LSSI
-        record.lssi = Math.log(record.size);
-        recordsUpdated++;
-      } catch (error) {
-        console.error(
-          `Error calculating LSSI for record ${record.id}:`,
-          error
-        );
-        recordsWithErrors++;
-      }
-    });
-
-    // Write updated database
-    writeDatabase(data);
-
-    res.json({
-      message: "Successfully calculated LSSI for records",
-      totalRecords: data.records.length,
-      recordsUpdated: recordsUpdated,
-      recordsWithErrors: recordsWithErrors
-    });
-  } catch (error) {
-    console.error("Error in LSSI calculation endpoint:", error);
-    res.status(500).json({
-      error: "Failed to calculate LSSI",
-      details: error.message
-    });
-  }
-});
 
 app.get("/download/:filename", (req, res) => {
   const { filename } = req.params;
@@ -4441,14 +4382,9 @@ app.post('/api/records/import', async (req, res) => {
                 gate2_score:      null,
                 smi:              null,
                 ssi:              null,
-                lssi:             null,
                 aop:              null,
                 aoppsi:           null,
-                appsi:            null,
-                medium_adj_ppsi:  null,
-                cli_adj_ppsi:     null,
-                smi_adj_ppsi:     null,
-                stdppsi:          null
+                appsi:            null
             };
 
             // ── Option B: fetch image from Saatchi CDN at import time ──
@@ -4848,7 +4784,7 @@ function migrateAddArtOnlyPrice(databaseData) {
     added++;
 
     if (processed <= 5) {
-      console.log(`Record ${record.id}: price=${record.price}, framed=${record.framed}, aop=${record.aop}, stdppsi=${record.stdppsi}`);
+      console.log(`Record ${record.id}: price=${record.price}, framed=${record.framed}, aop=${record.aop}, appsi=${record.appsi}`);
     }
   });
 
