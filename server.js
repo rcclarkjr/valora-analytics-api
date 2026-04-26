@@ -3411,34 +3411,150 @@ app.post("/api/valuation", async (req, res) => {
       }
     }
 
-    // ── Build topComps response — Phase 2 TBD ────────────────────────────────
-    // Returns full Phase 1 pool. Phase 2 (sorting, adjustment, pricing) replaces this.
-    const buildComp = r => ({
-      id:              r.id,
-      aop:             r.aop,
-      aoppsi:          r.aoppsi,
-      appsi:           r.appsi,
-      ssi:             r.ssi,
-      framed:          r.framed,
-      smi:             r.smi,
-      cli:             r.cli,
-      ri_integer:      r.ri_integer,
-      ri_decimal:      r.ri_decimal,
-      medium:          r.medium,
-      artistName:      r.artistName,
-      title:           r.title,
-      height:          r.height,
-      width:           r.width,
-      price:           r.price,
-      thumbnailBase64: r.thumbnailBase64
+    // ── Phase 2: Adjustment, Reconciliation, and Pricing ─────────────────────
+
+    // Metadata values needed for Phase 2
+    const sizeConstant = parseFloat(coefficients['coef_size_constant']);
+    const sizeExponent = parseFloat(coefficients['coef_size_exponent']);
+    const coef_A       = parseFloat(coefficients['coef_A']);
+    const coef_B       = parseFloat(coefficients['coef_B']);
+    const coef_C       = parseFloat(coefficients['coef_C']);
+    const coef_p5      = parseFloat(coefficients['coef_p5']);
+    const coef_p25     = parseFloat(coefficients['coef_p25']);
+    const coef_p50     = parseFloat(coefficients['coef_p50']);
+    const coef_p75     = parseFloat(coefficients['coef_p75']);
+    const coef_p95     = parseFloat(coefficients['coef_p95']);
+
+    // Subject medium index
+    if (mediumTable[media] === undefined) {
+      throw new Error(`Phase 2: no medium index found for subject medium: ${media}`);
+    }
+    const subjectMediumIdx = parseFloat(mediumTable[media]);
+
+    // Predicted PPSI at subject size — computed once, used for every comp
+    const predictedPPSI_at_subject = sizeConstant * Math.pow(Math.log(subjectSSI), sizeExponent);
+
+    // ── Adjustment pass — one comp at a time ─────────────────────────────────
+    const topComps = pool.map(r => {
+
+      // Validate comp medium
+      if (mediumTable[r.medium] === undefined) {
+        throw new Error(`Phase 2: no medium index found for comp medium: ${r.medium} (comp ID: ${r.id})`);
+      }
+      const compMediumIdx = parseFloat(mediumTable[r.medium]);
+
+      // Step 1: medium-adjust the comp's AOPPSI to subject's medium
+      const mediumAdjPPSI = r.aoppsi * (subjectMediumIdx / compMediumIdx);
+
+      // Step 2: predicted PPSI at comp's size
+      const predictedPPSI_at_comp = sizeConstant * Math.pow(Math.log(r.ssi), sizeExponent);
+
+      // Step 3: residual — how far the comp's medium-adjusted PPSI deviates from the curve at its size
+      const residualFactor = mediumAdjPPSI / predictedPPSI_at_comp;
+
+      // Step 4: apply residual to predicted PPSI at subject's size
+      const adjPPSI = predictedPPSI_at_subject * residualFactor;
+
+      // Step 5: convert to price
+      const adjPrice = adjPPSI * subjectSSI;
+
+      // Directional signs for adjustments display (frame, size, medium only)
+      const compSSI = r.height * r.width;
+      const signs = {
+        frame:  r.framed === 'Y' ? '−' : '=',
+        size:   compSSI > subjectSSI ? '−' : compSSI < subjectSSI ? '+' : '=',
+        medium: compMediumIdx > subjectMediumIdx ? '−'
+              : compMediumIdx < subjectMediumIdx ? '+' : '='
+      };
+
+      // Net adjustment as signed percentage of original price
+      const netAdjPct = Math.round(((adjPrice / r.price) - 1) * 100);
+
+      console.log(
+        `Comp ${r.id}: aoppsi=${r.aoppsi.toFixed(4)}, mediumAdj=${mediumAdjPPSI.toFixed(4)}, ` +
+        `residual=${residualFactor.toFixed(4)}, adjPPSI=${adjPPSI.toFixed(4)}, adjPrice=${adjPrice.toFixed(2)}`
+      );
+
+      return {
+        id:              r.id,
+        aop:             r.aop,
+        aoppsi:          r.aoppsi,
+        appsi:           r.appsi,
+        ssi:             r.ssi,
+        framed:          r.framed,
+        smi:             r.smi,
+        cli:             r.cli,
+        ri_integer:      r.ri_integer,
+        ri_decimal:      r.ri_decimal,
+        medium:          r.medium,
+        artistName:      r.artistName,
+        title:           r.title,
+        height:          r.height,
+        width:           r.width,
+        price:           r.price,
+        thumbnailBase64: r.thumbnailBase64,
+        adjPrice,
+        adjPPSI,
+        residualFactor,
+        netAdjPct,
+        signs
+      };
     });
 
-    const topComps = pool.map(buildComp);
-    console.log(`Returning ${topComps.length} comps to frontend`);
+    // ── Reconciliation — simple median of adjPrices ───────────────────────────
+    const adjPrices = topComps.map(c => c.adjPrice);
+    const sortedAdj = [...adjPrices].sort((a, b) => a - b);
+    const mid = Math.floor(sortedAdj.length / 2);
+    const centralValue = sortedAdj.length % 2 !== 0
+      ? sortedAdj[mid]
+      : (sortedAdj[mid - 1] + sortedAdj[mid]) / 2;
+
+    // pooledCoV — coefficient of variation across adjPrices
+    const poolMean = adjPrices.reduce((s, v) => s + v, 0) / adjPrices.length;
+    const poolStd  = Math.sqrt(
+      adjPrices.reduce((s, v) => s + Math.pow(v - poolMean, 2), 0) / (adjPrices.length - 1)
+    );
+    const pooledCoV = poolStd / poolMean;
+
+    console.log(`Reconciliation: centralValue=${centralValue.toFixed(2)}, poolMean=${poolMean.toFixed(2)}, pooledCoV=${pooledCoV.toFixed(4)}`);
+
+    // ── Three strategic price points ──────────────────────────────────────────
+    const premiumValue     = centralValue * (1 + (coef_A * pooledCoV));
+    const marketValue      = centralValue * (1 + (coef_B * pooledCoV));
+    const competitiveValue = centralValue * (1 + (coef_C * pooledCoV));
+
+    // ── Quartile prices ───────────────────────────────────────────────────────
+    const qPrice = coef => centralValue * (1 + coef * pooledCoV);
+    const qLow   = qPrice(coef_p5);
+    const qQ1    = qPrice(coef_p25);
+    const qQ2    = qPrice(coef_p50);
+    const qQ3    = qPrice(coef_p75);
+    const qHigh  = qPrice(coef_p95);
+
+    // ── Outlier warnings ──────────────────────────────────────────────────────
+    const poolMinSMI = Math.min(...topComps.map(c => c.smi));
+    const poolMaxSMI = Math.max(...topComps.map(c => c.smi));
+    const poolMinCLI = Math.min(...topComps.map(c => c.cli));
+    const poolMaxCLI = Math.max(...topComps.map(c => c.cli));
+    const smiBelow   = smi < poolMinSMI;
+    const smiAbove   = smi > poolMaxSMI;
+    const cliBelow   = cli < poolMinCLI;
+    const cliAbove   = cli > poolMaxCLI;
+    const isOutlier  = smiBelow || smiAbove || cliBelow || cliAbove;
+
+    console.log(`Outlier flags: smiBelow=${smiBelow}, smiAbove=${smiAbove}, cliBelow=${cliBelow}, cliAbove=${cliAbove}`);
+    console.log(`Strategic prices: competitive=${competitiveValue.toFixed(2)}, market=${marketValue.toFixed(2)}, premium=${premiumValue.toFixed(2)}`);
 
     res.json({
       topComps,
       filterCounts,
+      centralValue,
+      pooledCoV,
+      competitiveValue,
+      marketValue,
+      premiumValue,
+      qLow, qQ1, qQ2, qQ3, qHigh,
+      smiBelow, smiAbove, cliBelow, cliAbove, isOutlier,
       metadata: {
         coefficients: db.metadata.coefficients,
         medium:        db.metadata.medium
