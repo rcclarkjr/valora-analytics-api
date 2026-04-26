@@ -2846,7 +2846,8 @@ app.post("/api/coefficients", (req, res) => {
         // Validate numeric coefficient fields before saving
         const numericFields = ['coef_size_constant', 'coef_size_exponent', 'coef_frame_constant', 'coef_frame_exponent',
                                'target_quantity', 'target_multiple', 'z_filter_threshold',
-                               'cli_bracket_size', 'ssi_filter_start_pct', 'ssi_filter_step_pct'];
+                               'cli_bracket_size'];
+                               // ssi_filter_start_pct and ssi_filter_step_pct left in metadata but no longer validated — flagged for cleanup
         for (const field of numericFields) {
             if (req.body[field] !== undefined) {
                 const v = parseFloat(req.body[field]);
@@ -3203,7 +3204,7 @@ app.post("/api/valuation", async (req, res) => {
       'target_quantity', 'target_multiple',
       'z_filter_threshold',
       'cli_bracket_size',
-      'ssi_filter_start_pct', 'ssi_filter_step_pct',
+      // ssi_filter_start_pct and ssi_filter_step_pct are no longer used — flagged for metadata cleanup
       'coef_A', 'coef_B', 'coef_C'
     ];
     for (const field of requiredCoefs) {
@@ -3217,8 +3218,7 @@ app.post("/api/valuation", async (req, res) => {
     const targetRangeHigh  = targetQuantity * targetMultiple;
     const zFilterThreshold = parseFloat(coefficients['z_filter_threshold']);
     const cliBracketSize   = parseFloat(coefficients['cli_bracket_size']);
-    const ssiStartPct      = parseFloat(coefficients['ssi_filter_start_pct']);
-    const ssiStepPct       = parseFloat(coefficients['ssi_filter_step_pct']);
+    // ssiStartPct and ssiStepPct removed — no longer used after Step 6/7 redesign
     const subjectSSI       = parseFloat(height) * parseFloat(width);
 
     // filterCounts collects {label, count} for each step — returned to frontend for funnel display
@@ -3332,39 +3332,25 @@ app.post("/api/valuation", async (req, res) => {
       throw new Error(`Insufficient comps after Z-filter: ${pool.length} records remain.`);
     }
 
-    // ── Step 6: SSI size filter — iterative tightening ───────────────────────
-    // Always runs. Tighten until pool is within target range or backing out
-    // one step would drop below targetQuantity.
-    let ssiPct  = ssiStartPct;
-    let ssiPool = pool.filter(r => {
-      const lo = subjectSSI * (1 - ssiPct);
-      const hi = subjectSSI * (1 + ssiPct);
-      return r.ssi >= lo && r.ssi <= hi;
-    });
-    console.log(`Step 6 — SSI filter start (±${(ssiPct * 100).toFixed(1)}%): ${ssiPool.length} records`);
+    // ── Step 6: SMI proximity — reduce to targetRangeHigh by nearest SMI ────────
+    // Sort pool by absolute SMI distance from subject, keep top targetRangeHigh.
+    pool = pool
+      .map(r => ({ ...r, _smiDist: Math.abs(r.smi - smi) }))
+      .sort((a, b) => a._smiDist - b._smiDist)
+      .slice(0, targetRangeHigh)
+      .map(({ _smiDist, ...r }) => r);
+    filterCounts.push({ label: 'After SMI filter', count: pool.length });
+    console.log(`Step 6 — SMI proximity: kept ${pool.length} nearest by |smi - ${smi}|`);
 
-    if (ssiPool.length >= targetQuantity) {
-      while (ssiPool.length > targetRangeHigh) {
-        const nextPct     = ssiPct * (1 - ssiStepPct);
-        const nextSsiPool = pool.filter(r => {
-          const lo = subjectSSI * (1 - nextPct);
-          const hi = subjectSSI * (1 + nextPct);
-          return r.ssi >= lo && r.ssi <= hi;
-        });
-        if (nextSsiPool.length < targetQuantity) {
-          console.log(`Step 6 — SSI tighten to ±${(nextPct * 100).toFixed(1)}% would drop to ${nextSsiPool.length} — backing out, keeping ${ssiPool.length}`);
-          break;
-        }
-        ssiPct  = nextPct;
-        ssiPool = nextSsiPool;
-        console.log(`Step 6 — SSI tightened to ±${(ssiPct * 100).toFixed(1)}%: ${ssiPool.length} records`);
-      }
-      pool = ssiPool;
-    } else {
-      console.log(`Step 6 — SSI filter start would drop pool to ${ssiPool.length} (below targetQuantity ${targetQuantity}) — SSI filter skipped`);
-    }
+    // ── Step 7: SSI proximity — reduce to targetQuantity by nearest SSI ──────
+    // Sort Step 6 survivors by absolute SSI distance from subject, keep top targetQuantity.
+    pool = pool
+      .map(r => ({ ...r, _ssiDist: Math.abs(r.ssi - subjectSSI) }))
+      .sort((a, b) => a._ssiDist - b._ssiDist)
+      .slice(0, targetQuantity)
+      .map(({ _ssiDist, ...r }) => r);
     filterCounts.push({ label: 'After size filter', count: pool.length });
-    console.log(`Step 6 — SSI filter final pool: ${pool.length} records`);
+    console.log(`Step 7 — SSI proximity: kept ${pool.length} nearest by |ssi - ${subjectSSI}|`);
 
     // ── Phase 1 complete ──────────────────────────────────────────────────────
     console.log(`Phase 1 complete: ${pool.length} records in final pool (target range: ${targetQuantity}–${targetRangeHigh})`);
