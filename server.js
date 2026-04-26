@@ -1834,7 +1834,7 @@ app.get("/api/stats", (req, res) => {
     const incompleteRecords = [];
     data.records.forEach(record => {
 
-	const requiredFields = ['ri_integer', 'ri_decimal', 'cli', 'ssi', 'aop', 'aoppsi', 'appsi'];
+	const requiredFields = ['ri_integer', 'ri_decimal', 'cli', 'ssi', 'aop', 'appsi', 'stdppsi'];
 	const missingFields = [];
 	requiredFields.forEach(field => {
 		const value = record[field];
@@ -2529,23 +2529,31 @@ function calculateSMI_fromScores(subjectScores, renderingScores, coefficients, i
 // =============================================================
 function calculateDerivedFields(record, metadata) {
     const coefficients = metadata.coefficients || {};
+    const mediumCoefficients = metadata.medium || {};
 
     // 1. SSI
     const height = parseFloat(record.height) || 0;
     const width  = parseFloat(record.width)  || 0;
     record.ssi = height * width;
 
-    // 2. AOP — frame value is deducted if framed
+    // 2. LSSI
+    record.lssi = record.ssi > 0 ? Math.log(record.ssi) : 0;
+
+    // 3. AOP -- frame value is deducted if present
     const price = parseFloat(record.price) || 0;
     record.aop = calculateAOP(price, record.framed || 'N', coefficients);
 
-    // 3. AOPPSI — Art Only Price per square inch
+    // 4. AOPPSI -- Art Only Price per SI is calculated
     record.aoppsi = (record.ssi > 0 && record.aop > 0) ? record.aop / record.ssi : 0;
 
-    // 4. APPSI — AOPPSI normalized to 200 square inches using size curve
+    // 5. APPSI -- AOPPSI is normalized to a size of 200 square inches
     record.appsi = calculateAPPSI(record.ssi, record.aop, coefficients);
 
-    // 5. SMI — only if both pillar scores and integer are present
+    // 6. medium_adj_ppsi — appsi divided by medium index (oil = 1.0) ... normalized to oil
+    const mediumIndex = getMediumIndex(record.medium, mediumCoefficients);
+    record.medium_adj_ppsi = (record.appsi > 0 && mediumIndex > 0) ? record.appsi / mediumIndex : 0;
+
+    // 7. SMI — only if both pillar scores and integer are present (must precede Steps 8 and 9)
     if (record.smi_subject !== null && record.smi_subject !== undefined &&
         record.smi_render  !== null && record.smi_render  !== undefined) {
         if (record.integer === null || record.integer === undefined)
@@ -2554,6 +2562,24 @@ function calculateDerivedFields(record, metadata) {
     } else {
         record.smi = null;
     }
+
+    // 8. cli_adj_ppsi — medium_adj_ppsi adjusted for distance of this record's CLI from std_CLI
+    const std_CLI  = coefficients['std_CLI'];
+    const coef_CLI = coefficients['coef_CLI'];
+    if (std_CLI === undefined)  throw new Error('calculateDerivedFields: std_CLI is missing from metadata coefficients.');
+    if (coef_CLI === undefined) throw new Error('calculateDerivedFields: coef_CLI is missing from metadata coefficients.');
+    if (record.cli === undefined || record.cli === null) throw new Error('calculateDerivedFields: record.cli is missing — cannot calculate cli_adj_ppsi.');
+    record.cli_adj_ppsi = record.medium_adj_ppsi + ((parseFloat(std_CLI) - record.cli) * parseFloat(coef_CLI));
+
+    // 9. smi_adj_ppsi — cli_adj_ppsi adjusted for distance of this record's SMI from std_SMI
+    //    stdppsi is set equal to smi_adj_ppsi so the rest of the app continues to use stdppsi unchanged
+    const std_SMI  = coefficients['std_SMI'];
+    const coef_SMI = coefficients['coef_SMI'];
+    if (std_SMI === undefined)  throw new Error('calculateDerivedFields: std_SMI is missing from metadata coefficients.');
+    if (coef_SMI === undefined) throw new Error('calculateDerivedFields: coef_SMI is missing from metadata coefficients.');
+    if (record.smi === undefined || record.smi === null) throw new Error('calculateDerivedFields: record.smi is missing — cannot calculate smi_adj_ppsi.');
+    record.smi_adj_ppsi = record.cli_adj_ppsi + ((parseFloat(std_SMI) - record.smi) * parseFloat(coef_SMI));
+    record.stdppsi      = record.smi_adj_ppsi;
 
     return record;
 }
@@ -2784,15 +2810,67 @@ app.post("/api/records/recalculate-all", (req, res) => {
     }
 });
 
+// POST /api/records/remove-obsolete-fields — Strip legacy derived fields from all records
+app.post("/api/records/remove-obsolete-fields", (req, res) => {
+    try {
+        const data = readDatabase();
+        const obsoleteFields = ['lssi', 'medium_adj_ppsi', 'cli_adj_ppsi', 'smi_adj_ppsi', 'stdppsi'];
+        let recordsUpdated = 0;
+        let fieldsRemoved = 0;
+        data.records.forEach(record => {
+            let touched = false;
+            obsoleteFields.forEach(field => {
+                if (field in record) {
+                    delete record[field];
+                    fieldsRemoved++;
+                    touched = true;
+                }
+            });
+            if (touched) recordsUpdated++;
+        });
+        writeDatabase(data);
+        res.json({
+            message: `Obsolete record fields removed successfully`,
+            recordsUpdated,
+            fieldsRemoved
+        });
+    } catch (error) {
+        console.error("Error removing obsolete record fields:", error.message);
+        res.status(500).json({ error: "Failed to remove obsolete record fields", details: error.message });
+    }
+});
+
+// POST /api/metadata/remove-obsolete-fields — Strip legacy coefficient fields from metadata
+app.post("/api/metadata/remove-obsolete-fields", (req, res) => {
+    try {
+        const data = readDatabase();
+        const obsoleteFields = ['pass1_cutoff_pct', 'pass3_top_quantity', 'std_CLI', 'coef_CLI', 'std_SMI', 'coef_SMI'];
+        const fieldsRemoved = [];
+        obsoleteFields.forEach(field => {
+            if (field in data.metadata.coefficients) {
+                delete data.metadata.coefficients[field];
+                fieldsRemoved.push(field);
+            }
+        });
+        data.metadata.lastUpdated = new Date().toISOString();
+        writeDatabase(data);
+        res.json({
+            message: `Obsolete metadata fields removed successfully`,
+            fieldsRemoved
+        });
+    } catch (error) {
+        console.error("Error removing obsolete metadata fields:", error.message);
+        res.status(500).json({ error: "Failed to remove obsolete metadata fields", details: error.message });
+    }
+});
+
 // POST /api/coefficients — Save metadata and recalculate all derived fields
 app.post("/api/coefficients", (req, res) => {
     try {
         const data = readDatabase();
 
         // Validate numeric coefficient fields before saving
-        const numericFields = ['coef_size_constant', 'coef_size_exponent', 'coef_frame_constant', 'coef_frame_exponent',
-                               'target_quantity', 'target_multiple', 'z_filter_threshold',
-                               'cli_bracket_size', 'ssi_filter_start_pct', 'ssi_filter_step_pct'];
+        const numericFields = ['coef_size_constant', 'coef_size_exponent', 'coef_frame_constant', 'coef_frame_exponent'];
         for (const field of numericFields) {
             if (req.body[field] !== undefined) {
                 const v = parseFloat(req.body[field]);
@@ -3673,7 +3751,52 @@ app.post("/api/debug-clean-images", (req, res) => {
   }
 });
 
+app.post("/api/records/calculate-lssi", (req, res) => {
+  try {
+    const data = readDatabase();
 
+    // Track records updated
+    let recordsUpdated = 0;
+    let recordsWithErrors = 0;
+
+    // Update LSSI for all records
+    data.records.forEach(record => {
+      try {
+        // Skip records without size
+        if (!record.size || isNaN(record.size) || record.size <= 0) {
+          recordsWithErrors++;
+          return;
+        }
+
+        // Calculate or update LSSI
+        record.lssi = Math.log(record.size);
+        recordsUpdated++;
+      } catch (error) {
+        console.error(
+          `Error calculating LSSI for record ${record.id}:`,
+          error
+        );
+        recordsWithErrors++;
+      }
+    });
+
+    // Write updated database
+    writeDatabase(data);
+
+    res.json({
+      message: "Successfully calculated LSSI for records",
+      totalRecords: data.records.length,
+      recordsUpdated: recordsUpdated,
+      recordsWithErrors: recordsWithErrors
+    });
+  } catch (error) {
+    console.error("Error in LSSI calculation endpoint:", error);
+    res.status(500).json({
+      error: "Failed to calculate LSSI",
+      details: error.message
+    });
+  }
+});
 
 app.get("/download/:filename", (req, res) => {
   const { filename } = req.params;
@@ -4318,9 +4441,14 @@ app.post('/api/records/import', async (req, res) => {
                 gate2_score:      null,
                 smi:              null,
                 ssi:              null,
+                lssi:             null,
                 aop:              null,
                 aoppsi:           null,
-                appsi:            null
+                appsi:            null,
+                medium_adj_ppsi:  null,
+                cli_adj_ppsi:     null,
+                smi_adj_ppsi:     null,
+                stdppsi:          null
             };
 
             // ── Option B: fetch image from Saatchi CDN at import time ──
@@ -4720,7 +4848,7 @@ function migrateAddArtOnlyPrice(databaseData) {
     added++;
 
     if (processed <= 5) {
-      console.log(`Record ${record.id}: price=${record.price}, framed=${record.framed}, aop=${record.aop}, appsi=${record.appsi}`);
+      console.log(`Record ${record.id}: price=${record.price}, framed=${record.framed}, aop=${record.aop}, stdppsi=${record.stdppsi}`);
     }
   });
 
