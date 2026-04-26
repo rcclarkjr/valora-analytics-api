@@ -3344,7 +3344,7 @@ app.post("/api/valuation", async (req, res) => {
       const z = (r.appsi - appsiMean) / appsiStdDev;
       return z >= zFilterThreshold;
     });
-    filterCounts.push({ label: 'After outliers filter', count: pool.length });
+    filterCounts.push({ label: 'After outliers & artist multiples', count: pool.length });
     console.log(`Step 5 — Z-filter (threshold=${zFilterThreshold}, mean=${appsiMean.toFixed(4)}, stddev=${appsiStdDev.toFixed(4)}): ${pool.length} records`);
 
     // ── Step 6: SSI proximity — reduce to targetRangeHigh by nearest SSI ────────
