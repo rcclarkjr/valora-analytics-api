@@ -3316,6 +3316,24 @@ app.post("/api/valuation", async (req, res) => {
       console.log(`Step 4 — CLI bracket: skipped (would reduce pool to ${afterCLI.length}, at or within target range)`);
     }
 
+    // ── Artist deduplication — silent, no filter count entry ────────────────
+    // For each artist appearing more than once, keep only the record with
+    // the highest appsi. Ties broken by existing pool order.
+    {
+      const best = new Map();
+      pool.forEach(r => {
+        const key = r.artistName.trim().toLowerCase();
+        if (!best.has(key) || r.appsi > best.get(key).appsi) {
+          best.set(key, r);
+        }
+      });
+      const dedupedPool = Array.from(best.values());
+      if (dedupedPool.length < pool.length) {
+        console.log(`Artist dedup: ${pool.length} → ${dedupedPool.length} records (removed ${pool.length - dedupedPool.length} duplicate artist entries)`);
+      }
+      pool = dedupedPool;
+    }
+
     // ── Step 5: Z-filter — eliminate low-tail APPSI outliers ─────────────────
     const appsiValues = pool.map(r => r.appsi);
     const appsiMean   = appsiValues.reduce((sum, v) => sum + v, 0) / appsiValues.length;
@@ -3328,9 +3346,6 @@ app.post("/api/valuation", async (req, res) => {
     });
     filterCounts.push({ label: 'After outliers filter', count: pool.length });
     console.log(`Step 5 — Z-filter (threshold=${zFilterThreshold}, mean=${appsiMean.toFixed(4)}, stddev=${appsiStdDev.toFixed(4)}): ${pool.length} records`);
-    if (pool.length < targetQuantity) {
-      throw new Error(`Insufficient comps after Z-filter: ${pool.length} records remain.`);
-    }
 
     // ── Step 6: SSI proximity — reduce to targetRangeHigh by nearest SSI ────────
     // Sort pool by absolute SSI distance from subject, keep top targetRangeHigh.
