@@ -2444,6 +2444,54 @@ app.post("/api/valuation", async (req, res) => {
       throw new Error(`Insufficient comps after RI bracket filter: ${pool.length} records remain.`);
     }
 
+    // Step 1.5 — Iterative size filter
+    // Start at ±50% of subjectSSI. Each iteration tightens to 80% of the current
+    // percentage. Stop when the pool has shrunk by ≥40% vs. the Step 1 entry count,
+    // or when the next tightening would drop the pool below targetQuantity.
+    {
+      const step1Count   = pool.length;
+      let   rangePct     = 0.50;
+      let   filteredPool = pool;
+      let   iterCount    = 0;
+
+      while (true) {
+        const lo        = subjectSSI * (1 - rangePct);
+        const hi        = subjectSSI * (1 + rangePct);
+        const candidate = pool.filter(r => r.ssi >= lo && r.ssi <= hi);
+        const reduction = (step1Count - candidate.length) / step1Count;
+
+        console.log(`Step 2 iter ${++iterCount} — ±${(rangePct * 100).toFixed(1)}% [${lo.toFixed(0)}–${hi.toFixed(0)}]: ${candidate.length} records (reduction ${(reduction * 100).toFixed(1)}%)`);
+
+        // Accept this range's result as the working pool
+        filteredPool = candidate;
+
+        // Stop if we've achieved ≥40% reduction
+        if (reduction >= 0.40) {
+          console.log(`Step 2 — target reduction reached at ±${(rangePct * 100).toFixed(1)}%`);
+          break;
+        }
+
+        // Compute next range and check whether applying it would go below targetQuantity
+        const nextRangePct = rangePct * 0.80;
+        const nextLo       = subjectSSI * (1 - nextRangePct);
+        const nextHi       = subjectSSI * (1 + nextRangePct);
+        const nextCount    = pool.filter(r => r.ssi >= nextLo && r.ssi <= nextHi).length;
+
+        if (nextCount < targetQuantity) {
+          console.log(`Step 2 — stopping early: next tightening (±${(nextRangePct * 100).toFixed(1)}%) would yield ${nextCount} records, below targetQuantity (${targetQuantity})`);
+          break;
+        }
+
+        rangePct = nextRangePct;
+      }
+
+      pool = filteredPool;
+    }
+    filterCounts.push({ label: 'After size pre-filter', count: pool.length });
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after size pre-filter: ${pool.length} records remain.`);
+    }
+
     if (media === 'Oil') {
       pool = pool.filter(r => r.medium === 'Oil');
     } else if (media === 'Acrylic') {
@@ -2452,7 +2500,7 @@ app.post("/api/valuation", async (req, res) => {
       pool = pool.filter(r => r.medium !== 'Oil');
     }
     filterCounts.push({ label: 'After medium filter', count: pool.length });
-    console.log(`Step 2 — Medium filter (subject: ${media}): ${pool.length} records`);
+    console.log(`Step 3 — Medium filter (subject: ${media}): ${pool.length} records`);
     if (pool.length < targetQuantity) {
       throw new Error(`Insufficient comps after medium filter: ${pool.length} records remain.`);
     }
@@ -2474,10 +2522,10 @@ app.post("/api/valuation", async (req, res) => {
       const maxFig      = portraits.length;
       const shuffled    = figuratives.sort(() => Math.random() - 0.5).slice(0, maxFig);
       pool = [...portraits, ...shuffled];
-      console.log(`Step 3 — Subject filter (Portrait special): ${portraits.length} portraits + ${shuffled.length} figuratives = ${pool.length} records`);
+      console.log(`Step 4 — Subject filter (Portrait special): ${portraits.length} portraits + ${shuffled.length} figuratives = ${pool.length} records`);
     } else {
       pool = pool.filter(r => decimalRule.includes(parseInt(r.ri_decimal)));
-      console.log(`Step 3 — Subject filter (ri_decimal=${subjectDecimal}, allowed: [${decimalRule.join(',')}]): ${pool.length} records`);
+      console.log(`Step 4 — Subject filter (ri_decimal=${subjectDecimal}, allowed: [${decimalRule.join(',')}]): ${pool.length} records`);
     }
     filterCounts.push({ label: 'After subject filter', count: pool.length });
     if (pool.length < targetQuantity) {
@@ -2490,9 +2538,9 @@ app.post("/api/valuation", async (req, res) => {
     if (afterCLI.length > targetRangeHigh) {
       pool = afterCLI;
       filterCounts.push({ label: 'After CLI bracket', count: pool.length });
-      console.log(`Step 4 — CLI bracket [${cliLow.toFixed(2)}–${cliHigh.toFixed(2)}]: ${pool.length} records (applied)`);
+      console.log(`Step 5 — CLI bracket [${cliLow.toFixed(2)}–${cliHigh.toFixed(2)}]: ${pool.length} records (applied)`);
     } else {
-      console.log(`Step 4 — CLI bracket: skipped (would reduce pool to ${afterCLI.length}, at or within target range)`);
+      console.log(`Step 5 — CLI bracket: skipped (would reduce pool to ${afterCLI.length}, at or within target range)`);
     }
 
     {
@@ -2520,25 +2568,17 @@ app.post("/api/valuation", async (req, res) => {
       return z >= zFilterThreshold;
     });
     filterCounts.push({ label: 'After outliers & artist multiples', count: pool.length });
-    console.log(`Step 5 — Z-filter (threshold=${zFilterThreshold}, mean=${appsiMean.toFixed(4)}, stddev=${appsiStdDev.toFixed(4)}): ${pool.length} records`);
+    console.log(`Step 6 — Z-filter (threshold=${zFilterThreshold}, mean=${appsiMean.toFixed(4)}, stddev=${appsiStdDev.toFixed(4)}): ${pool.length} records`);
 
     pool = pool
       .map(r => ({ ...r, _ssiDist: Math.abs(r.ssi - subjectSSI) }))
       .sort((a, b) => a._ssiDist - b._ssiDist)
-      .slice(0, targetRangeHigh)
-      .map(({ _ssiDist, ...r }) => r);
-    filterCounts.push({ label: 'After size filter', count: pool.length });
-    console.log(`Step 6 — SSI proximity: kept ${pool.length} nearest by |ssi - ${subjectSSI}|`);
-
-    pool = pool
-      .map(r => ({ ...r, _smiDist: Math.abs(r.smi - smi) }))
-      .sort((a, b) => a._smiDist - b._smiDist)
       .slice(0, targetQuantity)
-      .map(({ _smiDist, ...r }) => r);
-    filterCounts.push({ label: 'After SMI filter', count: pool.length });
-    console.log(`Step 7 — SMI proximity: kept ${pool.length} nearest by |smi - ${smi}|`);
+      .map(({ _ssiDist, ...r }) => r);
+    filterCounts.push({ label: 'After final size filter', count: pool.length });
+    console.log(`Step 7 — SSI proximity: kept ${pool.length} nearest by |ssi - ${subjectSSI}|`);
 
-    console.log(`Phase 1 complete: ${pool.length} records in final pool (target range: ${targetQuantity}–${targetRangeHigh})`);
+    console.log(`Phase 1 complete: ${pool.length} records in final pool (target: ${targetQuantity})`);
 
     let aiAnalysis = "";
     if (!skipNarrative) {
@@ -2614,7 +2654,7 @@ app.post("/api/valuation", async (req, res) => {
     const subjectMediumIdx = parseFloat(mediumTable[media]);
     const predictedPPSI_at_subject = sizeConstant * Math.pow(Math.log(subjectSSI), sizeExponent);
 
-    const topComps = pool.map(r => {
+    const adjComps = pool.map(r => {
       if (mediumTable[r.medium] === undefined) {
         throw new Error(`Phase 2: no medium index found for comp medium: ${r.medium} (comp ID: ${r.id})`);
       }
@@ -2641,15 +2681,66 @@ app.post("/api/valuation", async (req, res) => {
       };
     });
 
-    const adjPrices = topComps.map(c => c.adjPrice);
+    // Step 8 — Score and rank the final pool, then compute weighted centralValue
+    // Scoring (max 4.5):
+    //   RI integer exact match:       +1.0
+    //   RI decimal exact match:       +1.0
+    //   Size within 15%:              +1.0  |  15–50%: +0.5  |  beyond: +0.0
+    //   SMI within 0.5:               +1.0  |  0.5–1.0: +0.5  |  beyond: +0.0
+    //   CLI within 0.5:               +0.5
+    // Ties broken by higher appsi.
+    const scoredComps = adjComps.map(c => {
+      let score = 0;
+
+      if (c.ri_integer === ri_integer)                    score += 1.0;
+      if (parseInt(c.ri_decimal) === parseInt(ri_decimal)) score += 1.0;
+
+      const sizeDiffPct = Math.abs(c.ssi - subjectSSI) / subjectSSI;
+      if      (sizeDiffPct <= 0.15)                       score += 1.0;
+      else if (sizeDiffPct <= 0.50)                       score += 0.5;
+
+      const smiDiff = Math.abs(c.smi - smi);
+      if      (smiDiff <= 0.5)                            score += 1.0;
+      else if (smiDiff <= 1.0)                            score += 0.5;
+
+      const cliDiff = Math.abs(c.cli - cli);
+      if (cliDiff <= 0.5)                                 score += 0.5;
+
+      return { ...c, _score: score };
+    });
+
+    scoredComps.sort((a, b) =>
+      b._score !== a._score ? b._score - a._score : b.appsi - a.appsi
+    );
+
+    scoredComps.forEach((c, i) => {
+      console.log(`Step 8 rank ${i + 1}: ID=${c.id} score=${c._score.toFixed(1)} appsi=${c.appsi.toFixed(4)} adjPrice=${c.adjPrice.toFixed(2)}`);
+    });
+
+    // Weighted centralValue: Rank 1 gets weight √N, Rank N gets weight √1
+    const N = scoredComps.length;
+    let weightedSum   = 0;
+    let totalWeight   = 0;
+    scoredComps.forEach((c, i) => {
+      const weight   = Math.sqrt(N - i);          // Rank 1 → √N, Rank N → √1
+      weightedSum   += weight * c.adjPrice;
+      totalWeight   += weight;
+    });
+    const centralValue = weightedSum / totalWeight;
+
+    // For console comparison: plain mean and median of adjPrices
+    const adjPrices = scoredComps.map(c => c.adjPrice);
+    const plainMean = adjPrices.reduce((s, v) => s + v, 0) / adjPrices.length;
     const sortedAdj = [...adjPrices].sort((a, b) => a - b);
-    const mid = Math.floor(sortedAdj.length / 2);
-    const centralValue = sortedAdj.length % 2 !== 0
+    const mid       = Math.floor(sortedAdj.length / 2);
+    const plainMedian = sortedAdj.length % 2 !== 0
       ? sortedAdj[mid]
       : (sortedAdj[mid - 1] + sortedAdj[mid]) / 2;
 
-    const poolMean = adjPrices.reduce((s, v) => s + v, 0) / adjPrices.length;
-    const poolStd  = Math.sqrt(adjPrices.reduce((s, v) => s + Math.pow(v - poolMean, 2), 0) / (adjPrices.length - 1));
+    console.log(`centralValue = $${centralValue.toFixed(2)} (weighted); mean = $${plainMean.toFixed(2)}; median = $${plainMedian.toFixed(2)}`);
+
+    const poolMean  = plainMean;
+    const poolStd   = Math.sqrt(adjPrices.reduce((s, v) => s + Math.pow(v - poolMean, 2), 0) / (adjPrices.length - 1));
     const pooledCoV = poolStd / poolMean;
 
     console.log(`Reconciliation: centralValue=${centralValue.toFixed(2)}, poolMean=${poolMean.toFixed(2)}, pooledCoV=${pooledCoV.toFixed(4)}`);
@@ -2665,10 +2756,10 @@ app.post("/api/valuation", async (req, res) => {
     const qQ3    = qPrice(coef_p75);
     const qHigh  = qPrice(coef_p95);
 
-    const poolMinSMI = Math.min(...topComps.map(c => c.smi));
-    const poolMaxSMI = Math.max(...topComps.map(c => c.smi));
-    const poolMinCLI = Math.min(...topComps.map(c => c.cli));
-    const poolMaxCLI = Math.max(...topComps.map(c => c.cli));
+    const poolMinSMI = Math.min(...scoredComps.map(c => c.smi));
+    const poolMaxSMI = Math.max(...scoredComps.map(c => c.smi));
+    const poolMinCLI = Math.min(...scoredComps.map(c => c.cli));
+    const poolMaxCLI = Math.max(...scoredComps.map(c => c.cli));
     const smiBelow   = smi < poolMinSMI;
     const smiAbove   = smi > poolMaxSMI;
     const cliBelow   = cli < poolMinCLI;
@@ -2676,6 +2767,8 @@ app.post("/api/valuation", async (req, res) => {
     const isOutlier  = smiBelow || smiAbove || cliBelow || cliAbove;
 
     console.log(`Strategic prices: competitive=${competitiveValue.toFixed(2)}, market=${marketValue.toFixed(2)}, premium=${premiumValue.toFixed(2)}`);
+
+    const topComps = scoredComps.map(({ _score, ...c }) => c);
 
     res.json({
       topComps, filterCounts, centralValue, pooledCoV,
