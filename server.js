@@ -2628,7 +2628,10 @@ app.post("/api/valuation", async (req, res) => {
     const subjectMediumIdx = parseFloat(mediumTable[media]);
     const predictedPPSI_at_subject = sizeConstant * Math.pow(Math.log(subjectSSI), sizeExponent);
 
-    const adjComps = pool.map(r => {
+    // Capture the full Step 5 pool before similarity filter — used for CoV computation
+    const coVPool = pool.slice();
+
+    const adjComps = coVPool.map(r => {
       if (mediumTable[r.medium] === undefined) {
         throw new Error(`Phase 2: no medium index found for comp medium: ${r.medium} (comp ID: ${r.id})`);
       }
@@ -2654,6 +2657,14 @@ app.post("/api/valuation", async (req, res) => {
         adjPrice, adjPPSI, residualFactor, netAdjPct, signs
       };
     });
+
+    // CoV computed from the full coVPool (target_multiple × targetQuantity records)
+    // for stability — not affected by which specific records survive the similarity filter
+    const coVAdjPrices = adjComps.map(c => c.adjPrice);
+    const poolMean     = coVAdjPrices.reduce((s, v) => s + v, 0) / coVAdjPrices.length;
+    const poolStd      = Math.sqrt(coVAdjPrices.reduce((s, v) => s + Math.pow(v - poolMean, 2), 0) / (coVAdjPrices.length - 1));
+    const pooledCoV    = poolStd / poolMean;
+    console.log(`CoV pool (${adjComps.length} records): mean=${poolMean.toFixed(2)}, std=${poolStd.toFixed(2)}, CoV=${pooledCoV.toFixed(4)}`);
 
     // Step 6 (post-adjustment) — Combined similarity scalar → targetQuantity
     // Z-score normalize SMI, CLI, and |netAdjPct| across adjComps.
@@ -2698,18 +2709,15 @@ app.post("/api/valuation", async (req, res) => {
       var topComps = similarityFiltered.sort((a, b) => a.id - b.id);
     }
 
-    const adjPrices  = topComps.map(c => c.adjPrice);
-    const sortedAdj  = [...adjPrices].sort((a, b) => a - b);
-    const mid        = Math.floor(sortedAdj.length / 2);
+    // centralValue = median of final targetQuantity adjPrices
+    const adjPrices   = topComps.map(c => c.adjPrice);
+    const sortedAdj   = [...adjPrices].sort((a, b) => a - b);
+    const mid         = Math.floor(sortedAdj.length / 2);
     const centralValue = sortedAdj.length % 2 !== 0
       ? sortedAdj[mid]
       : (sortedAdj[mid - 1] + sortedAdj[mid]) / 2;
 
-    const poolMean  = adjPrices.reduce((s, v) => s + v, 0) / adjPrices.length;
-    const poolStd   = Math.sqrt(adjPrices.reduce((s, v) => s + Math.pow(v - poolMean, 2), 0) / (adjPrices.length - 1));
-    const pooledCoV = poolStd / poolMean;
-
-    console.log(`Reconciliation: centralValue=${centralValue.toFixed(2)}, poolMean=${poolMean.toFixed(2)}, pooledCoV=${pooledCoV.toFixed(4)}`);
+    console.log(`Reconciliation: centralValue=${centralValue.toFixed(2)} (median of ${topComps.length}), poolMean=${poolMean.toFixed(2)}, pooledCoV=${pooledCoV.toFixed(4)} (from ${adjComps.length} records)`);
 
     const premiumValue     = centralValue * (1 + (coef_A * pooledCoV));
     const marketValue      = centralValue * (1 + (coef_B * pooledCoV));
