@@ -2543,12 +2543,12 @@ app.post("/api/valuation", async (req, res) => {
     console.log(`Step 6 — Z-filter (threshold=${zFilterThreshold}, mean=${appsiMean.toFixed(4)}, stddev=${appsiStdDev.toFixed(4)}): ${pool.length} records`);
 
     pool = pool
-      .map(r => ({ ...r, _ssiDist: Math.abs(r.ssi - subjectSSI) }))
-      .sort((a, b) => a._ssiDist - b._ssiDist)
+      .map(r => ({ ...r, _smiDist: Math.abs(r.smi - smi) }))
+      .sort((a, b) => a._smiDist !== b._smiDist ? a._smiDist - b._smiDist : b.appsi - a.appsi)
       .slice(0, targetQuantity)
-      .map(({ _ssiDist, ...r }) => r);
-    filterCounts.push({ label: 'After final size filter', count: pool.length });
-    console.log(`Step 7 — SSI proximity: kept ${pool.length} nearest by |ssi - ${subjectSSI}|`);
+      .map(({ _smiDist, ...r }) => r);
+    filterCounts.push({ label: 'After SMI bracket', count: pool.length });
+    console.log(`Step 7 — SMI bracket: kept ${pool.length} closest by |smi - ${smi}| (ties → higher appsi)`);
 
     console.log(`Phase 1 complete: ${pool.length} records in final pool (target: ${targetQuantity})`);
 
@@ -2653,65 +2653,16 @@ app.post("/api/valuation", async (req, res) => {
       };
     });
 
-    // Step 8 — Score and rank the final pool, then compute weighted centralValue
-    // Scoring (max 4.5):
-    //   RI integer exact match:       +1.0
-    //   RI decimal exact match:       +1.0
-    //   Size within 15%:              +1.0  |  15–50%: +0.5  |  beyond: +0.0
-    //   SMI within 0.5:               +1.0  |  0.5–1.0: +0.5  |  beyond: +0.0
-    //   CLI within 0.5:               +0.5
-    // Ties broken by higher appsi.
-    const scoredComps = adjComps.map(c => {
-      let score = 0;
+    const topComps = adjComps.sort((a, b) => a.id - b.id);
 
-      if (c.ri_integer === ri_integer)                    score += 1.0;
-      if (parseInt(c.ri_decimal) === parseInt(ri_decimal)) score += 1.0;
-
-      const sizeDiffPct = Math.abs(c.ssi - subjectSSI) / subjectSSI;
-      if      (sizeDiffPct <= 0.15)                       score += 1.0;
-      else if (sizeDiffPct <= 0.50)                       score += 0.5;
-
-      const smiDiff = Math.abs(c.smi - smi);
-      if      (smiDiff <= 0.5)                            score += 1.0;
-      else if (smiDiff <= 1.0)                            score += 0.5;
-
-      const cliDiff = Math.abs(c.cli - cli);
-      if (cliDiff <= 0.5)                                 score += 0.5;
-
-      return { ...c, _score: score };
-    });
-
-    scoredComps.sort((a, b) =>
-      b._score !== a._score ? b._score - a._score : b.appsi - a.appsi
-    );
-
-    scoredComps.forEach((c, i) => {
-      console.log(`Step 8 rank ${i + 1}: ID=${c.id} score=${c._score.toFixed(1)} appsi=${c.appsi.toFixed(4)} adjPrice=${c.adjPrice.toFixed(2)}`);
-    });
-
-    // Weighted centralValue: Rank 1 gets weight √N, Rank N gets weight √1
-    const N = scoredComps.length;
-    let weightedSum   = 0;
-    let totalWeight   = 0;
-    scoredComps.forEach((c, i) => {
-      const weight   = Math.sqrt(N - i);          // Rank 1 → √N, Rank N → √1
-      weightedSum   += weight * c.adjPrice;
-      totalWeight   += weight;
-    });
-    const centralValue = weightedSum / totalWeight;
-
-    // For console comparison: plain mean and median of adjPrices
-    const adjPrices = scoredComps.map(c => c.adjPrice);
-    const plainMean = adjPrices.reduce((s, v) => s + v, 0) / adjPrices.length;
-    const sortedAdj = [...adjPrices].sort((a, b) => a - b);
-    const mid       = Math.floor(sortedAdj.length / 2);
-    const plainMedian = sortedAdj.length % 2 !== 0
+    const adjPrices  = topComps.map(c => c.adjPrice);
+    const sortedAdj  = [...adjPrices].sort((a, b) => a - b);
+    const mid        = Math.floor(sortedAdj.length / 2);
+    const centralValue = sortedAdj.length % 2 !== 0
       ? sortedAdj[mid]
       : (sortedAdj[mid - 1] + sortedAdj[mid]) / 2;
 
-    console.log(`centralValue = $${centralValue.toFixed(2)} (weighted); mean = $${plainMean.toFixed(2)}; median = $${plainMedian.toFixed(2)}`);
-
-    const poolMean  = plainMean;
+    const poolMean  = adjPrices.reduce((s, v) => s + v, 0) / adjPrices.length;
     const poolStd   = Math.sqrt(adjPrices.reduce((s, v) => s + Math.pow(v - poolMean, 2), 0) / (adjPrices.length - 1));
     const pooledCoV = poolStd / poolMean;
 
@@ -2728,10 +2679,10 @@ app.post("/api/valuation", async (req, res) => {
     const qQ3    = qPrice(coef_p75);
     const qHigh  = qPrice(coef_p95);
 
-    const poolMinSMI = Math.min(...scoredComps.map(c => c.smi));
-    const poolMaxSMI = Math.max(...scoredComps.map(c => c.smi));
-    const poolMinCLI = Math.min(...scoredComps.map(c => c.cli));
-    const poolMaxCLI = Math.max(...scoredComps.map(c => c.cli));
+    const poolMinSMI = Math.min(...topComps.map(c => c.smi));
+    const poolMaxSMI = Math.max(...topComps.map(c => c.smi));
+    const poolMinCLI = Math.min(...topComps.map(c => c.cli));
+    const poolMaxCLI = Math.max(...topComps.map(c => c.cli));
     const smiBelow   = smi < poolMinSMI;
     const smiAbove   = smi > poolMaxSMI;
     const cliBelow   = cli < poolMinCLI;
@@ -2739,8 +2690,6 @@ app.post("/api/valuation", async (req, res) => {
     const isOutlier  = smiBelow || smiAbove || cliBelow || cliAbove;
 
     console.log(`Strategic prices: competitive=${competitiveValue.toFixed(2)}, market=${marketValue.toFixed(2)}, premium=${premiumValue.toFixed(2)}`);
-
-    const topComps = scoredComps.map(({ _score, ...c }) => c);
 
     res.json({
       topComps, filterCounts, centralValue, pooledCoV,
