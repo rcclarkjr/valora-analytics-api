@@ -2402,7 +2402,7 @@ app.post("/api/valuation", async (req, res) => {
       'target_quantity', 'target_multiple',
       'coef_A', 'coef_B', 'coef_C',
       'size_prefilter_reduction',
-      'w_smi', 'w_cli'
+      'w_smi', 'w_adj'
     ];
     for (const field of requiredCoefs) {
       if (coefficients[field] === undefined || coefficients[field] === null) {
@@ -2415,9 +2415,10 @@ app.post("/api/valuation", async (req, res) => {
     const targetRangeHigh        = targetQuantity * targetMultiple;
     const sizePrefilterReduction = parseFloat(coefficients['size_prefilter_reduction']);
     const wSMI                   = parseFloat(coefficients['w_smi']);
-    const wCLI                   = parseFloat(coefficients['w_cli']);
-    if (Math.abs(wSMI + wCLI - 1.0) > 0.0001) {
-      throw new Error(`Metadata error: w_smi (${wSMI}) + w_cli (${wCLI}) must equal 1.0.`);
+    const wADJ                   = parseFloat(coefficients['w_adj']);
+    const wCLI                   = parseFloat((1 - wSMI - wADJ).toFixed(10));
+    if (Math.abs(wSMI + wCLI + wADJ - 1.0) > 0.0001) {
+      throw new Error(`Metadata error: w_smi (${wSMI}) + w_adj (${wADJ}) + w_cli (${wCLI}) must equal 1.0.`);
     }
     const subjectSSI             = parseFloat(height) * parseFloat(width);
 
@@ -2502,6 +2503,9 @@ app.post("/api/valuation", async (req, res) => {
     }
 
     // Step 5 — Subject filter (ri_decimal rules)
+    // If strict filter would drop below targetRangeHigh, supplement with the
+    // highest-ID records from the Step 4 pool that did not pass the filter.
+    const step4Pool     = pool.slice(); // preserve Step 4 pool for supplementation
     const subjectDecimal = parseInt(ri_decimal);
     const decimalMap = {
       0: [0], 1: 'portrait_special', 2: [2],
@@ -2513,60 +2517,42 @@ app.post("/api/valuation", async (req, res) => {
       throw new Error(`No subject category mapping found for ri_decimal: ${subjectDecimal}`);
     }
 
+    let strictFiltered;
     if (decimalRule === 'portrait_special') {
       const portraits   = pool.filter(r => parseInt(r.ri_decimal) === 1);
       const figuratives = pool.filter(r => parseInt(r.ri_decimal) === 2);
-      const maxFig      = portraits.length;
-      const shuffled    = figuratives.sort(() => Math.random() - 0.5).slice(0, maxFig);
-      pool = [...portraits, ...shuffled];
-      console.log(`Step 5 — Subject filter (Portrait special): ${portraits.length} portraits + ${shuffled.length} figuratives = ${pool.length} records`);
+      const shuffled    = figuratives.sort(() => Math.random() - 0.5).slice(0, portraits.length);
+      strictFiltered    = [...portraits, ...shuffled];
+      console.log(`Step 5 — Subject filter (Portrait special): ${portraits.length} portraits + ${shuffled.length} figuratives = ${strictFiltered.length} records`);
     } else {
-      pool = pool.filter(r => decimalRule.includes(parseInt(r.ri_decimal)));
-      console.log(`Step 5 — Subject filter (ri_decimal=${subjectDecimal}, allowed: [${decimalRule.join(',')}]): ${pool.length} records`);
+      strictFiltered = pool.filter(r => decimalRule.includes(parseInt(r.ri_decimal)));
+      console.log(`Step 5 — Subject filter (ri_decimal=${subjectDecimal}, allowed: [${decimalRule.join(',')}]): ${strictFiltered.length} records`);
+    }
+
+    if (strictFiltered.length >= targetRangeHigh) {
+      pool = strictFiltered;
+    } else {
+      // Supplement with highest-ID records from Step 4 pool that didn't pass subject filter
+      const strictIds    = new Set(strictFiltered.map(r => r.id));
+      const remainder    = step4Pool
+        .filter(r => !strictIds.has(r.id))
+        .sort((a, b) => b.id - a.id);
+      const needed       = targetRangeHigh - strictFiltered.length;
+      const supplemental = remainder.slice(0, needed);
+      pool = [...strictFiltered, ...supplemental];
+      console.log(`Step 5 — Subject filter supplemented: ${strictFiltered.length} subject matches + ${supplemental.length} newest records = ${pool.length} records`);
     }
     filterCounts.push({ label: 'After subject filter', count: pool.length });
     if (pool.length < targetQuantity) {
-      throw new Error(`Insufficient comps after subject category filter: ${pool.length} records remain.`);
+      throw new Error(`Insufficient comps after subject filter: ${pool.length} records remain.`);
     }
 
-    // Step 6 — Combined SMI + CLI bracket → target_multiple × targetQuantity
-    // Z-score normalize SMI and CLI across the current pool, then compute a
-    // weighted combined distance. Lower score = better match.
-    // Ties broken by higher appsi.
-    {
-      const smiValues  = pool.map(r => r.smi);
-      const cliValues  = pool.map(r => r.cli);
-
-      const smiMean    = smiValues.reduce((s, v) => s + v, 0) / smiValues.length;
-      const cliMean    = cliValues.reduce((s, v) => s + v, 0) / cliValues.length;
-
-      const smiStdDev  = Math.sqrt(smiValues.reduce((s, v) => s + Math.pow(v - smiMean, 2), 0) / smiValues.length);
-      const cliStdDev  = Math.sqrt(cliValues.reduce((s, v) => s + Math.pow(v - cliMean, 2), 0) / cliValues.length);
-
-      const subjectSMIz = smiStdDev > 0 ? (smi - smiMean) / smiStdDev : 0;
-      const subjectCLIz = cliStdDev > 0 ? (cli - cliMean) / cliStdDev : 0;
-
-      pool = pool
-        .map(r => {
-          const zSMI  = smiStdDev > 0 ? (r.smi - smiMean) / smiStdDev : 0;
-          const zCLI  = cliStdDev > 0 ? (r.cli - cliMean) / cliStdDev : 0;
-          const score = wSMI * Math.abs(zSMI - subjectSMIz) + wCLI * Math.abs(zCLI - subjectCLIz);
-          return { ...r, _combinedScore: score };
-        })
-        .sort((a, b) => a._combinedScore !== b._combinedScore
-          ? a._combinedScore - b._combinedScore
-          : b.appsi - a.appsi)
-        .slice(0, targetRangeHigh)
-        .map(({ _combinedScore, ...r }) => r);
-
-      console.log(`Step 6 — SMI+CLI bracket: kept ${pool.length} by weighted z-score (w_smi=${wSMI}, w_cli=${wCLI}, target: ${targetRangeHigh})`);
-    }
-    filterCounts.push({ label: 'After SMI+CLI bracket', count: pool.length });
-    if (pool.length < targetQuantity) {
-      throw new Error(`Insufficient comps after SMI+CLI bracket: ${pool.length} records remain.`);
-    }
-
-    console.log(`Phase 1 complete: ${pool.length} records in pre-adjustment pool (target for similarity filter: ${targetQuantity})`);
+    // Step 6 — Combined similarity scalar → targetQuantity
+    // Z-score normalize SMI, CLI, and |netAdjPct| across the pool.
+    // score = w_smi×|z_smi| + w_cli×|z_cli| + w_adj×|z_adj|
+    // Lower score = better match. Ties broken by higher appsi.
+    // Runs post-adjustment since netAdjPct requires adjPrice.
+    console.log(`Phase 1 complete: ${pool.length} records entering Phase 2 adjustments (similarity scalar will select final ${targetQuantity})`);
 
     let aiAnalysis = "";
     if (!skipNarrative) {
@@ -2669,19 +2655,48 @@ app.post("/api/valuation", async (req, res) => {
       };
     });
 
-    // Step 7 (post-adjustment) — Similarity filter
-    // Eliminate comps with the largest absolute net adjustment percentage.
-    // These required the most correction and are therefore least similar to the subject.
-    // Sort ascending by |netAdjPct|, keep targetQuantity, ties broken by higher appsi.
-    const similarityFiltered = adjComps
-      .sort((a, b) => Math.abs(a.netAdjPct) !== Math.abs(b.netAdjPct)
-        ? Math.abs(a.netAdjPct) - Math.abs(b.netAdjPct)
-        : b.appsi - a.appsi)
-      .slice(0, targetQuantity);
-    filterCounts.push({ label: 'After similarity filter', count: similarityFiltered.length });
-    console.log(`Step 7 — Similarity filter: kept ${similarityFiltered.length} comps with smallest |netAdjPct| from ${adjComps.length}`);
+    // Step 6 (post-adjustment) — Combined similarity scalar → targetQuantity
+    // Z-score normalize SMI, CLI, and |netAdjPct| across adjComps.
+    // score = w_smi×|z_smi| + w_cli×|z_cli| + w_adj×|z_adj|
+    // Lower score = better match. Ties broken by higher appsi.
+    {
+      const smiValues = adjComps.map(c => c.smi);
+      const cliValues = adjComps.map(c => c.cli);
+      const adjValues = adjComps.map(c => Math.abs(c.netAdjPct));
 
-    const topComps = similarityFiltered.sort((a, b) => a.id - b.id);
+      const mean = arr => arr.reduce((s, v) => s + v, 0) / arr.length;
+      const std  = (arr, m) => Math.sqrt(arr.reduce((s, v) => s + Math.pow(v - m, 2), 0) / arr.length);
+
+      const smiMean = mean(smiValues);  const smiStd = std(smiValues, smiMean);
+      const cliMean = mean(cliValues);  const cliStd = std(cliValues, cliMean);
+      const adjMean = mean(adjValues);  const adjStd = std(adjValues, adjMean);
+
+      const subjectSMIz = smiStd > 0 ? (smi - smiMean) / smiStd : 0;
+      const subjectCLIz = cliStd > 0 ? (cli - cliMean) / cliStd : 0;
+
+      const scored = adjComps.map(c => {
+        const zSMI  = smiStd > 0 ? (c.smi - smiMean) / smiStd : 0;
+        const zCLI  = cliStd > 0 ? (c.cli - cliMean) / cliStd : 0;
+        const zADJ  = adjStd > 0 ? Math.abs(c.netAdjPct) / adjStd : 0;  // distance from zero
+        const score = wSMI * Math.abs(zSMI - subjectSMIz)
+                    + wCLI * Math.abs(zCLI - subjectCLIz)
+                    + wADJ * zADJ;
+        return { ...c, _score: score };
+      });
+
+      scored.sort((a, b) => a._score !== b._score ? a._score - b._score : b.appsi - a.appsi);
+
+      console.log(`Step 6 — Similarity scalar (w_smi=${wSMI}, w_cli=${wCLI}, w_adj=${wADJ}):`);
+      scored.forEach((c, i) => {
+        console.log(`  ${i + 1}. ID=${c.id} score=${c._score.toFixed(4)} smi=${c.smi} cli=${c.cli} netAdj=${c.netAdjPct}%`);
+      });
+
+      const similarityFiltered = scored.slice(0, targetQuantity).map(({ _score, ...c }) => c);
+      filterCounts.push({ label: 'After similarity filter', count: similarityFiltered.length });
+      console.log(`Step 6 — Similarity filter: kept ${similarityFiltered.length} from ${adjComps.length}`);
+
+      var topComps = similarityFiltered.sort((a, b) => a.id - b.id);
+    }
 
     const adjPrices  = topComps.map(c => c.adjPrice);
     const sortedAdj  = [...adjPrices].sort((a, b) => a - b);
