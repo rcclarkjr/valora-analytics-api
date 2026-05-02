@@ -2401,7 +2401,8 @@ app.post("/api/valuation", async (req, res) => {
       'coef_frame_constant', 'coef_frame_exponent',
       'target_quantity', 'target_multiple',
       'z_filter_threshold', 'cli_bracket_size',
-      'coef_A', 'coef_B', 'coef_C'
+      'coef_A', 'coef_B', 'coef_C',
+      'size_prefilter_reduction'
     ];
     for (const field of requiredCoefs) {
       if (coefficients[field] === undefined || coefficients[field] === null) {
@@ -2409,12 +2410,13 @@ app.post("/api/valuation", async (req, res) => {
       }
     }
 
-    const targetQuantity   = parseInt(coefficients['target_quantity']);
-    const targetMultiple   = parseFloat(coefficients['target_multiple']);
-    const targetRangeHigh  = targetQuantity * targetMultiple;
-    const zFilterThreshold = parseFloat(coefficients['z_filter_threshold']);
-    const cliBracketSize   = parseFloat(coefficients['cli_bracket_size']);
-    const subjectSSI       = parseFloat(height) * parseFloat(width);
+    const targetQuantity        = parseInt(coefficients['target_quantity']);
+    const targetMultiple        = parseFloat(coefficients['target_multiple']);
+    const targetRangeHigh       = targetQuantity * targetMultiple;
+    const zFilterThreshold      = parseFloat(coefficients['z_filter_threshold']);
+    const cliBracketSize        = parseFloat(coefficients['cli_bracket_size']);
+    const sizePrefilterReduction = parseFloat(coefficients['size_prefilter_reduction']);
+    const subjectSSI            = parseFloat(height) * parseFloat(width);
 
     const filterCounts = [{ label: 'Database', count: allRecords.length }];
 
@@ -2444,48 +2446,18 @@ app.post("/api/valuation", async (req, res) => {
       throw new Error(`Insufficient comps after RI bracket filter: ${pool.length} records remain.`);
     }
 
-    // Step 1.5 — Iterative size filter
-    // Start at ±50% of subjectSSI. Each iteration tightens to 80% of the current
-    // percentage. Stop when the pool has shrunk by ≥40% vs. the Step 1 entry count,
-    // or when the next tightening would drop the pool below targetQuantity.
+    // Step 2 — Size pre-filter
+    // Sort by absolute SSI distance from subject (symmetric, both directions).
+    // Retain the top (1 - sizePrefilterReduction) fraction, dropping the most
+    // distant records first. Guaranteed exactly sizePrefilterReduction reduction.
     {
-      const step1Count   = pool.length;
-      let   rangePct     = 0.50;
-      let   filteredPool = pool;
-      let   iterCount    = 0;
-
-      while (true) {
-        const lo        = subjectSSI * (1 - rangePct);
-        const hi        = subjectSSI * (1 + rangePct);
-        const candidate = pool.filter(r => r.ssi >= lo && r.ssi <= hi);
-        const reduction = (step1Count - candidate.length) / step1Count;
-
-        console.log(`Step 2 iter ${++iterCount} — ±${(rangePct * 100).toFixed(1)}% [${lo.toFixed(0)}–${hi.toFixed(0)}]: ${candidate.length} records (reduction ${(reduction * 100).toFixed(1)}%)`);
-
-        // Accept this range's result as the working pool
-        filteredPool = candidate;
-
-        // Stop if we've achieved ≥40% reduction
-        if (reduction >= 0.40) {
-          console.log(`Step 2 — target reduction reached at ±${(rangePct * 100).toFixed(1)}%`);
-          break;
-        }
-
-        // Compute next range and check whether applying it would go below targetQuantity
-        const nextRangePct = rangePct * 0.80;
-        const nextLo       = subjectSSI * (1 - nextRangePct);
-        const nextHi       = subjectSSI * (1 + nextRangePct);
-        const nextCount    = pool.filter(r => r.ssi >= nextLo && r.ssi <= nextHi).length;
-
-        if (nextCount < targetQuantity) {
-          console.log(`Step 2 — stopping early: next tightening (±${(nextRangePct * 100).toFixed(1)}%) would yield ${nextCount} records, below targetQuantity (${targetQuantity})`);
-          break;
-        }
-
-        rangePct = nextRangePct;
-      }
-
-      pool = filteredPool;
+      const keepCount = Math.ceil(pool.length * (1 - sizePrefilterReduction));
+      pool = pool
+        .map(r => ({ ...r, _ssiDist: Math.abs(r.ssi - subjectSSI) }))
+        .sort((a, b) => a._ssiDist - b._ssiDist)
+        .slice(0, keepCount)
+        .map(({ _ssiDist, ...r }) => r);
+      console.log(`Step 2 — Size pre-filter: kept ${pool.length} closest by |ssi - ${subjectSSI}| (${(sizePrefilterReduction * 100).toFixed(0)}% reduction)`);
     }
     filterCounts.push({ label: 'After size pre-filter', count: pool.length });
     if (pool.length < targetQuantity) {
