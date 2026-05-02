@@ -2440,17 +2440,36 @@ app.post("/api/valuation", async (req, res) => {
       throw new Error(`Insufficient valid records in database: ${pool.length} found, ${targetQuantity} required.`);
     }
 
-    // Step 1 — RI bracket
+    // Step 1 — Artist multiples
+    // Keep highest appsi record per artist across the full valid pool.
+    {
+      const best = new Map();
+      pool.forEach(r => {
+        const key = r.artistName.trim().toLowerCase();
+        if (!best.has(key) || r.appsi > best.get(key).appsi) {
+          best.set(key, r);
+        }
+      });
+      const dedupedPool = Array.from(best.values());
+      console.log(`Step 1 — Artist multiples: ${pool.length} → ${dedupedPool.length} records (removed ${pool.length - dedupedPool.length} duplicate artist entries)`);
+      pool = dedupedPool;
+    }
+    filterCounts.push({ label: 'After artist multiples', count: pool.length });
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after artist multiples: ${pool.length} records remain.`);
+    }
+
+    // Step 2 — RI bracket
     const riMin = Math.max(1, ri_integer - 1);
     const riMax = Math.min(5, ri_integer + 1);
     pool = pool.filter(r => r.ri_integer >= riMin && r.ri_integer <= riMax);
     filterCounts.push({ label: 'After RI bracket', count: pool.length });
-    console.log(`Step 1 — RI bracket [${riMin}–${riMax}]: ${pool.length} records`);
+    console.log(`Step 2 — RI bracket [${riMin}–${riMax}]: ${pool.length} records`);
     if (pool.length < targetQuantity) {
       throw new Error(`Insufficient comps after RI bracket filter: ${pool.length} records remain.`);
     }
 
-    // Step 2 — Size pre-filter
+    // Step 3 — Size pre-filter
     // Sort by absolute SSI distance from subject (symmetric, both directions).
     // Retain the top (1 - sizePrefilterReduction) fraction, dropping the most
     // distant records first. Guaranteed exactly sizePrefilterReduction reduction.
@@ -2461,14 +2480,14 @@ app.post("/api/valuation", async (req, res) => {
         .sort((a, b) => a._ssiDist - b._ssiDist)
         .slice(0, keepCount)
         .map(({ _ssiDist, ...r }) => r);
-      console.log(`Step 2 — Size pre-filter: kept ${pool.length} closest by |ssi - ${subjectSSI}| (${(sizePrefilterReduction * 100).toFixed(0)}% reduction)`);
+      console.log(`Step 3 — Size pre-filter: kept ${pool.length} closest by |ssi - ${subjectSSI}| (${(sizePrefilterReduction * 100).toFixed(0)}% reduction)`);
     }
     filterCounts.push({ label: 'After size pre-filter', count: pool.length });
     if (pool.length < targetQuantity) {
       throw new Error(`Insufficient comps after size pre-filter: ${pool.length} records remain.`);
     }
 
-    // Step 3 — Medium filter
+    // Step 4 — Medium filter
     if (media === 'Oil') {
       pool = pool.filter(r => r.medium === 'Oil');
     } else if (media === 'Acrylic') {
@@ -2477,28 +2496,9 @@ app.post("/api/valuation", async (req, res) => {
       pool = pool.filter(r => r.medium !== 'Oil');
     }
     filterCounts.push({ label: 'After medium filter', count: pool.length });
-    console.log(`Step 3 — Medium filter (subject: ${media}): ${pool.length} records`);
+    console.log(`Step 4 — Medium filter (subject: ${media}): ${pool.length} records`);
     if (pool.length < targetQuantity) {
       throw new Error(`Insufficient comps after medium filter: ${pool.length} records remain.`);
-    }
-
-    // Step 4 — Artist dedup
-    // Keep highest appsi record per artist.
-    {
-      const best = new Map();
-      pool.forEach(r => {
-        const key = r.artistName.trim().toLowerCase();
-        if (!best.has(key) || r.appsi > best.get(key).appsi) {
-          best.set(key, r);
-        }
-      });
-      const dedupedPool = Array.from(best.values());
-      console.log(`Step 4 — Artist dedup: ${pool.length} → ${dedupedPool.length} records (removed ${pool.length - dedupedPool.length} duplicate artist entries)`);
-      pool = dedupedPool;
-    }
-    filterCounts.push({ label: 'After artist dedup', count: pool.length });
-    if (pool.length < targetQuantity) {
-      throw new Error(`Insufficient comps after artist dedup: ${pool.length} records remain.`);
     }
 
     // Step 5 — Subject filter (ri_decimal rules)
