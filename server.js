@@ -3164,28 +3164,48 @@ app.post('/api/records/import', async (req, res) => {
         gate1_score: null, gate2_score: null,
         smi: null, ssi: null, aop: null, aoppsi: null, appsi: null
       };
-      if (incoming.imageUrl && incoming.imageUrl !== 'Missing') {
-        try {
-          const imgResponse = await axios.get(incoming.imageUrl, {
-            responseType: 'arraybuffer', timeout: 15000,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Referer': 'https://www.saatchiart.com/'
-            }
-          });
-          const imageBuffer = Buffer.from(imgResponse.data);
-          const imagePath = path.join('/mnt/data/images', `record_${maxId}.jpg`);
-          await sharp(imageBuffer).jpeg({ quality: 90 }).toFile(imagePath);
-          const thumbnailBuffer = await sharp(imageBuffer)
-            .resize(120, 120, { fit: 'inside' })
-            .jpeg({ quality: 70 })
-            .toBuffer();
-          newRecord.thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
-          console.log(`Image saved for imported record ${maxId}`);
-        } catch (imgError) {
-          console.error(`Image fetch/processing failed for record ${maxId}:`, imgError.message);
-        }
+	  
+	  // NEW — uses imageBase64 already fetched by the scraper
+if (incoming.imageBase64) {
+  try {
+    const match = incoming.imageBase64.match(/^data:image\/(jpeg|png|gif|webp);base64,(.+)$/);
+    if (!match) throw new Error('imageBase64 is not a valid data URI');
+    const imageBuffer = Buffer.from(match[2], 'base64');
+    const imagePath = path.join('/mnt/data/images', `record_${maxId}.jpg`);
+    await sharp(imageBuffer).jpeg({ quality: 90 }).toFile(imagePath);
+    const thumbnailBuffer = await sharp(imageBuffer)
+      .resize(120, 120, { fit: 'inside' })
+      .jpeg({ quality: 70 })
+      .toBuffer();
+    newRecord.thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
+    console.log(`Image saved for imported record ${maxId}`);
+  } catch (imgError) {
+    console.error(`Image processing failed for record ${maxId}:`, imgError.message);
+  }
+} else if (incoming.imageUrl && incoming.imageUrl !== 'Missing') {
+  // Fallback for any staging records that pre-date imageBase64 storage
+  try {
+    const imgResponse = await axios.get(incoming.imageUrl, {
+      responseType: 'arraybuffer', timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.saatchiart.com/'
       }
+    });
+    const imageBuffer = Buffer.from(imgResponse.data);
+    const imagePath = path.join('/mnt/data/images', `record_${maxId}.jpg`);
+    await sharp(imageBuffer).jpeg({ quality: 90 }).toFile(imagePath);
+    const thumbnailBuffer = await sharp(imageBuffer)
+      .resize(120, 120, { fit: 'inside' })
+      .jpeg({ quality: 70 })
+      .toBuffer();
+    newRecord.thumbnailBase64 = `data:image/jpeg;base64,${thumbnailBuffer.toString('base64')}`;
+    console.log(`Image saved for imported record ${maxId} (CDN fallback)`);
+  } catch (imgError) {
+    console.error(`Image fetch/processing failed for record ${maxId}:`, imgError.message);
+  }
+}
+ 
       data.records.push(newRecord);
       if (incoming.locationURL) byLocationUrl.set(incoming.locationURL.trim().toLowerCase(), newRecord);
       if (incomingNameTitle) byNameTitle.set(incomingNameTitle, newRecord);
