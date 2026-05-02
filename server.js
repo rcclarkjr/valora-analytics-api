@@ -2167,7 +2167,7 @@ app.post("/api/coefficients", (req, res) => {
   try {
     const data = readDatabase();
     const numericFields = ['coef_size_constant', 'coef_size_exponent', 'coef_frame_constant', 'coef_frame_exponent',
-                           'target_quantity', 'target_multiple', 'z_filter_threshold', 'cli_bracket_size'];
+                           'target_quantity', 'target_multiple', 'z_filter_threshold'];
     for (const field of numericFields) {
       if (req.body[field] !== undefined) {
         const v = parseFloat(req.body[field]);
@@ -2400,7 +2400,7 @@ app.post("/api/valuation", async (req, res) => {
       'coef_size_constant', 'coef_size_exponent',
       'coef_frame_constant', 'coef_frame_exponent',
       'target_quantity', 'target_multiple',
-      'z_filter_threshold', 'cli_bracket_size',
+      'z_filter_threshold',
       'coef_A', 'coef_B', 'coef_C',
       'size_prefilter_reduction'
     ];
@@ -2414,7 +2414,6 @@ app.post("/api/valuation", async (req, res) => {
     const targetMultiple        = parseFloat(coefficients['target_multiple']);
     const targetRangeHigh       = targetQuantity * targetMultiple;
     const zFilterThreshold      = parseFloat(coefficients['z_filter_threshold']);
-    const cliBracketSize        = parseFloat(coefficients['cli_bracket_size']);
     const sizePrefilterReduction = parseFloat(coefficients['size_prefilter_reduction']);
     const subjectSSI            = parseFloat(height) * parseFloat(width);
 
@@ -2437,16 +2436,38 @@ app.post("/api/valuation", async (req, res) => {
       throw new Error(`Insufficient valid records in database: ${pool.length} found, ${targetQuantity} required.`);
     }
 
+    // Step 1 — Artist dedup (full valid pool)
+    // Keep highest appsi record per artist across the entire valid pool.
+    // Running first gives the most representative picture of each artist
+    // and prevents late-stage surprises from heavy artist representation.
+    {
+      const best = new Map();
+      pool.forEach(r => {
+        const key = r.artistName.trim().toLowerCase();
+        if (!best.has(key) || r.appsi > best.get(key).appsi) {
+          best.set(key, r);
+        }
+      });
+      const dedupedPool = Array.from(best.values());
+      console.log(`Step 1 — Artist dedup: ${pool.length} → ${dedupedPool.length} records (removed ${pool.length - dedupedPool.length} duplicate artist entries)`);
+      pool = dedupedPool;
+    }
+    filterCounts.push({ label: 'After artist dedup', count: pool.length });
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after artist dedup: ${pool.length} records remain.`);
+    }
+
+    // Step 2 — RI bracket
     const riMin = Math.max(1, ri_integer - 1);
     const riMax = Math.min(5, ri_integer + 1);
     pool = pool.filter(r => r.ri_integer >= riMin && r.ri_integer <= riMax);
     filterCounts.push({ label: 'After RI bracket', count: pool.length });
-    console.log(`Step 1 — RI bracket [${riMin}–${riMax}]: ${pool.length} records`);
+    console.log(`Step 2 — RI bracket [${riMin}–${riMax}]: ${pool.length} records`);
     if (pool.length < targetQuantity) {
       throw new Error(`Insufficient comps after RI bracket filter: ${pool.length} records remain.`);
     }
 
-    // Step 2 — Size pre-filter
+    // Step 3 — Size pre-filter
     // Sort by absolute SSI distance from subject (symmetric, both directions).
     // Retain the top (1 - sizePrefilterReduction) fraction, dropping the most
     // distant records first. Guaranteed exactly sizePrefilterReduction reduction.
@@ -2457,13 +2478,14 @@ app.post("/api/valuation", async (req, res) => {
         .sort((a, b) => a._ssiDist - b._ssiDist)
         .slice(0, keepCount)
         .map(({ _ssiDist, ...r }) => r);
-      console.log(`Step 2 — Size pre-filter: kept ${pool.length} closest by |ssi - ${subjectSSI}| (${(sizePrefilterReduction * 100).toFixed(0)}% reduction)`);
+      console.log(`Step 3 — Size pre-filter: kept ${pool.length} closest by |ssi - ${subjectSSI}| (${(sizePrefilterReduction * 100).toFixed(0)}% reduction)`);
     }
     filterCounts.push({ label: 'After size pre-filter', count: pool.length });
     if (pool.length < targetQuantity) {
       throw new Error(`Insufficient comps after size pre-filter: ${pool.length} records remain.`);
     }
 
+    // Step 4 — Medium filter
     if (media === 'Oil') {
       pool = pool.filter(r => r.medium === 'Oil');
     } else if (media === 'Acrylic') {
@@ -2472,11 +2494,28 @@ app.post("/api/valuation", async (req, res) => {
       pool = pool.filter(r => r.medium !== 'Oil');
     }
     filterCounts.push({ label: 'After medium filter', count: pool.length });
-    console.log(`Step 3 — Medium filter (subject: ${media}): ${pool.length} records`);
+    console.log(`Step 4 — Medium filter (subject: ${media}): ${pool.length} records`);
     if (pool.length < targetQuantity) {
       throw new Error(`Insufficient comps after medium filter: ${pool.length} records remain.`);
     }
 
+    // Step 5 — Z-filter (outliers by appsi)
+    const appsiValues = pool.map(r => r.appsi);
+    const appsiMean   = appsiValues.reduce((sum, v) => sum + v, 0) / appsiValues.length;
+    const appsiStdDev = Math.sqrt(
+      appsiValues.reduce((sum, v) => sum + Math.pow(v - appsiMean, 2), 0) / appsiValues.length
+    );
+    pool = pool.filter(r => {
+      const z = (r.appsi - appsiMean) / appsiStdDev;
+      return z >= zFilterThreshold;
+    });
+    filterCounts.push({ label: 'After outliers', count: pool.length });
+    console.log(`Step 5 — Z-filter (threshold=${zFilterThreshold}, mean=${appsiMean.toFixed(4)}, stddev=${appsiStdDev.toFixed(4)}): ${pool.length} records`);
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after Z-filter: ${pool.length} records remain.`);
+    }
+
+    // Step 6 — Subject filter (ri_decimal rules)
     const subjectDecimal = parseInt(ri_decimal);
     const decimalMap = {
       0: [0], 1: 'portrait_special', 2: [2],
@@ -2494,61 +2533,39 @@ app.post("/api/valuation", async (req, res) => {
       const maxFig      = portraits.length;
       const shuffled    = figuratives.sort(() => Math.random() - 0.5).slice(0, maxFig);
       pool = [...portraits, ...shuffled];
-      console.log(`Step 4 — Subject filter (Portrait special): ${portraits.length} portraits + ${shuffled.length} figuratives = ${pool.length} records`);
+      console.log(`Step 6 — Subject filter (Portrait special): ${portraits.length} portraits + ${shuffled.length} figuratives = ${pool.length} records`);
     } else {
       pool = pool.filter(r => decimalRule.includes(parseInt(r.ri_decimal)));
-      console.log(`Step 4 — Subject filter (ri_decimal=${subjectDecimal}, allowed: [${decimalRule.join(',')}]): ${pool.length} records`);
+      console.log(`Step 6 — Subject filter (ri_decimal=${subjectDecimal}, allowed: [${decimalRule.join(',')}]): ${pool.length} records`);
     }
     filterCounts.push({ label: 'After subject filter', count: pool.length });
     if (pool.length < targetQuantity) {
       throw new Error(`Insufficient comps after subject category filter: ${pool.length} records remain.`);
     }
 
-    const cliLow   = Math.max(1, cli - cliBracketSize);
-    const cliHigh  = Math.min(5, cli + cliBracketSize);
-    const afterCLI = pool.filter(r => r.cli >= cliLow && r.cli <= cliHigh);
-    if (afterCLI.length > targetRangeHigh) {
-      pool = afterCLI;
-      filterCounts.push({ label: 'After CLI bracket', count: pool.length });
-      console.log(`Step 5 — CLI bracket [${cliLow.toFixed(2)}–${cliHigh.toFixed(2)}]: ${pool.length} records (applied)`);
-    } else {
-      console.log(`Step 5 — CLI bracket: skipped (would reduce pool to ${afterCLI.length}, at or within target range)`);
-    }
-
-    {
-      const best = new Map();
-      pool.forEach(r => {
-        const key = r.artistName.trim().toLowerCase();
-        if (!best.has(key) || r.appsi > best.get(key).appsi) {
-          best.set(key, r);
-        }
-      });
-      const dedupedPool = Array.from(best.values());
-      if (dedupedPool.length < pool.length) {
-        console.log(`Artist dedup: ${pool.length} → ${dedupedPool.length} records (removed ${pool.length - dedupedPool.length} duplicate artist entries)`);
-      }
-      pool = dedupedPool;
-    }
-
-    const appsiValues = pool.map(r => r.appsi);
-    const appsiMean   = appsiValues.reduce((sum, v) => sum + v, 0) / appsiValues.length;
-    const appsiStdDev = Math.sqrt(
-      appsiValues.reduce((sum, v) => sum + Math.pow(v - appsiMean, 2), 0) / appsiValues.length
-    );
-    pool = pool.filter(r => {
-      const z = (r.appsi - appsiMean) / appsiStdDev;
-      return z >= zFilterThreshold;
-    });
-    filterCounts.push({ label: 'After outliers & artist multiples', count: pool.length });
-    console.log(`Step 6 — Z-filter (threshold=${zFilterThreshold}, mean=${appsiMean.toFixed(4)}, stddev=${appsiStdDev.toFixed(4)}): ${pool.length} records`);
-
+    // Step 7 — SMI bracket → target_multiple × targetQuantity
+    // Absolute distance sort on SMI, ties broken by higher appsi.
+    const smiTarget = targetRangeHigh;
     pool = pool
       .map(r => ({ ...r, _smiDist: Math.abs(r.smi - smi) }))
       .sort((a, b) => a._smiDist !== b._smiDist ? a._smiDist - b._smiDist : b.appsi - a.appsi)
-      .slice(0, targetQuantity)
+      .slice(0, smiTarget)
       .map(({ _smiDist, ...r }) => r);
     filterCounts.push({ label: 'After SMI bracket', count: pool.length });
-    console.log(`Step 7 — SMI bracket: kept ${pool.length} closest by |smi - ${smi}| (ties → higher appsi)`);
+    console.log(`Step 7 — SMI bracket: kept ${pool.length} closest by |smi - ${smi}| (target: ${smiTarget}, ties → higher appsi)`);
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after SMI bracket: ${pool.length} records remain.`);
+    }
+
+    // Step 8 — CLI bracket → exactly targetQuantity
+    // Absolute distance sort on CLI, ties broken by higher appsi.
+    pool = pool
+      .map(r => ({ ...r, _cliDist: Math.abs(r.cli - cli) }))
+      .sort((a, b) => a._cliDist !== b._cliDist ? a._cliDist - b._cliDist : b.appsi - a.appsi)
+      .slice(0, targetQuantity)
+      .map(({ _cliDist, ...r }) => r);
+    filterCounts.push({ label: 'After CLI bracket', count: pool.length });
+    console.log(`Step 8 — CLI bracket: kept ${pool.length} closest by |cli - ${cli}| (ties → higher appsi)`);
 
     console.log(`Phase 1 complete: ${pool.length} records in final pool (target: ${targetQuantity})`);
 
