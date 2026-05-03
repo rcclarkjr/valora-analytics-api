@@ -197,6 +197,51 @@ function isForeignLanguageBio(bio) {
     return (nonLatin.length / letters.length) > 0.15;
 }
 
+// ── Detect Saatchi footer/navigation content masquerading as bio ─
+// When scrapeArtistProfile captures page footer instead of bio text,
+// the result contains repeated Saatchi site navigation phrases.
+// Returns true if the text looks like footer junk rather than a bio.
+function isFooterContent(bio) {
+    if (!bio) return false;
+    const lower = bio.toLowerCase();
+    // Footer junk contains multiple Saatchi navigation markers
+    const footerMarkers = [
+        'saatchi art',
+        'buy art online',
+        'sell your art',
+        'art advisory',
+        'gift cards',
+        'ship to',
+        'currency:',
+        'follow us',
+        'newsletter',
+        'terms of use',
+        'privacy policy',
+        'accessibility'
+    ];
+    const markerCount = footerMarkers.filter(m => lower.includes(m)).length;
+    return markerCount >= 3;
+}
+
+// ── Check bio for career credential signals ───────────────────
+// Returns true if the bio contains at least one keyword indicating
+// the artist has exhibition, education, or award credentials.
+// Bios with no credential signals almost always produce CLI=1.
+function hasCareerCredentials(bio) {
+    if (!bio) return false;
+    const lower = bio.toLowerCase();
+    const credentialKeywords = [
+        'exhibition', 'exhibited', 'gallery', 'galleries',
+        'museum', 'award', 'prize', 'residency', 'resident',
+        'degree', 'university', 'college', 'academy', 'school of',
+        'studied', 'graduated', 'mfa', 'bfa', 'collection',
+        'commissioned', 'commission', 'publication', 'published',
+        'solo show', 'group show', 'art fair', 'biennial',
+        'fellowship', 'grant', 'scholarship', 'juried'
+    ];
+    return credentialKeywords.some(kw => lower.includes(kw));
+}
+
 // ── Map Saatchi medium text to our finite list ────────────────
 const MEDIUM_MAP = [
     { pattern: /oil\s+over\s+acrylic/i,           value: 'Oil over Acrylic' },
@@ -642,6 +687,14 @@ async function main() {
             }
             if (isForeignLanguageBio(record.artistBio)) {
                 console.warn(`  SKIPPED — foreign-language bio detected: ${url}`);
+                continue;
+            }
+            if (isFooterContent(record.artistBio)) {
+                console.warn(`  SKIPPED — bio is footer/navigation content: ${url}`);
+                continue;
+            }
+            if (!hasCareerCredentials(record.artistBio)) {
+                console.warn(`  SKIPPED — bio has no career credential signals: ${url}`);
                 continue;
             }
 
