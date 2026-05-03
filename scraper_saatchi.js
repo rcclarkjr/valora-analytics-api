@@ -99,6 +99,49 @@ function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// ── API base URL (same server that spawned this process) ──────
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:10000';
+
+// ── Fetch existing artist names from the database ─────────────
+// Returns a Set of normalized artist names (lowercase, trimmed).
+// If the fetch fails for any reason, returns an empty Set so the
+// scraper continues normally rather than aborting.
+async function fetchExistingArtists() {
+    return new Promise((resolve) => {
+        const url = `${API_BASE_URL}/api/records`;
+        const isHttps = url.startsWith('https://');
+        const transport = isHttps ? https : require('http');
+        const req = transport.get(url, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+                try {
+                    const records = JSON.parse(body);
+                    const names = new Set(
+                        records
+                            .map(r => (r.artistName || '').trim().toLowerCase())
+                            .filter(n => n.length > 0)
+                    );
+                    console.log(`Loaded ${names.size} existing artist names from database.`);
+                    resolve(names);
+                } catch {
+                    console.warn('Could not parse existing artists response — proceeding without artist filter.');
+                    resolve(new Set());
+                }
+            });
+        });
+        req.on('error', (err) => {
+            console.warn(`Could not fetch existing artists (${err.message}) — proceeding without artist filter.`);
+            resolve(new Set());
+        });
+        req.setTimeout(15000, () => {
+            req.destroy();
+            console.warn('Timeout fetching existing artists — proceeding without artist filter.');
+            resolve(new Set());
+        });
+    });
+}
+
 // ── Parse artwork URLs from a sitemap XML string ──────────────
 // Filters to Painting- URLs only.
 function parseArtworkUrlsFromSitemap(xml) {
@@ -472,6 +515,10 @@ async function main() {
     writeProgress('starting', 0, LIMIT, 'Initializing scraper...');
     console.log(`Starting Saatchi scraper — limit: ${LIMIT}`);
 
+    // Step 0: Load existing artist names for duplicate filtering
+    writeProgress('starting', 0, LIMIT, 'Loading existing artists from database...');
+    const existingArtists = await fetchExistingArtists();
+
     // Step 1: Collect artwork entries from sitemaps until we have enough
     writeProgress('collecting', 0, LIMIT, 'Reading sitemaps to collect artwork URLs...');
     const artworkEntries = []; // each entry: { url, lastmod }
@@ -516,7 +563,12 @@ async function main() {
             // Store lastmod as dateAdded — reflects Saatchi's last modification date
             record.dateAdded = lastmod || new Date().toISOString().slice(0, 10);
 
-            // Fetch image and store as base64 for processing at import time
+            // ── Skip artists already in the database ─────────────────
+            const normalizedArtist = (record.artistName || '').trim().toLowerCase();
+            if (normalizedArtist && normalizedArtist !== 'missing' && existingArtists.has(normalizedArtist)) {
+                console.warn(`  SKIPPED — artist already in database: ${record.artistName}`);
+                continue;
+            }
             if (record.imageUrl && record.imageUrl !== 'Missing') {
                 console.log(`  Fetching image...`);
                 const imageBase64 = await fetchImageAsBase64(record.imageUrl);
@@ -556,6 +608,10 @@ async function main() {
                 continue;
             }
 
+            // Add to set so a second work by this artist is skipped later in the same run
+            if (normalizedArtist && normalizedArtist !== 'missing') {
+                existingArtists.add(normalizedArtist);
+            }
             results.push(record);
         } catch (err) {
             console.error(`  FAILED: ${err.message}`);
