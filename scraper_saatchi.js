@@ -519,44 +519,81 @@ async function main() {
     writeProgress('starting', 0, LIMIT, 'Loading existing artists from database...');
     const existingArtists = await fetchExistingArtists();
 
-    // Step 1: Collect artwork entries from sitemaps until we have enough
-    writeProgress('collecting', 0, LIMIT, 'Reading sitemaps to collect artwork URLs...');
-    const artworkEntries = []; // each entry: { url, lastmod }
-    let sitemapIndex = 1;
+    // Step 1: Set up on-demand sitemap URL feed
+    // Sitemaps are fetched as needed rather than all upfront, so we can
+    // keep going until we have LIMIT accepted records without pre-loading
+    // a huge URL list.
+    const MAX_ATTEMPTS = LIMIT * 5; // safety cap — stop if we can't find enough new records
+    const urlBuffer    = [];        // buffer of { url, lastmod } entries not yet processed
+    let sitemapIndex   = 1;
+    let urlCursor      = 0;         // how many URLs we have consumed from the buffer total (including skipped ones)
+    let sitemapsExhausted = false;
 
-    while (artworkEntries.length < LIMIT + SKIP) {
+    // Pre-load sitemaps until we have enough URLs to cover the SKIP offset
+    writeProgress('collecting', 0, LIMIT, 'Reading sitemaps...');
+    while (urlBuffer.length < SKIP + 1 && !sitemapsExhausted) {
         const sitemapUrl = `https://www.saatchiart.com/sitemap-artworks-${sitemapIndex}.xml`;
         console.log(`Fetching sitemap ${sitemapIndex}...`);
         try {
-            const xml = await fetchUrl(sitemapUrl);
+            const xml   = await fetchUrl(sitemapUrl);
             const found = parseArtworkUrlsFromSitemap(xml);
             console.log(`  Sitemap ${sitemapIndex}: ${found.length} painting URLs`);
-            artworkEntries.push(...found);
-            await delay(1000); // polite delay between sitemaps
+            urlBuffer.push(...found);
+            await delay(1000);
         } catch (err) {
-            console.warn(`  Sitemap ${sitemapIndex} failed: ${err.message} — stopping sitemap collection`);
+            console.warn(`  Sitemap ${sitemapIndex} failed: ${err.message} — no more sitemaps.`);
+            sitemapsExhausted = true;
             break;
         }
         sitemapIndex++;
     }
 
-    // Apply skip then limit
-    const entriesToProcess = artworkEntries.slice(SKIP, SKIP + LIMIT);
-    console.log(`Collected ${artworkEntries.length} URLs total, skipping ${SKIP}, processing ${entriesToProcess.length}`);
-
-    if (entriesToProcess.length === 0) {
-        writeProgress('error', 0, LIMIT, 'No artwork URLs found in sitemaps.');
+    if (urlBuffer.length <= SKIP) {
+        writeProgress('error', 0, LIMIT, 'No artwork URLs found after applying skip offset.');
         process.exit(1);
     }
 
-    // Step 2: Scrape each artwork page
-    const results = [];
-    for (let i = 0; i < entriesToProcess.length; i++) {
-        const { url, lastmod } = entriesToProcess[i];
-        const current = i + 1;
-        writeProgress('scraping', current, entriesToProcess.length,
-            `Scraping artwork ${current} of ${entriesToProcess.length}...`);
-        console.log(`[${current}/${entriesToProcess.length}] ${url}`);
+    // Apply skip offset
+    urlCursor = SKIP;
+    console.log(`Skipped first ${SKIP} URLs. Starting scrape from position ${SKIP + 1}.`);
+
+    // Helper: get the next URL from the buffer, fetching more sitemaps if needed
+    async function nextUrl() {
+        while (urlCursor >= urlBuffer.length && !sitemapsExhausted) {
+            const sitemapUrl = `https://www.saatchiart.com/sitemap-artworks-${sitemapIndex}.xml`;
+            console.log(`Fetching sitemap ${sitemapIndex}...`);
+            try {
+                const xml   = await fetchUrl(sitemapUrl);
+                const found = parseArtworkUrlsFromSitemap(xml);
+                console.log(`  Sitemap ${sitemapIndex}: ${found.length} painting URLs`);
+                urlBuffer.push(...found);
+                await delay(1000);
+            } catch (err) {
+                console.warn(`  Sitemap ${sitemapIndex} failed: ${err.message} — no more sitemaps.`);
+                sitemapsExhausted = true;
+                break;
+            }
+            sitemapIndex++;
+        }
+        if (urlCursor >= urlBuffer.length) return null; // exhausted
+        return urlBuffer[urlCursor++];
+    }
+
+    // Step 2: Scrape until we have LIMIT accepted records or hit MAX_ATTEMPTS
+    const results  = [];
+    let attempts   = 0;
+
+    while (results.length < LIMIT && attempts < MAX_ATTEMPTS) {
+        const entry = await nextUrl();
+        if (!entry) {
+            console.warn('Sitemaps exhausted — stopping scrape.');
+            break;
+        }
+        const { url, lastmod } = entry;
+        attempts++;
+        writeProgress('scraping', results.length, LIMIT,
+            `Collected ${results.length} of ${LIMIT} — attempting URL ${attempts} (max ${MAX_ATTEMPTS})...`);
+        console.log(`[${results.length}/${LIMIT} collected | attempt ${attempts}] ${url}`);
 
         try {
             const record = await scrapeArtworkPage(url);
@@ -614,18 +651,11 @@ async function main() {
             }
             results.push(record);
         } catch (err) {
-            console.error(`  FAILED: ${err.message}`);
-            results.push({
-                locationURL:   url,
-                website:       'Saatchi Art',
-                scrapeError:   err.message,
-                pendingScores: true,
-                dateAdded:     lastmod || new Date().toISOString().slice(0, 10)
-            });
+            console.error(`  FAILED: ${err.message} — not counted toward limit`);
         }
 
         // Polite delay between artwork pages — 1.5 seconds
-        if (i < entriesToProcess.length - 1) await delay(1500);
+        await delay(1500);
     }
 
     // Step 3: Write staging file (full data including imageBase64)
@@ -635,12 +665,12 @@ async function main() {
     // Strip imageBase64 from progress results — UI doesn't need it, keeps payload small
     const resultsForUI = results.map(({ imageBase64, ...rest }) => rest);
 
-    const skippedCount = entriesToProcess.length - results.length;
-    const skippedNote  = skippedCount > 0 ? ` (${skippedCount} skipped — no bio or foreign language)` : '';
-    writeProgress('complete', entriesToProcess.length, entriesToProcess.length,
-        `Scrape complete — ${results.length} records written to staging${skippedNote}.`, resultsForUI);
+    const hitCap = attempts >= MAX_ATTEMPTS && results.length < LIMIT;
+    const capNote = hitCap ? ` (stopped after ${MAX_ATTEMPTS} attempts — sitemap section may be heavily overlapping with existing database)` : '';
+    writeProgress('complete', results.length, LIMIT,
+        `Scrape complete — ${results.length} of ${LIMIT} requested records collected after ${attempts} attempts.${capNote}`, resultsForUI);
 
-    console.log(`Done. ${results.length} records scraped, ${skippedCount} skipped.`);
+    console.log(`Done. ${results.length} records collected in ${attempts} attempts.${capNote}`);
 }
 
 main().catch(err => {
