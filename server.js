@@ -1826,9 +1826,6 @@ function getMediumIndex(medium, mediumCoefficients) {
   return key ? (parseFloat(mediumCoefficients[key]) || 1.0) : 1.0;
 }
 
-Calculatesmi functions · JS
-Copy
-
 function calculateSMI(smiSubject, smiRender, integer, coefficients) {
   if (smiSubject === null || smiSubject === undefined ||
       smiRender  === null || smiRender  === undefined) return null;
