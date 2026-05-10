@@ -942,22 +942,6 @@ CRITICAL EVALUATION RULES:
       return res.status(500).json({ error: { message: `AI returned invalid integer: ${integer}. Must be 1–5.` } });
     }
 
-    if (integerVal === 3 || integerVal === 4) {
-      if (gate1_score === undefined || gate1_score === null) {
-        console.error("AI response missing gate1_score for integer 3/4");
-        return res.status(500).json({ error: { message: "AI returned incomplete response — missing gate1_score" } });
-      }
-      if (gate2_score === undefined || gate2_score === null) {
-        console.error("AI response missing gate2_score for integer 3/4");
-        return res.status(500).json({ error: { message: "AI returned incomplete response — missing gate2_score" } });
-      }
-      if (![0, 1, 2].includes(parseInt(gate1_score))) {
-        return res.status(500).json({ error: { message: `AI returned invalid gate1_score: ${gate1_score}. Must be 0, 1, or 2.` } });
-      }
-      if (![0, 1, 2].includes(parseInt(gate2_score))) {
-        return res.status(500).json({ error: { message: `AI returned invalid gate2_score: ${gate2_score}. Must be 0, 1, or 2.` } });
-      }
-    }
 
     if (integerVal === 5) {
       console.log(`SMI integer=5 (Master) — sub-scores not evaluated`);
@@ -1842,6 +1826,9 @@ function getMediumIndex(medium, mediumCoefficients) {
   return key ? (parseFloat(mediumCoefficients[key]) || 1.0) : 1.0;
 }
 
+Calculatesmi functions · JS
+Copy
+
 function calculateSMI(smiSubject, smiRender, integer, coefficients) {
   if (smiSubject === null || smiSubject === undefined ||
       smiRender  === null || smiRender  === undefined) return null;
@@ -1858,11 +1845,16 @@ function calculateSMI(smiSubject, smiRender, integer, coefficients) {
   if (isNaN(coefSubject) || coefSubject < 0 || coefSubject > 1)
     throw new Error(`calculateSMI: coef_smi_subject "${rawSubject}" is invalid. Must be 0 to 1.`);
   const coefRender = parseFloat((1 - coefSubject).toFixed(4));
-  const weighted = Math.min(
-    (parseFloat(smiSubject) * coefSubject) + (parseFloat(smiRender) * coefRender),
-    0.99
-  );
-  return parseFloat((integerVal + weighted).toFixed(2));
+  const weighted = (parseFloat(smiSubject) * coefSubject) + (parseFloat(smiRender) * coefRender);
+ 
+  if (integerVal === 3) {
+    const doubled = Math.min(weighted * 2, 1.90);
+    return parseFloat((integerVal + doubled).toFixed(2));
+  }
+ 
+  // Integers 1 and 2: cap weighted at 0.90
+  const cappedWeighted = Math.min(weighted, 0.90);
+  return parseFloat((integerVal + cappedWeighted).toFixed(2));
 }
 
 function calculateSMI_fromScores(subjectScores, renderingScores, coefficients, integer) {
