@@ -74,15 +74,13 @@ visible. There is limited range in mark-making, color, or
 technique. The work is recognizable as a sincere attempt at 
 the subject. Personal voice has not yet emerged.
 
-LEVEL 3 or 4 — PROFESSIONAL
+LEVEL 3 — PROFESSIONAL
 The work demonstrates solid, reliable technical competence 
 across the fundamental skills of the medium. Proportion, 
 perspective, value structure, and color relationships are 
 handled correctly and consistently. The work looks professional 
-and finished. Assign this designation if the work is clearly 
-above Level 2 and clearly below Level 5. The determination 
-of whether this work is a 3 or a 4 is made in Stage 2 — do 
-not attempt to resolve it here.
+and finished. Assign this level if the work is clearly above 
+Level 2 and clearly below Level 5.
 
 LEVEL 5 — MASTER
 The work achieves transcendence. Technical mastery is total 
@@ -92,84 +90,11 @@ inevitability: every element feels exactly right, as if it
 could not be otherwise. There is profound conceptual or 
 emotional depth. Works at this level are rare and unmistakable.
 
-[YOUR LEVEL IS NOW LOCKED. If you assigned Level 1, 2, or 5, 
-proceed directly to Stage 3. If you assigned Level 3 or 4, 
-proceed to Stage 2.]
+[YOUR LEVEL IS NOW LOCKED. Proceed directly to Stage 2.]
 
 ---
 
-STAGE 2 — GATE EVALUATION
-(Only reached if Stage 1 assigned Level 3 or 4)
-
-Your task is to determine whether this work is a Level 3 or 
-a Level 4. Apply the two gates below in sequence. Score each 
-gate independently.
-
-GATE SCORING:
-2 = clear pass — the condition is unambiguously present and 
-    strong throughout the work
-1 = marginal — the condition is present but uncertain, partial,
-    or inconsistent
-0 = fail — the condition is not present
-
-A combined gate score of 3 or 4 assigns Level 4.
-A combined gate score of 0, 1, or 2 assigns Level 3.
-
----
-
-GATE 1 — SUBVERSION
-
-Did the artist make at least one clear unconventional decision 
-— in subject treatment, composition, palette, or rendering — 
-that is the artist's own rather than the execution of an 
-established borrowed style?
-
-To pass this gate, the unconventional decision must be:
-- A genuine departure from what a competent professional would 
-  conventionally do with this subject
-- The artist's own invention, not the fluent execution of an 
-  established movement or tradition (working skillfully in the 
-  manner of Impressionism, Cubism, Pointillism, or any other 
-  named style is not itself an unconventional decision — it is 
-  the execution of someone else's unconventional decision)
-- Clearly intentional rather than accidental or the result of 
-  limited technical ability
-
-Consider findings from Stage 0. Hidden imagery, dual-scale 
-narratives, composite layering, and transparency effects are 
-all forms of unconventional decision-making if they are clearly 
-intentional and the artist's own.
-
-Score Gate 1: 0, 1, or 2
-
----
-
-GATE 2 — COMMITMENT
-
-Is the unconventional decision identified in Gate 1 honored 
-consistently throughout the entire work?
-
-To pass this gate:
-- The unconventional decision must be present and sustained 
-  across the whole canvas — not confined to one area or element
-- No significant portion of the work reverts to conventional 
-  handling in a way that contradicts or abandons the 
-  unconventional decision
-- The commitment must feel like a principle that governs the 
-  whole work, not a technique applied in one area
-
-If Gate 1 scored 0, score Gate 2 as 0.
-
-Score Gate 2: 0, 1, or 2
-
-[ADD Gate 1 + Gate 2 scores.
-Combined score 3 or 4 → Level 4
-Combined score 0, 1, or 2 → Level 3
-YOUR INTEGER IS NOW LOCKED.]
-
----
-
-STAGE 3 — SUBJECT SCORING
+STAGE 2 — SUBJECT SCORING
 
 Score this artwork on each of the following five subject 
 dimensions. Each dimension is scored from 0.00 to 1.00. Score 
@@ -229,7 +154,7 @@ Score range: 0.00 to 1.00
 
 ---
 
-STAGE 4 — RENDERING SCORING
+STAGE 3 — RENDERING SCORING
 
 Score this artwork on each of the following five rendering 
 dimensions. Each dimension is scored from 0.00 to 1.00. Score 
@@ -288,7 +213,7 @@ Score range: 0.00 to 1.00
 
 ---
 
-STAGE 5 — MITIGATORS
+STAGE 4 — MITIGATORS
 
 Apply each mitigator independently after scoring. A mitigator 
 adjusts the affected sub-score only. Apply only those that 
@@ -337,9 +262,9 @@ Return your response as a JSON object with exactly these
 six fields:
 
 {
-  "integer": [1, 2, 3, 4, or 5],
-  "gate1_score": [0, 1, or 2 — or null if Stage 2 was not reached],
-  "gate2_score": [0, 1, or 2 — or null if Stage 2 was not reached],
+  "integer": [1, 2, 3, or 5],
+  "gate1_score": null,
+  "gate2_score": null,
   "subject_scores": {
     "S1": [0.00 to 1.00],
     "S2": [0.00 to 1.00],
@@ -358,6 +283,9 @@ six fields:
   "rendering_description": "[string]"
 }
 
+integer must be 1, 2, 3, or 5. The value 4 is never a valid 
+integer return.
+gate1_score and gate2_score are always null.
 All score values must be numbers with exactly two decimal 
 places.
 Do not include any fields other than these six.
