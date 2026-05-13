@@ -469,6 +469,8 @@ app.get('/get-temp-image/:imageId', async (req, res) => {
 });
 
 
+
+
 // ============================================================
 // /api/valuation_v2  —  v2 comparable selection pipeline
 //
@@ -768,13 +770,6 @@ app.post("/api/valuation_v2", async (req, res) => {
       };
     });
 
-    // ── Phase 2 Step 2 — CoV from full 40-record pool ────────────────────────
-    const coVAdjPrices = adjComps.map(c => c.adjPrice);
-    const poolMean     = coVAdjPrices.reduce((s, v) => s + v, 0) / coVAdjPrices.length;
-    const poolStd      = Math.sqrt(coVAdjPrices.reduce((s, v) => s + Math.pow(v - poolMean, 2), 0) / (coVAdjPrices.length - 1));
-    const pooledCoV    = poolStd / poolMean;
-    console.log(`v2 CoV pool (${adjComps.length} records): mean=${poolMean.toFixed(2)}, std=${poolStd.toFixed(2)}, CoV=${pooledCoV.toFixed(4)}`);
-
     // ── Phase 2 Step 3 — Similarity scalar → targetQuantity ──────────────────
     // Medium penalty:
     //   0   — exact medium match
@@ -842,6 +837,15 @@ app.post("/api/valuation_v2", async (req, res) => {
 
     const topComps = similarityFiltered.sort((a, b) => a.id - b.id);
 
+    // ── Phase 2 Step 2 — CoV from final 10 comps ─────────────────────────────
+    // Computed after similarity scalar so CoV reflects the actual presented comps.
+    // This ensures the displayed price range stays within the visible comp spread.
+    const coVAdjPrices = topComps.map(c => c.adjPrice);
+    const poolMean     = coVAdjPrices.reduce((s, v) => s + v, 0) / coVAdjPrices.length;
+    const poolStd      = Math.sqrt(coVAdjPrices.reduce((s, v) => s + Math.pow(v - poolMean, 2), 0) / (coVAdjPrices.length - 1));
+    const pooledCoV    = poolStd / poolMean;
+    console.log(`v2 CoV (${topComps.length} final comps): mean=${poolMean.toFixed(2)}, std=${poolStd.toFixed(2)}, CoV=${pooledCoV.toFixed(4)}`);
+
     // ── Reconciliation outputs ────────────────────────────────────────────────
     const adjPrices    = topComps.map(c => c.adjPrice);
     const sortedAdj    = [...adjPrices].sort((a, b) => a - b);
@@ -850,7 +854,7 @@ app.post("/api/valuation_v2", async (req, res) => {
       ? sortedAdj[mid]
       : (sortedAdj[mid - 1] + sortedAdj[mid]) / 2;
 
-    console.log(`v2 Reconciliation: centralValue=${centralValue.toFixed(2)} (median of ${topComps.length}), poolMean=${poolMean.toFixed(2)}, pooledCoV=${pooledCoV.toFixed(4)} (from ${adjComps.length} records)`);
+    console.log(`v2 Reconciliation: centralValue=${centralValue.toFixed(2)} (median of ${topComps.length}), poolMean=${poolMean.toFixed(2)}, pooledCoV=${pooledCoV.toFixed(4)} (from ${topComps.length} final comps)`);
 
     const premiumValue     = centralValue * (1 + (coef_A * pooledCoV));
     const marketValue      = centralValue * (1 + (coef_B * pooledCoV));
