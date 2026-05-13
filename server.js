@@ -468,6 +468,436 @@ app.get('/get-temp-image/:imageId', async (req, res) => {
   }
 });
 
+
+// ============================================================
+// /api/valuation_v2  —  v2 comparable selection pipeline
+//
+// Phase 1: valid pool → artist multiples → RI bracket → WED (cut to 40)
+// Phase 2: adjustments → CoV → similarity scalar (cut to 10)
+//
+// All shared functions (readDatabase, callAI, formatAIAnalysisForReport,
+// readModelConfig, etc.) are unchanged from v1 and called directly.
+// Only the comp-selection logic and metadata fields are new.
+// ============================================================
+
+app.post("/api/valuation_v2", async (req, res) => {
+  try {
+    console.log("Starting valuation_v2 process");
+
+    const {
+      smi, ri_integer, ri_decimal, cli,
+      subjectImageBase64, skipNarrative,
+      media, title, artist, subjectDescription, height, width
+    } = req.body;
+
+    const narrativeTemperature = 0.5;
+
+    if (smi        === undefined || smi        === null) throw new Error("Missing required input: smi");
+    if (ri_integer === undefined || ri_integer === null) throw new Error("Missing required input: ri_integer");
+    if (ri_decimal === undefined || ri_decimal === null) throw new Error("Missing required input: ri_decimal");
+    if (cli        === undefined || cli        === null) throw new Error("Missing required input: cli");
+    if (!height)  throw new Error("Missing required input: height");
+    if (!width)   throw new Error("Missing required input: width");
+    if (!media)   throw new Error("Missing required input: media");
+    if (!skipNarrative && !subjectImageBase64) throw new Error("Missing required input: subjectImageBase64");
+
+    const db           = readDatabase();
+    const allRecords   = db.records || [];
+    const coefficients = db.metadata.coefficients;
+    const mediumTable  = db.metadata.medium;
+
+    // ── Validate all required metadata fields ────────────────────────────────
+    const requiredCoefs = [
+      'coef_size_constant', 'coef_size_exponent',
+      'coef_frame_constant', 'coef_frame_exponent',
+      'target_quantity', 'target_multiple',
+      'coef_A', 'coef_B', 'coef_C',
+      'coef_p5', 'coef_p25', 'coef_p50', 'coef_p75', 'coef_p95',
+      // v1 similarity scalar weights (preserved, not used in v2 pipeline)
+      'w_smi', 'w_adj',
+      // v2 WED weights
+      'w_wed_smi', 'w_wed_cli', 'w_wed_ridecimal', 'w_wed_size',
+      // v2 similarity scalar weights
+      'w_sim_medium', 'w_sim_subject', 'w_sim_netadj'
+    ];
+    for (const field of requiredCoefs) {
+      if (coefficients[field] === undefined || coefficients[field] === null) {
+        throw new Error(`Server configuration error: metadata field "${field}" is missing.`);
+      }
+    }
+
+    const targetQuantity  = parseInt(coefficients['target_quantity']);
+    const targetMultiple  = parseFloat(coefficients['target_multiple']);
+    const targetRangeHigh = targetQuantity * targetMultiple;   // 40
+
+    // v2 WED weights
+    const wWedSMI      = parseFloat(coefficients['w_wed_smi']);
+    const wWedCLI      = parseFloat(coefficients['w_wed_cli']);
+    const wWedRIDec    = parseFloat(coefficients['w_wed_ridecimal']);
+    const wWedSize     = parseFloat(coefficients['w_wed_size']);
+    if (Math.abs(wWedSMI + wWedCLI + wWedRIDec + wWedSize - 1.0) > 0.0001) {
+      throw new Error(
+        `Metadata error: w_wed_smi (${wWedSMI}) + w_wed_cli (${wWedCLI}) + ` +
+        `w_wed_ridecimal (${wWedRIDec}) + w_wed_size (${wWedSize}) must equal 1.0.`
+      );
+    }
+
+    // v2 similarity scalar weights
+    const wSimMedium  = parseFloat(coefficients['w_sim_medium']);
+    const wSimSubject = parseFloat(coefficients['w_sim_subject']);
+    const wSimNetAdj  = parseFloat(coefficients['w_sim_netadj']);
+    if (Math.abs(wSimMedium + wSimSubject + wSimNetAdj - 1.0) > 0.0001) {
+      throw new Error(
+        `Metadata error: w_sim_medium (${wSimMedium}) + w_sim_subject (${wSimSubject}) + ` +
+        `w_sim_netadj (${wSimNetAdj}) must equal 1.0.`
+      );
+    }
+
+    const subjectSSI = parseFloat(height) * parseFloat(width);
+    const subjectRIDecimal = parseInt(ri_decimal);
+
+    const filterCounts = [{ label: 'Total Works in Database', count: allRecords.length }];
+
+    // ── Valid pool ────────────────────────────────────────────────────────────
+    let pool = allRecords.filter(r =>
+      typeof r.appsi      === "number" && r.appsi  > 0 &&
+      typeof r.aop        === "number" && r.aop    > 0 &&
+      typeof r.ssi        === "number" && r.ssi    > 0 &&
+      typeof r.smi        === "number" &&
+      typeof r.cli        === "number" &&
+      r.ri_integer !== undefined && r.ri_integer !== null &&
+      r.ri_decimal !== undefined && r.ri_decimal !== null &&
+      r.thumbnailBase64 && r.artistName && r.title &&
+      r.height && r.width && r.medium && r.price && r.framed !== undefined
+    );
+
+    console.log(`Valid pool: ${pool.length} records with all required fields`);
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient valid records in database: ${pool.length} found, ${targetQuantity} required.`);
+    }
+
+    // ── Phase 1 Step 1 — Artist multiples ────────────────────────────────────
+    // Keep highest appsi record per artist across the full valid pool.
+    {
+      const best = new Map();
+      pool.forEach(r => {
+        const key = r.artistName.trim().toLowerCase();
+        if (!best.has(key) || r.appsi > best.get(key).appsi) {
+          best.set(key, r);
+        }
+      });
+      const dedupedPool = Array.from(best.values());
+      console.log(`Phase 1 Step 1 — Artist multiples: ${pool.length} → ${dedupedPool.length} records`);
+      pool = dedupedPool;
+    }
+    filterCounts.push({ label: 'Unique Artists Identified', count: pool.length });
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after artist multiples: ${pool.length} records remain.`);
+    }
+
+    // ── Phase 1 Step 2 — RI bracket ──────────────────────────────────────────
+    const riMin = Math.max(1, ri_integer - 1);
+    const riMax = Math.min(5, ri_integer + 1);
+    pool = pool.filter(r => r.ri_integer >= riMin && r.ri_integer <= riMax);
+    filterCounts.push({ label: 'Matched by Representational Style', count: pool.length });
+    console.log(`Phase 1 Step 2 — RI bracket [${riMin}–${riMax}]: ${pool.length} records`);
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after RI bracket filter: ${pool.length} records remain.`);
+    }
+
+    // ── Phase 1 Step 3 — Weighted Euclidean Distance (WED) → targetRangeHigh ─
+    // Z-score SMI, CLI, RI decimal, and SSI across the post-RI-bracket pool.
+    // Subject z-scores use the same pool stats (pool only, subject not included).
+    // WED = √[ wA*(z_smi_s − z_smi_i)² + wB*(z_cli_s − z_cli_i)²
+    //          + wC*(z_rid_s − z_rid_i)² + wD*(z_ssi_s − z_ssi_i)² ]
+    // Cut to nearest targetRangeHigh records by ascending WED.
+    {
+      const smiValues = pool.map(r => r.smi);
+      const cliValues = pool.map(r => r.cli);
+      const ridValues = pool.map(r => parseFloat(r.ri_decimal));
+      const ssiValues = pool.map(r => r.ssi);
+
+      const mean = arr => arr.reduce((s, v) => s + v, 0) / arr.length;
+      const std  = (arr, m) => {
+        const variance = arr.reduce((s, v) => s + Math.pow(v - m, 2), 0) / arr.length;
+        return Math.sqrt(variance);
+      };
+
+      const smiMean = mean(smiValues); const smiStd = std(smiValues, smiMean);
+      const cliMean = mean(cliValues); const cliStd = std(cliValues, cliMean);
+      const ridMean = mean(ridValues); const ridStd = std(ridValues, ridMean);
+      const ssiMean = mean(ssiValues); const ssiStd = std(ssiValues, ssiMean);
+
+      // Subject z-scores against pool stats
+      const zSmiS = smiStd > 0 ? (smi        - smiMean) / smiStd : 0;
+      const zCliS = cliStd > 0 ? (cli        - cliMean) / cliStd : 0;
+      const zRidS = ridStd > 0 ? (subjectRIDecimal - ridMean) / ridStd : 0;
+      const zSsiS = ssiStd > 0 ? (subjectSSI  - ssiMean) / ssiStd : 0;
+
+      const scored = pool.map(r => {
+        const zSmiI = smiStd > 0 ? (r.smi              - smiMean) / smiStd : 0;
+        const zCliI = cliStd > 0 ? (r.cli              - cliMean) / cliStd : 0;
+        const zRidI = ridStd > 0 ? (parseFloat(r.ri_decimal) - ridMean) / ridStd : 0;
+        const zSsiI = ssiStd > 0 ? (r.ssi              - ssiMean) / ssiStd : 0;
+
+        const wed = Math.sqrt(
+          wWedSMI   * Math.pow(zSmiS - zSmiI, 2) +
+          wWedCLI   * Math.pow(zCliS - zCliI, 2) +
+          wWedRIDec * Math.pow(zRidS - zRidI, 2) +
+          wWedSize  * Math.pow(zSsiS - zSsiI, 2)
+        );
+        return { ...r, _wed: wed };
+      });
+
+      scored.sort((a, b) => a._wed - b._wed);
+
+      console.log(`Phase 1 Step 3 — WED top ${targetRangeHigh} of ${scored.length}:`);
+      scored.slice(0, Math.min(5, scored.length)).forEach((r, i) => {
+        console.log(`  ${i + 1}. ID=${r.id} WED=${r._wed.toFixed(4)} smi=${r.smi} cli=${r.cli} rid=${r.ri_decimal} ssi=${r.ssi}`);
+      });
+
+      pool = scored.slice(0, targetRangeHigh).map(({ _wed, ...r }) => r);
+      console.log(`Phase 1 Step 3 — WED cut: kept ${pool.length} records`);
+    }
+    filterCounts.push({ label: 'Filtered by Skill, Career Level, Subject & Size', count: pool.length });
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after WED filter: ${pool.length} records remain.`);
+    }
+
+    // ── Narrative (AI analysis) ───────────────────────────────────────────────
+    // Identical to v1 — no changes to narrative generation.
+    let aiAnalysis = "";
+    if (!skipNarrative) {
+      try {
+        const promptPath = path.join(__dirname, "public", "prompts", "VALUATION_DESCRIPTION.txt");
+        const prompt = fs.readFileSync(promptPath, "utf8").trim();
+        if (prompt.length < 50) throw new Error("VALUATION_DESCRIPTION.txt not found or too short");
+
+        const textContent = subjectDescription
+          ? `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}\nArtist's subject description: "${subjectDescription}"`
+          : `Title: "${title}"\nArtist: "${artist}"\nMedium: ${media}`;
+
+        let processedImageBase64 = subjectImageBase64;
+        let processedImageType   = "image/jpeg";
+
+        try {
+          const sharp       = require('sharp');
+          const inputBuffer = Buffer.from(subjectImageBase64, 'base64');
+          console.log(`v2 original image buffer size: ${(inputBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+          const resized = await sharp(inputBuffer)
+            .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 90 })
+            .toBuffer();
+          console.log(`v2 processed image buffer size: ${(resized.length / 1024 / 1024).toFixed(2)} MB`);
+          if (resized.length > 4.5 * 1024 * 1024) {
+            const recompressed = await sharp(resized).jpeg({ quality: 75 }).toBuffer();
+            processedImageBase64 = recompressed.toString('base64');
+            console.log(`v2 recompressed image buffer size: ${(recompressed.length / 1024 / 1024).toFixed(2)} MB`);
+          } else {
+            processedImageBase64 = resized.toString('base64');
+          }
+          processedImageType = 'image/jpeg';
+        } catch (sharpError) {
+          console.error("v2 sharp preprocessing failed:", sharpError.message);
+          return res.status(500).json({
+            error: "We were unable to process your image. Please try a different image or contact support@theartisansascent.com."
+          });
+        }
+
+        const messages = [{
+          role: "user",
+          content: [
+            { type: "text", text: textContent },
+            { type: "image_url", image_url: { url: `data:${processedImageType};base64,${processedImageBase64}` } }
+          ]
+        }];
+
+        aiAnalysis = await callAI(messages, 300, prompt, false, narrativeTemperature);
+        console.log("v2 AI analysis completed successfully");
+      } catch (error) {
+        console.error("v2 analysis failed:", error.message);
+        return res.status(500).json({
+          error: "Analysis failed",
+          details: error.response?.data?.error?.message || error.message
+        });
+      }
+    }
+
+    // ── Phase 2 Step 1 — Price adjustments on all 40 ─────────────────────────
+    const sizeConstant = parseFloat(coefficients['coef_size_constant']);
+    const sizeExponent = parseFloat(coefficients['coef_size_exponent']);
+    const coef_A       = parseFloat(coefficients['coef_A']);
+    const coef_B       = parseFloat(coefficients['coef_B']);
+    const coef_C       = parseFloat(coefficients['coef_C']);
+    const coef_p5      = parseFloat(coefficients['coef_p5']);
+    const coef_p25     = parseFloat(coefficients['coef_p25']);
+    const coef_p50     = parseFloat(coefficients['coef_p50']);
+    const coef_p75     = parseFloat(coefficients['coef_p75']);
+    const coef_p95     = parseFloat(coefficients['coef_p95']);
+
+    if (mediumTable[media] === undefined) {
+      throw new Error(`Phase 2: no medium index found for subject medium: ${media}`);
+    }
+    const subjectMediumIdx          = parseFloat(mediumTable[media]);
+    const predictedPPSI_at_subject  = sizeConstant * Math.pow(Math.log(subjectSSI), sizeExponent);
+
+    const adjComps = pool.map(r => {
+      if (mediumTable[r.medium] === undefined) {
+        throw new Error(`Phase 2: no medium index found for comp medium: ${r.medium} (comp ID: ${r.id})`);
+      }
+      const compMediumIdx         = parseFloat(mediumTable[r.medium]);
+      const mediumAdjPPSI         = r.aoppsi * (subjectMediumIdx / compMediumIdx);
+      const predictedPPSI_at_comp = sizeConstant * Math.pow(Math.log(r.ssi), sizeExponent);
+      const residualFactor        = mediumAdjPPSI / predictedPPSI_at_comp;
+      const adjPPSI               = predictedPPSI_at_subject * residualFactor;
+      const adjPrice              = adjPPSI * subjectSSI;
+      const compSSI               = r.height * r.width;
+      const signs = {
+        frame:  r.framed === 'Y' ? '−' : '=',
+        size:   compSSI > subjectSSI ? '−' : compSSI < subjectSSI ? '+' : '=',
+        medium: compMediumIdx > subjectMediumIdx ? '−' : compMediumIdx < subjectMediumIdx ? '+' : '='
+      };
+      const netAdjPct = Math.round(((adjPrice / r.price) - 1) * 100);
+      console.log(`v2 Comp ${r.id}: aoppsi=${r.aoppsi.toFixed(4)}, mediumAdj=${mediumAdjPPSI.toFixed(4)}, residual=${residualFactor.toFixed(4)}, adjPPSI=${adjPPSI.toFixed(4)}, adjPrice=${adjPrice.toFixed(2)}`);
+      return {
+        id: r.id, aop: r.aop, aoppsi: r.aoppsi, appsi: r.appsi, ssi: r.ssi,
+        framed: r.framed, smi: r.smi, cli: r.cli, ri_integer: r.ri_integer, ri_decimal: r.ri_decimal,
+        medium: r.medium, artistName: r.artistName, title: r.title,
+        height: r.height, width: r.width, price: r.price, thumbnailBase64: r.thumbnailBase64,
+        adjPrice, adjPPSI, residualFactor, netAdjPct, signs
+      };
+    });
+
+    // ── Phase 2 Step 2 — CoV from full 40-record pool ────────────────────────
+    const coVAdjPrices = adjComps.map(c => c.adjPrice);
+    const poolMean     = coVAdjPrices.reduce((s, v) => s + v, 0) / coVAdjPrices.length;
+    const poolStd      = Math.sqrt(coVAdjPrices.reduce((s, v) => s + Math.pow(v - poolMean, 2), 0) / (coVAdjPrices.length - 1));
+    const pooledCoV    = poolStd / poolMean;
+    console.log(`v2 CoV pool (${adjComps.length} records): mean=${poolMean.toFixed(2)}, std=${poolStd.toFixed(2)}, CoV=${pooledCoV.toFixed(4)}`);
+
+    // ── Phase 2 Step 3 — Similarity scalar → targetQuantity ──────────────────
+    // Medium penalty:
+    //   0   — exact medium match
+    //   0.5 — subject Oil & comp Acrylic, or subject Acrylic & comp Oil
+    //   1   — all other mismatches
+    //
+    // Subject penalty (RI decimal group):
+    //   Group A: 0, 8  (Abstract / Geometric)
+    //   Group B: 1, 2  (Portrait / Figurative)
+    //   Group C: 3, 4, 5 (Landscape / Seascape / Cityscape)
+    //   Group D: 6, 7  (Floral / Still Life)
+    //   Group E: 9     (Animals — isolated)
+    //   0 if same group, 1 if different group
+    //
+    // netAdjPct: z-scored across adjComps, use absolute value
+    //
+    // score = wSimMedium * mediumPenalty
+    //       + wSimSubject * subjectPenalty
+    //       + wSimNetAdj * |z_netAdj|
+    // Lower score = better match. Ties broken by higher appsi.
+
+    const riDecimalGroup = dec => {
+      const d = parseInt(dec);
+      if (d === 0 || d === 8) return 'A';
+      if (d === 1 || d === 2) return 'B';
+      if (d === 3 || d === 4 || d === 5) return 'C';
+      if (d === 6 || d === 7) return 'D';
+      if (d === 9) return 'E';
+      throw new Error(`v2 similarity scalar: unrecognized ri_decimal value: ${dec}`);
+    };
+
+    const mediumPenalty = (subjectMedium, compMedium) => {
+      if (subjectMedium === compMedium) return 0;
+      if (
+        (subjectMedium === 'Oil'     && compMedium === 'Acrylic') ||
+        (subjectMedium === 'Acrylic' && compMedium === 'Oil')
+      ) return 0.5;
+      return 1;
+    };
+
+    const subjectGroup = riDecimalGroup(subjectRIDecimal);
+
+    const adjValues   = adjComps.map(c => Math.abs(c.netAdjPct));
+    const adjMeanV    = adjValues.reduce((s, v) => s + v, 0) / adjValues.length;
+    const adjStdV     = Math.sqrt(adjValues.reduce((s, v) => s + Math.pow(v - adjMeanV, 2), 0) / adjValues.length);
+
+    const scored = adjComps.map(c => {
+      const mPenalty = mediumPenalty(media, c.medium);
+      const sPenalty = riDecimalGroup(c.ri_decimal) === subjectGroup ? 0 : 1;
+      const zAdj     = adjStdV > 0 ? Math.abs(c.netAdjPct) / adjStdV : 0;
+      const score    = wSimMedium * mPenalty + wSimSubject * sPenalty + wSimNetAdj * zAdj;
+      return { ...c, _score: score };
+    });
+
+    scored.sort((a, b) => a._score !== b._score ? a._score - b._score : b.appsi - a.appsi);
+
+    console.log(`v2 Phase 2 Step 3 — Similarity scalar (w_sim_medium=${wSimMedium}, w_sim_subject=${wSimSubject}, w_sim_netadj=${wSimNetAdj}):`);
+    scored.forEach((c, i) => {
+      console.log(`  ${i + 1}. ID=${c.id} score=${c._score.toFixed(4)} medium=${c.medium} rid=${c.ri_decimal} netAdj=${c.netAdjPct}%`);
+    });
+
+    const similarityFiltered = scored.slice(0, targetQuantity).map(({ _score, ...c }) => c);
+    filterCounts.push({ label: 'Filtered by Medium, Subject & Price Adjustment', count: similarityFiltered.length });
+    console.log(`v2 Phase 2 Step 3 — Similarity filter: kept ${similarityFiltered.length} from ${adjComps.length}`);
+
+    const topComps = similarityFiltered.sort((a, b) => a.id - b.id);
+
+    // ── Reconciliation outputs ────────────────────────────────────────────────
+    const adjPrices    = topComps.map(c => c.adjPrice);
+    const sortedAdj    = [...adjPrices].sort((a, b) => a - b);
+    const mid          = Math.floor(sortedAdj.length / 2);
+    const centralValue = sortedAdj.length % 2 !== 0
+      ? sortedAdj[mid]
+      : (sortedAdj[mid - 1] + sortedAdj[mid]) / 2;
+
+    console.log(`v2 Reconciliation: centralValue=${centralValue.toFixed(2)} (median of ${topComps.length}), poolMean=${poolMean.toFixed(2)}, pooledCoV=${pooledCoV.toFixed(4)} (from ${adjComps.length} records)`);
+
+    const premiumValue     = centralValue * (1 + (coef_A * pooledCoV));
+    const marketValue      = centralValue * (1 + (coef_B * pooledCoV));
+    const competitiveValue = centralValue * (1 + (coef_C * pooledCoV));
+
+    const qPrice = coef => centralValue * (1 + coef * pooledCoV);
+    const qLow   = qPrice(coef_p5);
+    const qQ1    = qPrice(coef_p25);
+    const qQ2    = qPrice(coef_p50);
+    const qQ3    = qPrice(coef_p75);
+    const qHigh  = qPrice(coef_p95);
+
+    const poolMinSMI = Math.min(...topComps.map(c => c.smi));
+    const poolMaxSMI = Math.max(...topComps.map(c => c.smi));
+    const poolMinCLI = Math.min(...topComps.map(c => c.cli));
+    const poolMaxCLI = Math.max(...topComps.map(c => c.cli));
+    const smiBelow   = smi < poolMinSMI;
+    const smiAbove   = smi > poolMaxSMI;
+    const cliBelow   = cli < poolMinCLI;
+    const cliAbove   = cli > poolMaxCLI;
+    const isOutlier  = smiBelow || smiAbove || cliBelow || cliAbove;
+
+    console.log(`v2 Strategic prices: competitive=${competitiveValue.toFixed(2)}, market=${marketValue.toFixed(2)}, premium=${premiumValue.toFixed(2)}`);
+
+    res.json({
+      topComps, filterCounts, centralValue, pooledCoV,
+      competitiveValue, marketValue, premiumValue,
+      qLow, qQ1, qQ2, qQ3, qHigh,
+      smiBelow, smiAbove, cliBelow, cliAbove, isOutlier,
+      metadata: { coefficients: db.metadata.coefficients, medium: db.metadata.medium },
+      ...(skipNarrative ? {} : { aiAnalysis: formatAIAnalysisForReport(aiAnalysis) })
+    });
+
+  } catch (error) {
+    console.error("v2 Valuation request failed:", error.message);
+    console.error("v2 Error stack:", error.stack);
+    res.status(500).json({
+      error: "Valuation processing failed",
+      details: error.response?.data?.error?.message || error.message
+    });
+  }
+});
+
+
+
+
+
 // ====================
 // MAINTENANCE MODE ENDPOINTS
 // ====================
