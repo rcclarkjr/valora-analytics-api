@@ -519,9 +519,7 @@ app.post("/api/valuation_v2", async (req, res) => {
       // v2 WED weights
       'w_wed_smi', 'w_wed_cli', 'w_wed_ridecimal', 'w_wed_size',
       // v2 similarity scalar weights
-      'w_sim_medium', 'w_sim_subject', 'w_sim_netadj',
-      // price quality filter
-      'z_filter_threshold'
+      'w_sim_medium', 'w_sim_subject', 'w_sim_netadj'
     ];
     for (const field of requiredCoefs) {
       if (coefficients[field] === undefined || coefficients[field] === null) {
@@ -622,23 +620,24 @@ app.post("/api/valuation_v2", async (req, res) => {
       throw new Error(`Insufficient comps after medium filter: ${pool.length} records remain.`);
     }
 
-    // ── Phase 1 Step 4 — Price quality filter (APPSI z-score) ────────────────
-    // Z-score appsi across the post-medium pool. Eliminate records whose appsi
-    // z-score falls below z_filter_threshold (one-tailed, left tail only).
-    // Z-scores computed from this pool — mean and std exclude the subject.
+    // ── Phase 1 Step 4 — Size pre-filter ─────────────────────────────────────
+    // Reduces pool halfway from its current size to targetRangeHigh.
+    // keepCount = ceil((currentPool.length + targetRangeHigh) / 2)
+    // Sorts by absolute SSI distance from subject (symmetric, both directions).
+    // Closest records retained.
     {
-      const zThreshold  = parseFloat(coefficients['z_filter_threshold']);
-      const appsiValues = pool.map(r => r.appsi);
-      const appsiMean   = appsiValues.reduce((s, v) => s + v, 0) / appsiValues.length;
-      const appsiStd    = Math.sqrt(appsiValues.reduce((s, v) => s + Math.pow(v - appsiMean, 2), 0) / appsiValues.length);
-      if (appsiStd === 0) throw new Error('Phase 1 Step 4: appsi standard deviation is zero — cannot compute z-scores.');
+      const keepCount = Math.ceil((pool.length + targetRangeHigh) / 2);
       const before = pool.length;
-      pool = pool.filter(r => ((r.appsi - appsiMean) / appsiStd) >= zThreshold);
-      console.log(`Phase 1 Step 4 — Price quality filter (z_threshold=${zThreshold}, appsiMean=${appsiMean.toFixed(4)}, appsiStd=${appsiStd.toFixed(4)}): ${before} → ${pool.length} records (removed ${before - pool.length})`);
+      pool = pool
+        .map(r => ({ ...r, _ssiDist: Math.abs(r.ssi - subjectSSI) }))
+        .sort((a, b) => a._ssiDist - b._ssiDist)
+        .slice(0, keepCount)
+        .map(({ _ssiDist, ...r }) => r);
+      console.log(`Phase 1 Step 4 — Size pre-filter: ${before} → ${pool.length} records (keepCount=${keepCount}, subjectSSI=${subjectSSI})`);
     }
-    filterCounts.push({ label: 'Filtered by Price Quality', count: pool.length });
+    filterCounts.push({ label: 'Filtered by Size', count: pool.length });
     if (pool.length < targetQuantity) {
-      throw new Error(`Insufficient comps after price quality filter: ${pool.length} records remain.`);
+      throw new Error(`Insufficient comps after size pre-filter: ${pool.length} records remain.`);
     }
 
     // ── Phase 1 Step 5 — Weighted Euclidean Distance (WED) → targetRangeHigh ─
@@ -777,7 +776,7 @@ app.post("/api/valuation_v2", async (req, res) => {
     const subjectMediumIdx          = parseFloat(mediumTable[media]);
     const predictedPPSI_at_subject  = sizeConstant * Math.pow(Math.log(subjectSSI), sizeExponent);
 
-    let adjComps = pool.map(r => {
+    const adjComps = pool.map(r => {
       if (mediumTable[r.medium] === undefined) {
         throw new Error(`Phase 2: no medium index found for comp medium: ${r.medium} (comp ID: ${r.id})`);
       }
@@ -804,30 +803,7 @@ app.post("/api/valuation_v2", async (req, res) => {
       };
     });
 
-    // ── Phase 2 Step 2 — CoV40: from full 40-record adjusted pool ────────────
-    // Used as the population for the adjPrice z-score filter below.
-    {
-      const prices40  = adjComps.map(c => c.adjPrice);
-      const mean40    = prices40.reduce((s, v) => s + v, 0) / prices40.length;
-      const std40     = Math.sqrt(prices40.reduce((s, v) => s + Math.pow(v - mean40, 2), 0) / (prices40.length - 1));
-      const coV40     = std40 / mean40;
-      console.log(`v2 CoV40 (${prices40.length} records): mean=${mean40.toFixed(2)}, std=${std40.toFixed(2)}, CoV=${coV40.toFixed(4)}`);
-
-      // ── Phase 2 Step 3 — adjPrice z-score filter ─────────────────────────────
-      // One-tailed left filter: eliminate comps whose adjPrice z-score < z_filter_threshold.
-      // Z-scores computed from the 40-record pool (mean40, std40).
-      const zThreshold = parseFloat(coefficients['z_filter_threshold']);
-      if (std40 === 0) throw new Error('Phase 2 Step 3: adjPrice standard deviation is zero — cannot compute z-scores.');
-      const before = adjComps.length;
-      adjComps = adjComps.filter(c => ((c.adjPrice - mean40) / std40) >= zThreshold);
-      console.log(`v2 Phase 2 Step 3 — adjPrice z-filter (threshold=${zThreshold}): ${before} → ${adjComps.length} records (removed ${before - adjComps.length})`);
-    }
-    filterCounts.push({ label: 'Filtered by Price Quality', count: adjComps.length });
-    if (adjComps.length < targetQuantity) {
-      throw new Error(`Insufficient comps after adjPrice z-score filter: ${adjComps.length} records remain.`);
-    }
-
-    // ── Phase 2 Step 4 — Similarity scalar → targetQuantity ──────────────────
+    // ── Phase 2 Step 2 — Similarity scalar → targetQuantity ──────────────────
     // Medium penalty:
     //   0   — exact medium match
     //   0.5 — subject Oil & comp Acrylic, or subject Acrylic & comp Oil
@@ -883,14 +859,14 @@ app.post("/api/valuation_v2", async (req, res) => {
 
     scored.sort((a, b) => a._score !== b._score ? a._score - b._score : b.appsi - a.appsi);
 
-    console.log(`v2 Phase 2 Step 4 — Similarity scalar (w_sim_medium=${wSimMedium}, w_sim_subject=${wSimSubject}, w_sim_netadj=${wSimNetAdj}):`);
+    console.log(`v2 Phase 2 Step 2 — Similarity scalar (w_sim_medium=${wSimMedium}, w_sim_subject=${wSimSubject}, w_sim_netadj=${wSimNetAdj}):`);
     scored.forEach((c, i) => {
       console.log(`  ${i + 1}. ID=${c.id} score=${c._score.toFixed(4)} medium=${c.medium} rid=${c.ri_decimal} netAdj=${c.netAdjPct}%`);
     });
 
     const similarityFiltered = scored.slice(0, targetQuantity).map(({ _score, ...c }) => c);
     filterCounts.push({ label: 'Filtered by Medium, Subject & Price Adjustment', count: similarityFiltered.length });
-    console.log(`v2 Phase 2 Step 4 — Similarity filter: kept ${similarityFiltered.length} from ${adjComps.length}`);
+    console.log(`v2 Phase 2 Step 2 — Similarity filter: kept ${similarityFiltered.length} from ${adjComps.length}`);
 
     const topComps = similarityFiltered.sort((a, b) => a.id - b.id);
 
@@ -954,6 +930,7 @@ app.post("/api/valuation_v2", async (req, res) => {
     });
   }
 });
+
 
 
 
