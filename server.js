@@ -470,7 +470,6 @@ app.get('/get-temp-image/:imageId', async (req, res) => {
 
 
 
-
 // ============================================================
 // /api/valuation_v2  —  v2 comparable selection pipeline
 //
@@ -607,7 +606,21 @@ app.post("/api/valuation_v2", async (req, res) => {
       throw new Error(`Insufficient comps after RI bracket filter: ${pool.length} records remain.`);
     }
 
-    // ── Phase 1 Step 3 — Weighted Euclidean Distance (WED) → targetRangeHigh ─
+    // ── Phase 1 Step 3 — Medium filter ───────────────────────────────────────
+    if (media === 'Oil') {
+      pool = pool.filter(r => r.medium === 'Oil');
+    } else if (media === 'Acrylic') {
+      pool = pool.filter(r => r.medium === 'Acrylic');
+    } else {
+      pool = pool.filter(r => r.medium !== 'Oil');
+    }
+    filterCounts.push({ label: 'Filtered by Medium', count: pool.length });
+    console.log(`Phase 1 Step 3 — Medium filter (subject: ${media}): ${pool.length} records`);
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after medium filter: ${pool.length} records remain.`);
+    }
+
+    // ── Phase 1 Step 4 — Weighted Euclidean Distance (WED) → targetRangeHigh ─
     // Z-score SMI, CLI, RI decimal, and SSI across the post-RI-bracket pool.
     // Subject z-scores use the same pool stats (pool only, subject not included).
     // WED = √[ wA*(z_smi_s − z_smi_i)² + wB*(z_cli_s − z_cli_i)²
@@ -653,13 +666,13 @@ app.post("/api/valuation_v2", async (req, res) => {
 
       scored.sort((a, b) => a._wed - b._wed);
 
-      console.log(`Phase 1 Step 3 — WED top ${targetRangeHigh} of ${scored.length}:`);
+      console.log(`Phase 1 Step 4 — WED top ${targetRangeHigh} of ${scored.length}:`);
       scored.slice(0, Math.min(5, scored.length)).forEach((r, i) => {
         console.log(`  ${i + 1}. ID=${r.id} WED=${r._wed.toFixed(4)} smi=${r.smi} cli=${r.cli} rid=${r.ri_decimal} ssi=${r.ssi}`);
       });
 
       pool = scored.slice(0, targetRangeHigh).map(({ _wed, ...r }) => r);
-      console.log(`Phase 1 Step 3 — WED cut: kept ${pool.length} records`);
+      console.log(`Phase 1 Step 4 — WED cut: kept ${pool.length} records`);
     }
     filterCounts.push({ label: 'Filtered by Skill, Career Level, Subject & Size', count: pool.length });
     if (pool.length < targetQuantity) {
@@ -897,7 +910,6 @@ app.post("/api/valuation_v2", async (req, res) => {
     });
   }
 });
-
 
 
 
