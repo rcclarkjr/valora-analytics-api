@@ -519,7 +519,9 @@ app.post("/api/valuation_v2", async (req, res) => {
       // v2 WED weights
       'w_wed_smi', 'w_wed_cli', 'w_wed_ridecimal', 'w_wed_size',
       // v2 similarity scalar weights
-      'w_sim_medium', 'w_sim_subject', 'w_sim_netadj'
+      'w_sim_medium', 'w_sim_subject', 'w_sim_netadj',
+      // price quality filter
+      'z_filter_threshold'
     ];
     for (const field of requiredCoefs) {
       if (coefficients[field] === undefined || coefficients[field] === null) {
@@ -620,7 +622,26 @@ app.post("/api/valuation_v2", async (req, res) => {
       throw new Error(`Insufficient comps after medium filter: ${pool.length} records remain.`);
     }
 
-    // ── Phase 1 Step 4 — Weighted Euclidean Distance (WED) → targetRangeHigh ─
+    // ── Phase 1 Step 4 — Price quality filter (APPSI z-score) ────────────────
+    // Z-score appsi across the post-medium pool. Eliminate records whose appsi
+    // z-score falls below z_filter_threshold (one-tailed, left tail only).
+    // Z-scores computed from this pool — mean and std exclude the subject.
+    {
+      const zThreshold  = parseFloat(coefficients['z_filter_threshold']);
+      const appsiValues = pool.map(r => r.appsi);
+      const appsiMean   = appsiValues.reduce((s, v) => s + v, 0) / appsiValues.length;
+      const appsiStd    = Math.sqrt(appsiValues.reduce((s, v) => s + Math.pow(v - appsiMean, 2), 0) / appsiValues.length);
+      if (appsiStd === 0) throw new Error('Phase 1 Step 4: appsi standard deviation is zero — cannot compute z-scores.');
+      const before = pool.length;
+      pool = pool.filter(r => ((r.appsi - appsiMean) / appsiStd) >= zThreshold);
+      console.log(`Phase 1 Step 4 — Price quality filter (z_threshold=${zThreshold}, appsiMean=${appsiMean.toFixed(4)}, appsiStd=${appsiStd.toFixed(4)}): ${before} → ${pool.length} records (removed ${before - pool.length})`);
+    }
+    filterCounts.push({ label: 'Filtered by Price Quality', count: pool.length });
+    if (pool.length < targetQuantity) {
+      throw new Error(`Insufficient comps after price quality filter: ${pool.length} records remain.`);
+    }
+
+    // ── Phase 1 Step 5 — Weighted Euclidean Distance (WED) → targetRangeHigh ─
     // Z-score SMI, CLI, RI decimal, and SSI across the post-RI-bracket pool.
     // Subject z-scores use the same pool stats (pool only, subject not included).
     // WED = √[ wA*(z_smi_s − z_smi_i)² + wB*(z_cli_s − z_cli_i)²
@@ -666,13 +687,13 @@ app.post("/api/valuation_v2", async (req, res) => {
 
       scored.sort((a, b) => a._wed - b._wed);
 
-      console.log(`Phase 1 Step 4 — WED top ${targetRangeHigh} of ${scored.length}:`);
+      console.log(`Phase 1 Step 5 — WED top ${targetRangeHigh} of ${scored.length}:`);
       scored.slice(0, Math.min(5, scored.length)).forEach((r, i) => {
         console.log(`  ${i + 1}. ID=${r.id} WED=${r._wed.toFixed(4)} smi=${r.smi} cli=${r.cli} rid=${r.ri_decimal} ssi=${r.ssi}`);
       });
 
       pool = scored.slice(0, targetRangeHigh).map(({ _wed, ...r }) => r);
-      console.log(`Phase 1 Step 4 — WED cut: kept ${pool.length} records`);
+      console.log(`Phase 1 Step 5 — WED cut: kept ${pool.length} records`);
     }
     filterCounts.push({ label: 'Filtered by Skill, Career Level, Subject & Size', count: pool.length });
     if (pool.length < targetQuantity) {
@@ -910,7 +931,6 @@ app.post("/api/valuation_v2", async (req, res) => {
     });
   }
 });
-
 
 
 
