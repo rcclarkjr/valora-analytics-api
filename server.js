@@ -777,7 +777,7 @@ app.post("/api/valuation_v2", async (req, res) => {
     const subjectMediumIdx          = parseFloat(mediumTable[media]);
     const predictedPPSI_at_subject  = sizeConstant * Math.pow(Math.log(subjectSSI), sizeExponent);
 
-    const adjComps = pool.map(r => {
+    let adjComps = pool.map(r => {
       if (mediumTable[r.medium] === undefined) {
         throw new Error(`Phase 2: no medium index found for comp medium: ${r.medium} (comp ID: ${r.id})`);
       }
@@ -804,7 +804,30 @@ app.post("/api/valuation_v2", async (req, res) => {
       };
     });
 
-    // ── Phase 2 Step 3 — Similarity scalar → targetQuantity ──────────────────
+    // ── Phase 2 Step 2 — CoV40: from full 40-record adjusted pool ────────────
+    // Used as the population for the adjPrice z-score filter below.
+    {
+      const prices40  = adjComps.map(c => c.adjPrice);
+      const mean40    = prices40.reduce((s, v) => s + v, 0) / prices40.length;
+      const std40     = Math.sqrt(prices40.reduce((s, v) => s + Math.pow(v - mean40, 2), 0) / (prices40.length - 1));
+      const coV40     = std40 / mean40;
+      console.log(`v2 CoV40 (${prices40.length} records): mean=${mean40.toFixed(2)}, std=${std40.toFixed(2)}, CoV=${coV40.toFixed(4)}`);
+
+      // ── Phase 2 Step 3 — adjPrice z-score filter ─────────────────────────────
+      // One-tailed left filter: eliminate comps whose adjPrice z-score < z_filter_threshold.
+      // Z-scores computed from the 40-record pool (mean40, std40).
+      const zThreshold = parseFloat(coefficients['z_filter_threshold']);
+      if (std40 === 0) throw new Error('Phase 2 Step 3: adjPrice standard deviation is zero — cannot compute z-scores.');
+      const before = adjComps.length;
+      adjComps = adjComps.filter(c => ((c.adjPrice - mean40) / std40) >= zThreshold);
+      console.log(`v2 Phase 2 Step 3 — adjPrice z-filter (threshold=${zThreshold}): ${before} → ${adjComps.length} records (removed ${before - adjComps.length})`);
+    }
+    filterCounts.push({ label: 'Filtered by Price Quality', count: adjComps.length });
+    if (adjComps.length < targetQuantity) {
+      throw new Error(`Insufficient comps after adjPrice z-score filter: ${adjComps.length} records remain.`);
+    }
+
+    // ── Phase 2 Step 4 — Similarity scalar → targetQuantity ──────────────────
     // Medium penalty:
     //   0   — exact medium match
     //   0.5 — subject Oil & comp Acrylic, or subject Acrylic & comp Oil
@@ -860,25 +883,25 @@ app.post("/api/valuation_v2", async (req, res) => {
 
     scored.sort((a, b) => a._score !== b._score ? a._score - b._score : b.appsi - a.appsi);
 
-    console.log(`v2 Phase 2 Step 3 — Similarity scalar (w_sim_medium=${wSimMedium}, w_sim_subject=${wSimSubject}, w_sim_netadj=${wSimNetAdj}):`);
+    console.log(`v2 Phase 2 Step 4 — Similarity scalar (w_sim_medium=${wSimMedium}, w_sim_subject=${wSimSubject}, w_sim_netadj=${wSimNetAdj}):`);
     scored.forEach((c, i) => {
       console.log(`  ${i + 1}. ID=${c.id} score=${c._score.toFixed(4)} medium=${c.medium} rid=${c.ri_decimal} netAdj=${c.netAdjPct}%`);
     });
 
     const similarityFiltered = scored.slice(0, targetQuantity).map(({ _score, ...c }) => c);
     filterCounts.push({ label: 'Filtered by Medium, Subject & Price Adjustment', count: similarityFiltered.length });
-    console.log(`v2 Phase 2 Step 3 — Similarity filter: kept ${similarityFiltered.length} from ${adjComps.length}`);
+    console.log(`v2 Phase 2 Step 4 — Similarity filter: kept ${similarityFiltered.length} from ${adjComps.length}`);
 
     const topComps = similarityFiltered.sort((a, b) => a.id - b.id);
 
-    // ── Phase 2 Step 2 — CoV from final 10 comps ─────────────────────────────
-    // Computed after similarity scalar so CoV reflects the actual presented comps.
-    // This ensures the displayed price range stays within the visible comp spread.
-    const coVAdjPrices = topComps.map(c => c.adjPrice);
-    const poolMean     = coVAdjPrices.reduce((s, v) => s + v, 0) / coVAdjPrices.length;
-    const poolStd      = Math.sqrt(coVAdjPrices.reduce((s, v) => s + Math.pow(v - poolMean, 2), 0) / (coVAdjPrices.length - 1));
-    const pooledCoV    = poolStd / poolMean;
-    console.log(`v2 CoV (${topComps.length} final comps): mean=${poolMean.toFixed(2)}, std=${poolStd.toFixed(2)}, CoV=${pooledCoV.toFixed(4)}`);
+    // ── Phase 2 Step 5 — CoV10: from final 10 comps ──────────────────────────
+    // Used to compute strategic price points — anchored to the actual presented comps.
+    const prices10     = topComps.map(c => c.adjPrice);
+    const mean10       = prices10.reduce((s, v) => s + v, 0) / prices10.length;
+    const std10        = Math.sqrt(prices10.reduce((s, v) => s + Math.pow(v - mean10, 2), 0) / (prices10.length - 1));
+    const pooledCoV    = std10 / mean10;
+    const poolMean     = mean10;
+    console.log(`v2 CoV10 (${topComps.length} final comps): mean=${mean10.toFixed(2)}, std=${std10.toFixed(2)}, CoV=${pooledCoV.toFixed(4)}`);
 
     // ── Reconciliation outputs ────────────────────────────────────────────────
     const adjPrices    = topComps.map(c => c.adjPrice);
@@ -888,7 +911,7 @@ app.post("/api/valuation_v2", async (req, res) => {
       ? sortedAdj[mid]
       : (sortedAdj[mid - 1] + sortedAdj[mid]) / 2;
 
-    console.log(`v2 Reconciliation: centralValue=${centralValue.toFixed(2)} (median of ${topComps.length}), poolMean=${poolMean.toFixed(2)}, pooledCoV=${pooledCoV.toFixed(4)} (from ${topComps.length} final comps)`);
+    console.log(`v2 Reconciliation: centralValue=${centralValue.toFixed(2)} (median of ${topComps.length}), CoV10=${pooledCoV.toFixed(4)}, mean10=${poolMean.toFixed(2)}`);
 
     const premiumValue     = centralValue * (1 + (coef_A * pooledCoV));
     const marketValue      = centralValue * (1 + (coef_B * pooledCoV));
@@ -931,6 +954,7 @@ app.post("/api/valuation_v2", async (req, res) => {
     });
   }
 });
+
 
 
 
