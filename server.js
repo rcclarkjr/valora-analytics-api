@@ -674,7 +674,7 @@ app.post("/api/valuation_v2", async (req, res) => {
       pool = scored.slice(0, targetRangeHigh).map(({ _wed, ...r }) => r);
       console.log(`Phase 1 Step 4 — WED cut: kept ${pool.length} records`);
     }
-    filterCounts.push({ label: 'Filtered by Skill, Career Level, Subject & Size', count: pool.length });
+    filterCounts.push({ label: 'Filtered by SMI, CLI, Subject & Size', count: pool.length });
     if (pool.length < targetQuantity) {
       throw new Error(`Insufficient comps after WED filter: ${pool.length} records remain.`);
     }
@@ -845,7 +845,7 @@ app.post("/api/valuation_v2", async (req, res) => {
     });
 
     const similarityFiltered = scored.slice(0, targetQuantity).map(({ _score, ...c }) => c);
-    filterCounts.push({ label: 'Filtered by Medium, Subject & Price Adjustment', count: similarityFiltered.length });
+    filterCounts.push({ label: 'Filtered by Amount of Adjustment Adjustment', count: similarityFiltered.length });
     console.log(`v2 Phase 2 Step 2 — Similarity filter: kept ${similarityFiltered.length} from ${adjComps.length}`);
 
     const topComps = similarityFiltered.sort((a, b) => a.id - b.id);
