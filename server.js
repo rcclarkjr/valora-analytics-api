@@ -845,7 +845,7 @@ app.post("/api/valuation_v2", async (req, res) => {
     });
 
     const similarityFiltered = scored.slice(0, targetQuantity).map(({ _score, ...c }) => c);
-    filterCounts.push({ label: 'Filtered by Amount of Adjustment Adjustment', count: similarityFiltered.length });
+    filterCounts.push({ label: 'Filtered by Amount of Adjustment', count: similarityFiltered.length });
     console.log(`v2 Phase 2 Step 2 — Similarity filter: kept ${similarityFiltered.length} from ${adjComps.length}`);
 
     const topComps = similarityFiltered.sort((a, b) => a.id - b.id);
