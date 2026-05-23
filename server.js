@@ -3665,19 +3665,19 @@ function normalizeNameTitle(artistName, title) {
   return `${lastName}::${normTitle}`;
 }
 
+
+
 // ====================
-// KAJABI SUBSCRIBER REGISTRATION
+// MAILERLITE SUBSCRIBER REGISTRATION
 // ====================
 
-const KAJABI_API_KEY     = process.env.KAJABI_API_KEY;
-const KAJABI_API_SECRET  = process.env.KAJABI_API_SECRET;
-const KAJABI_TAG_33FACTORS   = process.env.KAJABI_TAG_33FACTORS;
-const KAJABI_TAG_TAAPROSPECT = process.env.KAJABI_TAG_TAAPROSPECT;
-const KAJABI_TAG_SYPUSERS    = process.env.KAJABI_TAG_SYPUSERS;
+const MAILERLITE_API_TOKEN = process.env.MAILERLITE_API_TOKEN;
+const MAILERLITE_GROUP_ID  = process.env.MAILERLITE_GROUP_ID;
 
 app.post('/api/register-subscriber', async (req, res) => {
   try {
     const { name, email } = req.body;
+
     if (!name || typeof name !== 'string' || name.trim().length < 2) {
       return res.status(400).json({ success: false, error: 'A valid name is required.' });
     }
@@ -3685,58 +3685,47 @@ app.post('/api/register-subscriber', async (req, res) => {
     if (!email || !emailRegex.test(email.trim())) {
       return res.status(400).json({ success: false, error: 'A valid email address is required.' });
     }
+
+    if (!MAILERLITE_API_TOKEN) throw new Error('MAILERLITE_API_TOKEN is not set in environment');
+    if (!MAILERLITE_GROUP_ID)  throw new Error('MAILERLITE_GROUP_ID is not set in environment');
+
     const cleanName  = name.trim();
     const cleanEmail = email.trim().toLowerCase();
+
     console.log(`📧 SizeYourPrice subscriber registration: ${cleanName} <${cleanEmail}>`);
-    const basicAuth = Buffer.from(`${KAJABI_API_KEY}:${KAJABI_API_SECRET}`).toString('base64');
-    const headers = {
-      'Authorization': `Basic ${basicAuth}`,
-      'Content-Type': 'application/vnd.api+json',
-      'Accept': 'application/vnd.api+json'
-    };
-    let contactId;
-    try {
-      const contactResponse = await axios.post(
-        'https://api.kajabi.com/v1/contacts',
-        { data: { type: 'contacts', attributes: { name: cleanName, email: cleanEmail, subscribed: true } } },
-        { headers }
-      );
-      contactId = contactResponse.data?.data?.id;
-      if (!contactId) throw new Error('Kajabi did not return a contact ID');
-      console.log(`✅ Kajabi contact created/updated: ID ${contactId}`);
-    } catch (contactError) {
-      if (contactError.response?.status === 422) {
-        console.log(`ℹ️ Contact may already exist, searching by email...`);
-        const searchResponse = await axios.get(
-          `https://api.kajabi.com/v1/contacts?filter[email]=${encodeURIComponent(cleanEmail)}`,
-          { headers }
-        );
-        const existingContact = searchResponse.data?.data?.[0];
-        if (!existingContact) throw new Error('Could not create or find contact in Kajabi');
-        contactId = existingContact.id;
-        console.log(`✅ Found existing Kajabi contact: ID ${contactId}`);
-      } else {
-        throw contactError;
+
+    const response = await axios.post(
+      'https://connect.mailerlite.com/api/subscribers',
+      {
+        email:  cleanEmail,
+        fields: { name: cleanName },
+        groups: [MAILERLITE_GROUP_ID]
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${MAILERLITE_API_TOKEN}`,
+          'Content-Type':  'application/json',
+          'Accept':        'application/json'
+        }
       }
-    }
-    await axios.post(
-      `https://api.kajabi.com/v1/contacts/${contactId}/relationships/tags`,
-      { data: [
-        { type: 'contact_tags', id: KAJABI_TAG_33FACTORS },
-        { type: 'contact_tags', id: KAJABI_TAG_TAAPROSPECT },
-        { type: 'contact_tags', id: KAJABI_TAG_SYPUSERS }
-      ]},
-      { headers }
     );
-    console.log(`✅ Tags applied to contact ${contactId}: 33Factors + TAAprospect`);
+
+    const subscriberId = response.data?.data?.id;
+    console.log(`✅ MailerLite subscriber added: ID ${subscriberId}`);
+
     res.json({ success: true, message: 'Subscriber registered successfully' });
+
   } catch (error) {
-    console.error('❌ Kajabi subscriber registration failed:', {
-      message: error.message, status: error.response?.status, data: error.response?.data
+    console.error('❌ MailerLite subscriber registration failed:', {
+      message: error.message,
+      status:  error.response?.status,
+      data:    error.response?.data
     });
     res.status(500).json({ success: false, error: 'Registration failed. Please try again.' });
   }
 });
+
+
 
 // Serve static files from the "public" folder
 app.use(express.static("public"));
