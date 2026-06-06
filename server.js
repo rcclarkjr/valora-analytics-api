@@ -139,6 +139,152 @@ function roundSMIUp(value) {
 }
 
 // ====================
+// SMI ANCHOR STORAGE
+// ====================
+
+// Persisted at startup by initializeAnchors(). Never modified after that.
+const anchorAnalyses = {}; // keyed 1–5
+
+// ====================
+// SMI PROMPTS
+// ====================
+
+const PROMPT_A = `ARTWORK ANALYSIS
+
+You are an objective evaluator of artistic skill. Examine the artwork image carefully and produce a complete textual analysis. You must follow these rules without exception:
+
+- Evaluate only what you see in the work before you
+- Do not consider the identity, reputation, or historical significance of the artist
+- Do not factor in provenance, attribution, or authorship
+- If you recognize the work as a known masterpiece, disregard that recognition entirely — it is irrelevant to your evaluation
+- A perfect forgery and the original deploy identical skill on the canvas
+- Do not adjust your evaluation based on the apparent age, experience level, or intent of the artist
+- Do not soften or qualify scores out of kindness or encouragement
+- A work that deploys little skill should score low regardless of who made it or why
+- Evaluate only the skill deployed in the work as it exists visually, nothing else
+
+---
+
+FIRST READ
+
+Observe and record what is deployed in this work across all three dimensions:
+
+- Technical execution: mark-making, color handling, edge control, spatial construction, medium mastery
+- Compositional intelligence: arrangement, balance, movement, focal structure, use of negative space
+- Expressive voice: the degree to which a personal artistic vision is present, intentional, and realized
+
+---
+
+SECOND LOOK
+
+Before writing your analysis, examine the image again with fresh attention. Look specifically for elements that may not have been immediately obvious — figures, faces, animals, landscapes, or objects emerging from abstraction; imagery embedded within texture or gestural marks; superimposed transparencies or dual narratives occupying the same visual space. If such layered complexity is discovered, it must be captured in your analysis, as it represents genuinely additional skill deployed.
+
+---
+
+OUTPUT
+
+Write a thorough analytical description of what is deployed in this artwork across technical execution, compositional intelligence, and expressive voice. Include anything discovered in the second look. Be specific and observational — do not evaluate against a scale, do not assign a score. Your output will be used later for comparative analysis against other works.`;
+
+const PROMPT_B_TEMPLATE = `SMI SCORING
+
+You are an objective evaluator of artistic skill assigning a Skill Mastery Index (SMI) score. You must follow these rules without exception:
+
+- Do not consider the identity, reputation, or historical significance of the artist
+- Do not factor in provenance, attribution, or authorship
+- Do not soften or qualify scores out of kindness or encouragement
+- Score only the skill deployed in the work, nothing else
+
+---
+
+THE SCALE — CONCEPTUAL FRAMEWORK
+
+The SMI scale runs from 1.0 to 5.0 in increments of 0.25. The five integer levels represent named thresholds in artistic development:
+
+- 1.0 — Novice: The artist is beginning. Work shows basic attempts at representation with limited technical foundation. Marks are symbolic rather than observed. This is the entry point of the scale.
+
+- 2.0 — Apprentice: The artist has crossed into intentional representational work. Basic competence is emerging — subjects are recognizable, color is purposeful, composition is attempted. Technical understanding is present but incomplete.
+
+- 3.0 — Journeyman: The artist has crossed into confident, competent execution. Technical fundamentals are established. Personal color preferences and compositional approaches are beginning to emerge. Work is professional in character.
+
+- 4.0 — Artisan: The artist has crossed into distinctive, sophisticated work. Multiple technical and expressive skills are deployed simultaneously and intentionally. A personal voice is present and recognizable. This is the level The Artisan's Ascent is named for — the accomplished working artist.
+
+- 5.0 — Master: The artist has crossed into mastery. Technical execution, compositional intelligence, and expressive voice operate at the highest level simultaneously. Work stops the viewer. Note: 5.0 is the threshold of Master — the minimum score for a work of master-level skill. Some masters deploy more skill than others, but the scale does not express gradations above 5.0. All master-level work scores 5.0.
+
+On decimal scoring:
+- The integer (1.0, 2.0, 3.0, 4.0, 5.0) represents the threshold — the point at which a work has just crossed into that level. The anchor analysis for each integer is a representative example of work at that threshold.
+- 0.25 above the integer (e.g. 3.25) indicates the work has clearly crossed the threshold and shows meaningful development beyond the entry point.
+- 0.50 above the integer (e.g. 3.50) indicates the work sits solidly in the middle of that level.
+- 0.75 above the integer (e.g. 3.75) indicates the work is approaching the next threshold but has not yet crossed it.
+- The score is never less than 1.0 and never greater than 5.0.
+
+---
+
+THE ANCHOR ANALYSES
+
+The following five analyses describe the anchor works that define the SMI scale. Each represents the threshold entry point for its level.
+
+ANCHOR 1 — SMI 1.0 (Novice):
+{{ANCHOR_1_ANALYSIS}}
+
+ANCHOR 2 — SMI 2.0 (Apprentice):
+{{ANCHOR_2_ANALYSIS}}
+
+ANCHOR 3 — SMI 3.0 (Journeyman):
+{{ANCHOR_3_ANALYSIS}}
+
+ANCHOR 4 — SMI 4.0 (Artisan):
+{{ANCHOR_4_ANALYSIS}}
+
+ANCHOR 5 — SMI 5.0 (Master):
+{{ANCHOR_5_ANALYSIS}}
+
+---
+
+SUBJECT ANALYSIS:
+{{SUBJECT_ANALYSIS}}
+
+---
+
+STEP 1 — BRACKET THE WORK
+
+Using the analyses above, determine which two adjacent anchors the subject falls between, based on this question:
+
+"Considering the full range of artistic skill — technical execution, compositional intelligence, and expressive voice — which artwork had more skill deployed during its rendering?"
+
+Identify the two anchors that bound the subject — the highest anchor the subject exceeds and the lowest anchor that exceeds the subject. State your bracketing clearly before proceeding.
+
+If the subject essentially matches an anchor, note that and proceed to Step 2.
+
+---
+
+STEP 2 — LOCATE WITHIN THE BAND
+
+Now compare the subject only against the two bounding anchors using the same question:
+
+"Considering the full range of artistic skill — technical execution, compositional intelligence, and expressive voice — which artwork had more skill deployed during its rendering?"
+
+Determine which of these five positions best describes where the subject sits:
+
+- Essentially matches the lower anchor → score = lower anchor integer (e.g. 3.0)
+- Closer to the lower anchor → score = lower anchor integer + 0.25 (e.g. 3.25)
+- Squarely between the two anchors → score = lower anchor integer + 0.50 (e.g. 3.50)
+- Closer to the upper anchor → score = lower anchor integer + 0.75 (e.g. 3.75)
+- Essentially matches the upper anchor → score = upper anchor integer (e.g. 4.0)
+
+---
+
+FINAL OUTPUT
+
+Respond with ONLY valid JSON in this exact format, nothing else:
+
+{
+  "smi": 3.25,
+  "justification": "Brief 3-4 sentence explanation of what specifically places the work at this score."
+}
+
+The smi value must be a number (not a string). Valid values: 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.25, 4.5, 4.75, 5.0`;
+
+// ====================
 // AI CALLER FUNCTION
 // ====================
 async function callAI(
@@ -1279,8 +1425,15 @@ app.post("/analyze-smi", async (req, res) => {
   try {
     console.log("Received SMI analysis request");
 
-    const { image, imageType, artTitle, artistName, medium, temperature: requestedTemp } = req.body;
-    const temperature = typeof requestedTemp === "number" ? requestedTemp : DEFAULT_TEMPERATURE;
+    // Verify anchors are initialized
+    for (let i = 1; i <= 5; i++) {
+      if (!anchorAnalyses[i]) {
+        console.error(`/analyze-smi: anchor ${i} analysis is missing — server not fully initialized`);
+        return res.status(503).json({ error: { message: "Server is still initializing. Please try again in a moment." } });
+      }
+    }
+
+    const { image, imageType, artTitle, artistName } = req.body;
 
     if (!image) {
       console.log("Missing image in request");
@@ -1300,31 +1453,26 @@ app.post("/analyze-smi", async (req, res) => {
         error: { message: `Unsupported image type: ${imageType}. Please upload a JPEG or PNG file.` }
       });
     }
-    const validImageType = imageType;
 
     console.log(`Processing SMI for: "${artTitle}" by ${artistName}`);
-    console.log(`Medium: ${medium}`);
 
-    let processedImageBase64 = image;
-    let processedImageType = validImageType;
-
+    // Preprocess image
+    let processedImageBase64;
     try {
-      const sharp = require('sharp');
-      const inputBuffer = Buffer.from(image, 'base64');
+      const inputBuffer = Buffer.from(image, "base64");
       console.log(`Original image buffer size: ${(inputBuffer.length / 1024 / 1024).toFixed(2)} MB`);
       const resized = await sharp(inputBuffer)
-        .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+        .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
         .jpeg({ quality: 90 })
         .toBuffer();
       console.log(`Processed image buffer size: ${(resized.length / 1024 / 1024).toFixed(2)} MB`);
       if (resized.length > 4.5 * 1024 * 1024) {
         const recompressed = await sharp(resized).jpeg({ quality: 75 }).toBuffer();
-        processedImageBase64 = recompressed.toString('base64');
+        processedImageBase64 = recompressed.toString("base64");
         console.log(`Recompressed image buffer size: ${(recompressed.length / 1024 / 1024).toFixed(2)} MB`);
       } else {
-        processedImageBase64 = resized.toString('base64');
+        processedImageBase64 = resized.toString("base64");
       }
-      processedImageType = 'image/jpeg';
     } catch (sharpError) {
       console.error("analyze-smi sharp preprocessing failed:", sharpError.message);
       return res.status(500).json({
@@ -1332,142 +1480,66 @@ app.post("/analyze-smi", async (req, res) => {
       });
     }
 
-    console.log("Loading SMI_prompt...");
-    let smiPrompt;
+    // Step 1: Analyze the subject image using PROMPT_A
+    console.log("Analyzing subject artwork...");
+    let subjectAnalysis;
     try {
-      const promptResponse = await axios.get('https://valora-analytics-api.onrender.com/prompts/SMI_prompt');
-      smiPrompt = promptResponse.data;
-    } catch (fileError) {
-      console.error("Failed to load SMI_prompt:", fileError.message);
-      return res.status(500).json({
-        error: { message: "Server configuration error: Missing SMI_prompt file" }
-      });
+      subjectAnalysis = await analyzeArtwork(processedImageBase64);
+    } catch (err) {
+      console.error("Subject analysis failed:", err.message);
+      return res.status(500).json({ error: { message: "SMI evaluation failed during artwork analysis: " + err.message } });
     }
 
-    const fullPrompt = `Medium: ${medium}
-(Note: Evaluate the subject and rendering considering what was achieved with this medium. Some mediums make certain techniques easier or harder. The quality of what was achieved in the image is the only measure — the prestige or historical associations of the medium play no role in the evaluation.)
+    // Step 2: Build PROMPT_B with anchor analyses and subject analysis substituted in
+    const promptB = PROMPT_B_TEMPLATE
+      .replace("{{ANCHOR_1_ANALYSIS}}", anchorAnalyses[1])
+      .replace("{{ANCHOR_2_ANALYSIS}}", anchorAnalyses[2])
+      .replace("{{ANCHOR_3_ANALYSIS}}", anchorAnalyses[3])
+      .replace("{{ANCHOR_4_ANALYSIS}}", anchorAnalyses[4])
+      .replace("{{ANCHOR_5_ANALYSIS}}", anchorAnalyses[5])
+      .replace("{{SUBJECT_ANALYSIS}}", subjectAnalysis);
 
-${smiPrompt}`;
-
-    const systemContent = `You are an expert fine art analyst evaluating artwork for relative collector market value. Analyze the artwork and return your evaluation in valid JSON format only.
-
-CRITICAL EVALUATION RULES:
-1. Evaluate only what you observe in this image. Every artwork is assessed entirely on its own merits.
-2. If you recognize this artwork or its artist, set that recognition aside completely. The historical reputation, critical standing, fame, or importance of the artist or work must play no role in your evaluation. Evaluate what you see, not what you know.
-3. Do not reference any other works by this artist, their broader practice, or their development over time.
-4. The title and artist name provided are for identification only. Do not use them to infer anything about the work's significance or the artist's stature.`;
-
-    const messages = [
-      {
-        role: "user",
-        content: [
-          { type: "image_url", image_url: { url: `data:${processedImageType};base64,${processedImageBase64}` } },
-          { type: "text", text: fullPrompt }
-        ]
-      }
+    const scoringMessages = [
+      { role: "user", content: promptB }
     ];
 
-    console.log("Calling AI for SMI evaluation...");
-
+    console.log("Scoring subject artwork against anchors...");
     let aiResponse;
     try {
-      aiResponse = await callAI(messages, 1000, systemContent, true, temperature);
-    } catch (error) {
-      console.error("AI call failed:", error.message);
-      return res.status(500).json({ error: { message: "SMI evaluation failed: " + error.message } });
+      aiResponse = await callAI(scoringMessages, 1000, "", true);
+    } catch (err) {
+      console.error("Scoring AI call failed:", err.message);
+      return res.status(500).json({ error: { message: "SMI evaluation failed during scoring: " + err.message } });
     }
 
-    const { integer, gate1_score, gate2_score, subject_scores, rendering_scores, subject_description, rendering_description } = aiResponse;
+    const smiRaw = aiResponse.smi;
+    const justification = aiResponse.justification;
 
-    if (integer === undefined || integer === null) {
-      console.error("AI response missing integer");
-      return res.status(500).json({ error: { message: "AI returned incomplete response — missing integer" } });
+    if (smiRaw === undefined || smiRaw === null) {
+      console.error("AI scoring response missing smi field");
+      return res.status(500).json({ error: { message: "AI returned incomplete response — missing smi" } });
     }
-    const integerVal = parseInt(integer);
-    if (isNaN(integerVal) || integerVal < 1 || integerVal > 5) {
-      console.error(`AI returned invalid integer: ${integer}`);
-      return res.status(500).json({ error: { message: `AI returned invalid integer: ${integer}. Must be 1–5.` } });
+    if (typeof smiRaw !== "number" || isNaN(smiRaw)) {
+      console.error(`AI returned non-numeric smi: ${smiRaw}`);
+      return res.status(500).json({ error: { message: `AI returned invalid smi value: ${smiRaw}` } });
     }
-
-
-    if (integerVal === 5) {
-      console.log(`SMI integer=5 (Master) — sub-scores not evaluated`);
-      return res.json({
-        smi:               5.00,
-        smi_subject:       null,
-        smi_render:        null,
-        integer:           5,
-        gate1_score:       0,
-        gate2_score:       0,
-        subject_scores:    null,
-        rendering_scores:  null,
-        subject_description:   subject_description !== undefined ? subject_description : null,
-        rendering_description: rendering_description !== undefined ? rendering_description : null
-      });
+    if (smiRaw < 1.0 || smiRaw > 5.0) {
+      console.error(`AI returned out-of-range smi: ${smiRaw}`);
+      return res.status(500).json({ error: { message: `AI returned out-of-range smi: ${smiRaw}. Must be 1.0–5.0.` } });
+    }
+    if (!justification || typeof justification !== "string" || justification.trim().length === 0) {
+      console.error("AI scoring response missing justification field");
+      return res.status(500).json({ error: { message: "AI returned incomplete response — missing justification" } });
     }
 
-    if (!subject_scores || !rendering_scores) {
-      console.error("AI response missing subject_scores or rendering_scores");
-      return res.status(500).json({ error: { message: "AI returned incomplete response — missing pillar scores" } });
+    const validIncrements = [1.0,1.25,1.5,1.75,2.0,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0,4.25,4.5,4.75,5.0];
+    if (!validIncrements.includes(smiRaw)) {
+      console.error(`AI returned smi not on 0.25 increment: ${smiRaw}`);
+      return res.status(500).json({ error: { message: `AI returned smi not on valid 0.25 increment: ${smiRaw}` } });
     }
 
-    if (!subject_description || !rendering_description) {
-      console.error("AI response missing description fields");
-      return res.status(500).json({ error: { message: "AI returned incomplete response — missing description fields" } });
-    }
-
-    const sKeys = ['S1','S2','S3','S4','S5'];
-    const rKeys = ['R1','R2','R3','R4','R5'];
-
-    for (const k of sKeys) {
-      const v = parseFloat(subject_scores[k]);
-      if (isNaN(v) || v < 0 || v > 1) {
-        console.error(`Invalid subject score ${k}: ${subject_scores[k]}`);
-        return res.status(500).json({ error: { message: `Invalid subject score ${k}: ${subject_scores[k]}` } });
-      }
-    }
-    for (const k of rKeys) {
-      const v = parseFloat(rendering_scores[k]);
-      if (isNaN(v) || v < 0 || v > 1) {
-        console.error(`Invalid rendering score ${k}: ${rendering_scores[k]}`);
-        return res.status(500).json({ error: { message: `Invalid rendering score ${k}: ${rendering_scores[k]}` } });
-      }
-    }
-
-    console.log(`SUBJECT SCORES: ${JSON.stringify(subject_scores)}`);
-    console.log(`RENDERING SCORES: ${JSON.stringify(rendering_scores)}`);
-
-    const data = readDatabase();
-    if (!data.metadata || !data.metadata.coefficients) {
-      console.error("Database metadata or coefficients missing in /analyze-smi");
-      return res.status(500).json({
-        error: { message: "System configuration error: scoring coefficients are missing from the database. Please contact support@theartisansascent.com." }
-      });
-    }
-    const coefficients = data.metadata.coefficients;
-
-    let smiResult;
-    try {
-      smiResult = calculateSMI_fromScores(subject_scores, rendering_scores, coefficients, integerVal);
-    } catch (smiError) {
-      console.error('SMI calculation failed inside /analyze-smi:', smiError.message);
-      return res.status(500).json({ error: { message: 'SMI calculation failed: ' + smiError.message } });
-    }
-
-    console.log(`SMI result: smi=${smiResult.smi}, integer=${smiResult.integer}, smi_subject=${smiResult.smi_subject}, smi_render=${smiResult.smi_render}`);
-
-    res.json({
-      smi:               smiResult.smi,
-      smi_subject:       smiResult.smi_subject,
-      smi_render:        smiResult.smi_render,
-      integer:           integerVal,
-      gate1_score:       (integerVal === 3 || integerVal === 4) ? parseInt(gate1_score) : 0,
-      gate2_score:       (integerVal === 3 || integerVal === 4) ? parseInt(gate2_score) : 0,
-      subject_scores,
-      rendering_scores,
-      subject_description,
-      rendering_description
-    });
+    console.log(`SMI result: ${smiRaw}`);
+    res.json({ smi: smiRaw, justification: justification.trim() });
 
   } catch (error) {
     console.error("Unexpected error in SMI analysis:", error);
@@ -3734,4 +3806,67 @@ app.use(express.static("public"));
 // START THE SERVER
 // ====================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, async () => {
+  console.log(`Server running on port ${PORT}`);
+  try {
+    await initializeAnchors();
+  } catch (err) {
+    console.error("FATAL: SMI anchor initialization failed:", err.message);
+    process.exit(1);
+  }
+});
+
+// ====================
+// SMI ARTWORK ANALYZER
+// ====================
+
+async function analyzeArtwork(imageBase64) {
+  const messages = [
+    {
+      role: "user",
+      content: [
+        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+        { type: "text", text: PROMPT_A }
+      ]
+    }
+  ];
+  const analysis = await callAI(messages, 1000, "", false);
+  if (!analysis || typeof analysis !== "string" || analysis.trim().length === 0) {
+    throw new Error("analyzeArtwork: AI returned empty analysis");
+  }
+  return analysis.trim();
+}
+
+// ====================
+// ANCHOR INITIALIZATION
+// ====================
+
+async function initializeAnchors() {
+  console.log("Initializing SMI anchors...");
+  const anchorsDir = path.join(__dirname, "public", "anchors");
+
+  for (let i = 1; i <= 5; i++) {
+    const imagePath = path.join(anchorsDir, `${i}.jpg`);
+    let imageBuffer;
+    try {
+      imageBuffer = fs.readFileSync(imagePath);
+    } catch (err) {
+      throw new Error(`initializeAnchors: Failed to read anchor image ${i}.jpg — ${err.message}`);
+    }
+
+    const imageBase64 = imageBuffer.toString("base64");
+    console.log(`Analyzing anchor ${i}...`);
+
+    let analysis;
+    try {
+      analysis = await analyzeArtwork(imageBase64);
+    } catch (err) {
+      throw new Error(`initializeAnchors: Failed to analyze anchor ${i} — ${err.message}`);
+    }
+
+    anchorAnalyses[i] = analysis;
+    console.log(`Anchor ${i} analysis complete (${analysis.length} chars)`);
+  }
+
+  console.log("All 5 SMI anchors initialized.");
+}
