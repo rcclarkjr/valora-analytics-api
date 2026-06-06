@@ -2373,31 +2373,6 @@ function calculateSMI(smiSubject, smiRender, integer, coefficients) {
   return parseFloat((integerVal + cappedWeighted).toFixed(2));
 }
 
-function calculateSMI_fromScores(subjectScores, renderingScores, coefficients, integer) {
-  const sKeys = ['S1','S2','S3','S4','S5'];
-  const rKeys = ['R1','R2','R3','R4','R5'];
-  if (integer === undefined || integer === null)
-    throw new Error('calculateSMI_fromScores: integer is required.');
-  const integerVal = parseInt(integer);
-  if (isNaN(integerVal) || integerVal < 1 || integerVal > 5)
-    throw new Error(`calculateSMI_fromScores: integer must be 1–5. Got: ${integer}`);
-  if (integerVal === 5)
-    return { smi: 5.00, smi_subject: null, smi_render: null, integer: 5 };
-  for (const k of sKeys) {
-    const v = parseFloat(subjectScores[k]);
-    if (isNaN(v) || v < 0 || v > 1)
-      throw new Error(`Invalid subject score ${k}: ${subjectScores[k]}`);
-  }
-  for (const k of rKeys) {
-    const v = parseFloat(renderingScores[k]);
-    if (isNaN(v) || v < 0 || v > 1)
-      throw new Error(`Invalid rendering score ${k}: ${renderingScores[k]}`);
-  }
-  const smi_subject = parseFloat((sKeys.reduce((sum, k) => sum + parseFloat(subjectScores[k]), 0) / 5).toFixed(4));
-  const smi_render  = parseFloat((rKeys.reduce((sum, k) => sum + parseFloat(renderingScores[k]), 0) / 5).toFixed(4));
-  const smi = calculateSMI(smi_subject, smi_render, integerVal, coefficients);
-  return { smi, smi_subject, smi_render, integer: integerVal };
-}
 
 function calculateDerivedFields(record, metadata) {
   if (!metadata.coefficients) throw new Error('calculateDerivedFields: metadata.coefficients is missing.');
@@ -3343,9 +3318,7 @@ app.post('/api/batch/process-record', async (req, res) => {
     }
     if (!record.title)      throw new Error(`Record ${id} is missing title`);
     if (!record.artistName) throw new Error(`Record ${id} is missing artistName`);
-    if (mode.smi && !record.medium) {
-      throw new Error(`Record ${id} is missing medium — required for SMI`);
-    }
+
 
     const result = { recordId: id };
 
@@ -3373,65 +3346,55 @@ app.post('/api/batch/process-record', async (req, res) => {
 
     if (mode.smi) {
       console.log(`Record ${id}: running SMI...`);
-      const smiPromptPath = path.join(__dirname, 'public', 'prompts', 'SMI_prompt.txt');
-      if (!fs.existsSync(smiPromptPath)) throw new Error('SMI_prompt.txt not found on disk.');
-      const smiPromptRaw = fs.readFileSync(smiPromptPath, 'utf8');
-      const fullSmiPrompt = `Medium: ${record.medium}
-(Note: Evaluate the subject and rendering considering what was achieved with this medium. Some mediums make certain techniques easier or harder. The quality of what was achieved in the image is the only measure — the prestige or historical associations of the medium play no role in the evaluation.)
 
-${smiPromptRaw}`;
-      const smiSystemContent = `You are an expert fine art analyst evaluating artwork for relative collector market value. Analyze the artwork and return your evaluation in valid JSON format only.
-
-CRITICAL EVALUATION RULES:
-1. Evaluate only what you observe in this image. Every artwork is assessed entirely on its own merits.
-2. If you recognize this artwork or its artist, set that recognition aside completely. The historical reputation, critical standing, fame, or importance of the artist or work must play no role in your evaluation. Evaluate what you see, not what you know.
-3. Do not reference any other works by this artist, their broader practice, or their development over time.
-4. The title and artist name provided are for identification only. Do not use them to infer anything about the work's significance or the artist's stature.`;
-      const smiMessages = [
-        {
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${processedImageBase64}` } },
-            { type: 'text', text: fullSmiPrompt }
-          ]
+      // Verify anchors are initialized
+      for (let i = 1; i <= 5; i++) {
+        if (!anchorAnalyses[i]) {
+          throw new Error(`Record ${id}: SMI cannot run — anchor ${i} analysis is missing. Server may not be fully initialized.`);
         }
-      ];
+      }
+
+      // Step 1: Analyze the subject image
+      let subjectAnalysis;
+      try {
+        subjectAnalysis = await analyzeArtwork(processedImageBase64);
+      } catch (err) {
+        throw new Error(`Record ${id}: SMI artwork analysis failed — ${err.message}`);
+      }
+
+      // Step 2: Score against anchor analyses
+      const promptB = PROMPT_B_TEMPLATE
+        .replace('{{ANCHOR_1_ANALYSIS}}', anchorAnalyses[1])
+        .replace('{{ANCHOR_2_ANALYSIS}}', anchorAnalyses[2])
+        .replace('{{ANCHOR_3_ANALYSIS}}', anchorAnalyses[3])
+        .replace('{{ANCHOR_4_ANALYSIS}}', anchorAnalyses[4])
+        .replace('{{ANCHOR_5_ANALYSIS}}', anchorAnalyses[5])
+        .replace('{{SUBJECT_ANALYSIS}}', subjectAnalysis);
+
       let smiAiResponse;
       try {
-        smiAiResponse = await callAI(smiMessages, 1000, smiSystemContent, true, DEFAULT_TEMPERATURE);
+        smiAiResponse = await callAI([{ role: 'user', content: promptB }], 1000, '', true, DEFAULT_TEMPERATURE);
       } catch (err) {
-        throw new Error(`Record ${id}: SMI AI call failed — ${err.message}`);
+        throw new Error(`Record ${id}: SMI scoring failed — ${err.message}`);
       }
-      const { integer, gate1_score, gate2_score, subject_scores, rendering_scores } = smiAiResponse;
-      const integerVal = parseInt(integer);
-      if (isNaN(integerVal) || integerVal < 1 || integerVal > 5) {
-        throw new Error(`Record ${id}: SMI returned invalid integer: ${integer}`);
+
+      const smiRaw = smiAiResponse.smi;
+      if (smiRaw === undefined || smiRaw === null) {
+        throw new Error(`Record ${id}: SMI response missing smi field`);
       }
-      if (integerVal === 5) {
-        result.smi = 5.00; result.smi_subject = null; result.smi_render = null;
-        result.integer = 5; result.gate1_score = 0; result.gate2_score = 0;
-      } else {
-        if (!subject_scores || !rendering_scores) {
-          throw new Error(`Record ${id}: SMI response missing pillar scores`);
-        }
-        if (!data.metadata || !data.metadata.coefficients) {
-          throw new Error(`Record ${id}: SMI calculation failed — scoring coefficients are missing from the database. Please contact support@theartisansascent.com.`);
-        }
-        const coefficients = data.metadata.coefficients;
-        let smiResult;
-        try {
-          smiResult = calculateSMI_fromScores(subject_scores, rendering_scores, coefficients, integerVal);
-        } catch (smiError) {
-          throw new Error(`Record ${id}: SMI calculation failed — ${smiError.message}`);
-        }
-        result.smi         = smiResult.smi;
-        result.smi_subject = smiResult.smi_subject;
-        result.smi_render  = smiResult.smi_render;
-        result.integer     = integerVal;
-        result.gate1_score = (integerVal === 3 || integerVal === 4) ? parseInt(gate1_score) : 0;
-        result.gate2_score = (integerVal === 3 || integerVal === 4) ? parseInt(gate2_score) : 0;
+      if (typeof smiRaw !== 'number' || isNaN(smiRaw)) {
+        throw new Error(`Record ${id}: SMI returned non-numeric smi: ${smiRaw}`);
       }
-      console.log(`Record ${id}: SMI=${result.smi}, integer=${result.integer}`);
+      if (smiRaw < 1.0 || smiRaw > 5.0) {
+        throw new Error(`Record ${id}: SMI returned out-of-range smi: ${smiRaw}`);
+      }
+      const validIncrements = [1.0,1.25,1.5,1.75,2.0,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0,4.25,4.5,4.75,5.0];
+      if (!validIncrements.includes(smiRaw)) {
+        throw new Error(`Record ${id}: SMI returned smi not on valid 0.25 increment: ${smiRaw}`);
+      }
+
+      result.smi = smiRaw;
+      console.log(`Record ${id}: SMI=${result.smi}`);
     }
 
     if (mode.ri) {
