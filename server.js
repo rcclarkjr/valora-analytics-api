@@ -1785,6 +1785,31 @@ function calculateRSquared(points, constant, exponent) {
 // DATA ACCESS ENDPOINTS
 // ====================================================
 
+// POST /api/admin/flag-pending-records
+// One-time fix: sets pendingScores=true for a hardcoded list of record IDs.
+app.post('/api/admin/flag-pending-records', (req, res) => {
+  try {
+    const targetIds = [748,1354,1837,1991,2138,2155,2210,2445,2557,2830,2862,2904,2943,3130];
+    const data = readDatabase();
+    const flagged = [];
+    const notFound = [];
+    for (const id of targetIds) {
+      const record = data.records.find(r => parseInt(r.id) === id);
+      if (record) {
+        record.pendingScores = true;
+        flagged.push(id);
+      } else {
+        notFound.push(id);
+      }
+    }
+    writeDatabase(data);
+    res.json({ flagged, notFound, message: `Flagged ${flagged.length} records as pending. Not found: ${notFound.length}` });
+  } catch (err) {
+    console.error('flag-pending-records error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/admin/create-backup', async (req, res) => {
   try {
     const dbPath = '/mnt/data/art_database.json';
