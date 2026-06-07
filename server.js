@@ -2524,13 +2524,18 @@ app.put("/api/records/:id", async (req, res) => {
     delete updatedRecord.ppsi;
     delete updatedRecord.imagePath;
 
-    // Recalculate pendingScores based on current state of all three score groups
-    updatedRecord.pendingScores = (
-      updatedRecord.smi        === null || updatedRecord.smi        === undefined ||
-      updatedRecord.cli        === null || updatedRecord.cli        === undefined ||
-      updatedRecord.ri_integer === null || updatedRecord.ri_integer === undefined ||
-      updatedRecord.ri_decimal === null || updatedRecord.ri_decimal === undefined
-    );
+    // If caller explicitly sets pendingScores (e.g. batch error handler), honor it.
+    // Otherwise recalculate from the current state of all three score groups.
+    if (req.body.pendingScores === true) {
+      updatedRecord.pendingScores = true;
+    } else {
+      updatedRecord.pendingScores = (
+        updatedRecord.smi        === null || updatedRecord.smi        === undefined ||
+        updatedRecord.cli        === null || updatedRecord.cli        === undefined ||
+        updatedRecord.ri_integer === null || updatedRecord.ri_integer === undefined ||
+        updatedRecord.ri_decimal === null || updatedRecord.ri_decimal === undefined
+      );
+    }
 
     calculateDerivedFields(updatedRecord, data.metadata);
 
