@@ -2345,33 +2345,7 @@ function getMediumIndex(medium, mediumCoefficients) {
   return key ? (parseFloat(mediumCoefficients[key]) || 1.0) : 1.0;
 }
 
-function calculateSMI(smiSubject, smiRender, integer, coefficients) {
-  if (smiSubject === null || smiSubject === undefined ||
-      smiRender  === null || smiRender  === undefined) return null;
-  if (integer === null || integer === undefined)
-    throw new Error('calculateSMI: integer is required but missing from record.');
-  const integerVal = parseInt(integer);
-  if (isNaN(integerVal) || integerVal < 1 || integerVal > 5)
-    throw new Error(`calculateSMI: integer must be 1–5. Got: ${integer}`);
-  if (integerVal === 5) return 5.00;
-  const rawSubject = coefficients['coef_smi_subject'];
-  if (rawSubject === undefined || rawSubject === null)
-    throw new Error('calculateSMI: coef_smi_subject is not set in metadata.');
-  const coefSubject = parseFloat(rawSubject);
-  if (isNaN(coefSubject) || coefSubject < 0 || coefSubject > 1)
-    throw new Error(`calculateSMI: coef_smi_subject "${rawSubject}" is invalid. Must be 0 to 1.`);
-  const coefRender = parseFloat((1 - coefSubject).toFixed(4));
-  const weighted = (parseFloat(smiSubject) * coefSubject) + (parseFloat(smiRender) * coefRender);
- 
-  if (integerVal === 3) {
-    const doubled = Math.min(weighted * 2, 1.90);
-    return parseFloat((integerVal + doubled).toFixed(2));
-  }
- 
-  // Integers 1 and 2: cap weighted at 0.90
-  const cappedWeighted = Math.min(weighted, 0.90);
-  return parseFloat((integerVal + cappedWeighted).toFixed(2));
-}
+
 
 
 function calculateDerivedFields(record, metadata) {
@@ -2384,14 +2358,7 @@ function calculateDerivedFields(record, metadata) {
   record.aop = calculateAOP(price, record.framed || 'N', coefficients);
   record.aoppsi = (record.ssi > 0 && record.aop > 0) ? record.aop / record.ssi : 0;
   record.appsi = calculateAPPSI(record.ssi, record.aop, coefficients);
-  if (record.smi_subject !== null && record.smi_subject !== undefined &&
-      record.smi_render  !== null && record.smi_render  !== undefined) {
-    if (record.integer === null || record.integer === undefined)
-      throw new Error('calculateDerivedFields: record.integer is missing — cannot calculate SMI.');
-    record.smi = calculateSMI(record.smi_subject, record.smi_render, record.integer, coefficients);
-  } else {
-    record.smi = null;
-  }
+
   return record;
 }
 
@@ -2409,33 +2376,40 @@ app.post("/api/records", async (req, res) => {
         return res.status(400).json({ error: `Missing required field: ${field}` });
       }
     }
-    const smiSubject = req.body.smi_subject !== undefined ? parseFloat(req.body.smi_subject) : undefined;
-    const smiRender  = req.body.smi_render  !== undefined ? parseFloat(req.body.smi_render)  : undefined;
-    const cli        = req.body.cli         !== undefined ? parseFloat(req.body.cli)         : undefined;
-    const riInteger  = req.body.ri_integer  !== undefined ? parseInt(req.body.ri_integer)    : undefined;
-    const riDecimal  = req.body.ri_decimal  !== undefined ? parseInt(req.body.ri_decimal)    : undefined;
+    // SMI, CLI, RI are optional — missing any one triggers pendingScores
+    const smiRaw    = req.body.smi        !== undefined && req.body.smi        !== null && req.body.smi        !== '' ? parseFloat(req.body.smi)        : null;
+    const cliRaw    = req.body.cli        !== undefined && req.body.cli        !== null && req.body.cli        !== '' ? parseFloat(req.body.cli)        : null;
+    const riInteger = req.body.ri_integer !== undefined && req.body.ri_integer !== null && req.body.ri_integer !== '' ? parseInt(req.body.ri_integer)   : null;
+    const riDecimal = req.body.ri_decimal !== undefined && req.body.ri_decimal !== null && req.body.ri_decimal !== '' ? parseInt(req.body.ri_decimal)   : null;
 
-    if (smiSubject === undefined || isNaN(smiSubject) || smiSubject < 0 || smiSubject > 1) {
-      return res.status(400).json({ error: 'SMI Subject Score (smi_subject) is required (0.00 to 1.00). Please calculate this value using the SMI Calculator before adding a record.' });
+    if (smiRaw !== null) {
+      const validIncrements = [1.0,1.25,1.5,1.75,2.0,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0,4.25,4.5,4.75,5.0];
+      if (isNaN(smiRaw) || !validIncrements.includes(smiRaw)) {
+        return res.status(400).json({ error: `smi must be a valid 0.25-increment value between 1.0 and 5.0. Got: "${req.body.smi}"` });
+      }
     }
-    if (smiRender === undefined || isNaN(smiRender) || smiRender < 0 || smiRender > 1) {
-      return res.status(400).json({ error: 'SMI Render Score (smi_render) is required (0.00 to 1.00). Please calculate this value using the SMI Calculator before adding a record.' });
+    if (cliRaw !== null && (isNaN(cliRaw) || cliRaw < 1.0 || cliRaw > 5.0)) {
+      return res.status(400).json({ error: `cli must be 1.00 to 5.00. Got: "${req.body.cli}"` });
     }
-    if (cli === undefined || isNaN(cli) || cli < 1.0 || cli > 5.0) {
-      return res.status(400).json({ error: 'Career Level Index (cli) is required (1.00 to 5.00). Please calculate this value using the CLI Calculator before adding a record.' });
+    if (riInteger !== null || riDecimal !== null) {
+      if (riInteger === null || riDecimal === null) {
+        return res.status(400).json({ error: 'ri_integer and ri_decimal must both be provided together.' });
+      }
+      if (isNaN(riInteger) || riInteger < 1 || riInteger > 5) {
+        return res.status(400).json({ error: `ri_integer must be 1 to 5. Got: "${req.body.ri_integer}"` });
+      }
+      if (isNaN(riDecimal) || riDecimal < 0 || riDecimal > 9) {
+        return res.status(400).json({ error: `ri_decimal must be 0 to 9. Got: "${req.body.ri_decimal}"` });
+      }
+      if (riInteger <= 2 && riDecimal !== 0) {
+        return res.status(400).json({ error: `RI validation failed: ri_integer ${riInteger} requires ri_decimal 0, got ${riDecimal}.` });
+      }
+      if (riInteger >= 3 && riDecimal === 0) {
+        return res.status(400).json({ error: `RI validation failed: ri_integer ${riInteger} requires ri_decimal 1–9, got 0.` });
+      }
     }
-    if (riInteger === undefined || isNaN(riInteger) || riInteger < 1 || riInteger > 5) {
-      return res.status(400).json({ error: 'RI Integer (ri_integer) is required (1 to 5). Please calculate this value using the RI Calculator before adding a record.' });
-    }
-    if (riDecimal === undefined || isNaN(riDecimal) || riDecimal < 0 || riDecimal > 9) {
-      return res.status(400).json({ error: 'RI Decimal (ri_decimal) is required (0 to 9). Please calculate this value using the RI Calculator before adding a record.' });
-    }
-    if (riInteger <= 2 && riDecimal !== 0) {
-      return res.status(400).json({ error: `RI validation failed: ri_integer ${riInteger} requires ri_decimal 0, got ${riDecimal}.` });
-    }
-    if (riInteger >= 3 && riDecimal === 0) {
-      return res.status(400).json({ error: `RI validation failed: ri_integer ${riInteger} requires ri_decimal 1–9, got 0.` });
-    }
+
+    const pendingScores = (smiRaw === null || cliRaw === null || riInteger === null || riDecimal === null);
 
     const maxId = data.records.length > 0
       ? data.records.reduce((max, record) => {
@@ -2450,11 +2424,11 @@ app.post("/api/records", async (req, res) => {
       isActive: true,
       dateAdded: new Date().toISOString(),
       ...bodyWithoutId,
-      smi_subject: parseFloat(smiSubject),
-      smi_render:  parseFloat(smiRender),
-      cli:         parseFloat(cli),
-      ri_integer:  parseInt(riInteger),
-      ri_decimal:  parseInt(riDecimal)
+      smi:         smiRaw,
+      cli:         cliRaw,
+      ri_integer:  riInteger,
+      ri_decimal:  riDecimal,
+      pendingScores: pendingScores
     };
 
     calculateDerivedFields(newRecord, data.metadata);
@@ -2510,15 +2484,13 @@ app.put("/api/records/:id", async (req, res) => {
       dateAdded: data.records[index].dateAdded
     };
 
-    if (req.body.smi_subject !== undefined) {
-      const v = parseFloat(req.body.smi_subject);
-      if (isNaN(v) || v < 0 || v > 1) return res.status(400).json({ error: 'smi_subject must be 0.00 to 1.00' });
-      updatedRecord.smi_subject = v;
-    }
-    if (req.body.smi_render !== undefined) {
-      const v = parseFloat(req.body.smi_render);
-      if (isNaN(v) || v < 0 || v > 1) return res.status(400).json({ error: 'smi_render must be 0.00 to 1.00' });
-      updatedRecord.smi_render = v;
+    if (req.body.smi !== undefined) {
+      const v = req.body.smi === null || req.body.smi === '' ? null : parseFloat(req.body.smi);
+      if (v !== null) {
+        const validIncrements = [1.0,1.25,1.5,1.75,2.0,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0,4.25,4.5,4.75,5.0];
+        if (isNaN(v) || !validIncrements.includes(v)) return res.status(400).json({ error: `smi must be a valid 0.25-increment value between 1.0 and 5.0. Got: "${req.body.smi}"` });
+      }
+      updatedRecord.smi = v;
     }
     if (req.body.cli !== undefined) {
       const v = parseFloat(req.body.cli);
@@ -2551,6 +2523,14 @@ app.put("/api/records/:id", async (req, res) => {
     delete updatedRecord.artOnlyPrice;
     delete updatedRecord.ppsi;
     delete updatedRecord.imagePath;
+
+    // Recalculate pendingScores based on current state of all three score groups
+    updatedRecord.pendingScores = (
+      updatedRecord.smi        === null || updatedRecord.smi        === undefined ||
+      updatedRecord.cli        === null || updatedRecord.cli        === undefined ||
+      updatedRecord.ri_integer === null || updatedRecord.ri_integer === undefined ||
+      updatedRecord.ri_decimal === null || updatedRecord.ri_decimal === undefined
+    );
 
     calculateDerivedFields(updatedRecord, data.metadata);
 
@@ -2606,7 +2586,7 @@ app.post("/api/records/recalculate-all", (req, res) => {
 app.post("/api/records/remove-obsolete-fields", (req, res) => {
   try {
     const data = readDatabase();
-    const obsoleteFields = ['lssi', 'medium_adj_ppsi', 'cli_adj_ppsi', 'smi_adj_ppsi', 'stdppsi'];
+    const obsoleteFields = ['smi_subject', 'smi_render', 'integer', 'gate1_score', 'gate2_score'];
     let recordsUpdated = 0;
     let fieldsRemoved = 0;
     data.records.forEach(record => {
@@ -2628,7 +2608,7 @@ app.post("/api/records/remove-obsolete-fields", (req, res) => {
 app.post("/api/metadata/remove-obsolete-fields", (req, res) => {
   try {
     const data = readDatabase();
-    const obsoleteFields = ['pass1_cutoff_pct', 'pass3_top_quantity', 'std_CLI', 'coef_CLI', 'std_SMI', 'coef_SMI'];
+    const obsoleteFields = ['coef_smi_subject', 'coef_smi_render'];
     const fieldsRemoved = [];
     obsoleteFields.forEach(field => {
       if (field in data.metadata.coefficients) {
@@ -2657,11 +2637,7 @@ app.post("/api/coefficients", (req, res) => {
         if (isNaN(v)) return res.status(400).json({ error: `${field} must be a valid number. Got: "${req.body[field]}"` });
       }
     }
-    if (req.body['coef_smi_subject'] !== undefined) {
-      const v = parseFloat(req.body['coef_smi_subject']);
-      if (isNaN(v) || v < 0 || v > 1) return res.status(400).json({ error: `coef_smi_subject must be a number between 0 and 1. Got: "${req.body['coef_smi_subject']}"` });
-      req.body['coef_smi_render'] = parseFloat((1 - v).toFixed(4));
-    }
+
     if (!data.metadata.coefficients) {
       data.metadata.coefficients = {};
     }
@@ -3630,10 +3606,10 @@ app.post('/api/records/import', async (req, res) => {
         imageUrl: incoming.imageUrl || 'Missing',
         artistProfileUrl: incoming.artistProfileUrl || 'Missing',
         artistBio: incoming.artistBio || null,
-        smi_subject: null, smi_render: null, cli: null,
-        ri_integer: null, ri_decimal: null, integer: null,
-        gate1_score: null, gate2_score: null,
-        smi: null, ssi: null, aop: null, aoppsi: null, appsi: null
+        smi: null, cli: null,
+        ri_integer: null, ri_decimal: null,
+        ssi: null, aop: null, aoppsi: null, appsi: null,
+        pendingScores: true
       };
 	  
 	  // NEW — uses imageBase64 already fetched by the scraper
