@@ -3724,11 +3724,8 @@ const MAILERLITE_GROUP_ID  = process.env.MAILERLITE_GROUP_ID;
 
 app.post('/api/register-subscriber', async (req, res) => {
   try {
-    const { name, email } = req.body;
+    const { email } = req.body;
 
-    if (!name || typeof name !== 'string' || name.trim().length < 2) {
-      return res.status(400).json({ success: false, error: 'A valid name is required.' });
-    }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email.trim())) {
       return res.status(400).json({ success: false, error: 'A valid email address is required.' });
@@ -3737,16 +3734,14 @@ app.post('/api/register-subscriber', async (req, res) => {
     if (!MAILERLITE_API_TOKEN) throw new Error('MAILERLITE_API_TOKEN is not set in environment');
     if (!MAILERLITE_GROUP_ID)  throw new Error('MAILERLITE_GROUP_ID is not set in environment');
 
-    const cleanName  = name.trim();
     const cleanEmail = email.trim().toLowerCase();
 
-    console.log(`📧 SizeYourPrice subscriber registration: ${cleanName} <${cleanEmail}>`);
+    console.log(`📧 SizeYourPrice subscriber registration: ${cleanEmail}`);
 
     const response = await axios.post(
       'https://connect.mailerlite.com/api/subscribers',
       {
         email:  cleanEmail,
-        fields: { name: cleanName },
         groups: [MAILERLITE_GROUP_ID]
       },
       {
