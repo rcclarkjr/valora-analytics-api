@@ -2705,7 +2705,14 @@ app.get("/api/sizeyourprice", (req, res) => {
       coef_size_constant: data.metadata.coefficients.coef_size_constant,
       coef_size_exponent: data.metadata.coefficients.coef_size_exponent
     };
-    res.json(coefficients);
+    const mobileApp = data.metadata.mobileApp || {};
+    res.json({
+      ...coefficients,
+      syp_video_heading: mobileApp.syp_video_heading,
+      syp_video_id:      mobileApp.syp_video_id,
+      syp_cta_text:      mobileApp.syp_cta_text,
+      syp_cta_url:       mobileApp.syp_cta_url,
+    });
   } catch (error) {
     console.error("Error in Size Your Price endpoint:", error);
     res.status(500).json({ error: { message: error.message || "An error occurred retrieving the coefficients" } });
