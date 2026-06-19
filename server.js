@@ -2007,6 +2007,7 @@ app.get("/api/coefficients", (req, res) => {
         ? data.metadata.coefficients
         : (() => { throw new Error('Database metadata.coefficients is missing.'); })(),
       medium: data.metadata.medium || {},
+      mobileApp: data.metadata.mobileApp || {},
       lastUpdated: data.metadata.lastUpdated,
       lastCalculated: data.metadata.lastCalculated
     };
@@ -2672,12 +2673,15 @@ app.post("/api/coefficients", (req, res) => {
       data.metadata.coefficients = {};
     }
     Object.keys(req.body).forEach(key => {
-      if (key !== "medium") {
+      if (key !== "medium" && key !== "mobileApp") {
         data.metadata.coefficients[key] = req.body[key];
       }
     });
     if (req.body.medium) {
       data.metadata.medium = { ...data.metadata.medium, ...req.body.medium };
+    }
+    if (req.body.mobileApp) {
+      data.metadata.mobileApp = { ...data.metadata.mobileApp, ...req.body.mobileApp };
     }
     data.metadata.lastUpdated = new Date().toISOString();
     let recalculatedCount = 0;
@@ -2690,7 +2694,8 @@ app.post("/api/coefficients", (req, res) => {
       message: "Coefficients updated successfully",
       recalculatedRecords: recalculatedCount,
       coefficients: data.metadata.coefficients,
-      medium: data.metadata.medium
+      medium: data.metadata.medium,
+      mobileApp: data.metadata.mobileApp
     });
   } catch (error) {
     console.error("Error updating coefficients:", error);
