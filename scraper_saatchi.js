@@ -538,7 +538,7 @@ async function scrapeArtistProfile(profileUrl) {
         }
 
         if (sections.length > 0) {
-            return sections.join('\n\n');
+            return sections.join(' — ');
         }
 
         // Fallback: look for a substantial paragraph of text near the artist name
