@@ -3720,61 +3720,6 @@ function normalizeNameTitle(artistName, title) {
 
 
 
-// ====================
-// MAILERLITE SUBSCRIBER REGISTRATION
-// ====================
-
-const MAILERLITE_API_TOKEN = process.env.MAILERLITE_API_TOKEN;
-const MAILERLITE_GROUP_ID  = process.env.MAILERLITE_GROUP_ID;
-
-app.post('/api/register-subscriber', async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email || !emailRegex.test(email.trim())) {
-      return res.status(400).json({ success: false, error: 'A valid email address is required.' });
-    }
-
-    if (!MAILERLITE_API_TOKEN) throw new Error('MAILERLITE_API_TOKEN is not set in environment');
-    if (!MAILERLITE_GROUP_ID)  throw new Error('MAILERLITE_GROUP_ID is not set in environment');
-
-    const cleanEmail = email.trim().toLowerCase();
-
-    console.log(`📧 SizeYourPrice subscriber registration: ${cleanEmail}`);
-
-    const response = await axios.post(
-      'https://connect.mailerlite.com/api/subscribers',
-      {
-        email:  cleanEmail,
-        groups: [MAILERLITE_GROUP_ID]
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${MAILERLITE_API_TOKEN}`,
-          'Content-Type':  'application/json',
-          'Accept':        'application/json'
-        }
-      }
-    );
-
-    const subscriberId = response.data?.data?.id;
-    console.log(`✅ MailerLite subscriber added: ID ${subscriberId}`);
-
-    res.json({ success: true, message: 'Subscriber registered successfully' });
-
-  } catch (error) {
-    console.error('❌ MailerLite subscriber registration failed:', {
-      message: error.message,
-      status:  error.response?.status,
-      data:    error.response?.data
-    });
-    res.status(500).json({ success: false, error: 'Registration failed. Please try again.' });
-  }
-});
-
-
-
 // Serve static files from the "public" folder
 app.use(express.static("public"));
 
