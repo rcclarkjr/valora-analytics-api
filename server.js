@@ -2717,6 +2717,10 @@ app.get("/api/sizeyourprice", (req, res) => {
       syp_video_id:      mobileApp.syp_video_id,
       syp_cta_text:      mobileApp.syp_cta_text,
       syp_cta_url:       mobileApp.syp_cta_url,
+      syp_youtube_id:     mobileApp.syp_youtube_id,
+      syp_book_image_url: mobileApp.syp_book_image_url,
+      syp_book_link_url:  mobileApp.syp_book_link_url,
+      syp_min_version:    mobileApp.syp_min_version,
     });
   } catch (error) {
     console.error("Error in Size Your Price endpoint:", error);
